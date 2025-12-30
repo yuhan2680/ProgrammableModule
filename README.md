@@ -32,6 +32,8 @@
 
 `tick` 函数在游戏进行中不断调用，用于更新机器人的状态。
 
+### [编程关卡](https://github.com/yuhan2680/ProgrammableModule/blob/main/ProgramLevel.md)
+
 ## 手动
 
 手动控制机器人，可自行设置键位。
