@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "shoot",
+  "order": 40,
+  "category": "action",
+  "category_title": {
+    "zh_CN": "动作指令",
+    "zh_HK": "動作指令",
+    "en": "Actions"
+  },
+  "title": {
+    "zh_CN": "射击",
+    "zh_HK": "射擊",
+    "en": "Shoot"
+  },
+  "description": {
+    "zh_CN": "沿指定角度发射弹丸，角度方向与 move 相同。弹丸逐渐减速，命中伤害与当时速度有关。需要射击模块；每个射击模块独立冷却，冷却中再次调用不会开火，也不会报错。",
+    "zh_HK": "沿指定角度發射彈丸，角度方向與 move 相同。彈丸會逐漸減速，命中時的傷害與當時速度有關。需要射擊模組；每個射擊模組獨立冷卻，冷卻期間再次呼叫不會開火，也不會報錯。",
+    "en": "Fire a projectile in the given direction, using the same angle convention as move. Projectiles slow down, and their impact damage depends on their remaining speed. A shooting module is required. Each gun has its own cooldown; calls during cooldown do not fire and are not errors."
+  },
+  "syntax": "shoot(angle)",
+  "requirements": {
+    "module_behavior": "ShootingModule"
+  }
+}

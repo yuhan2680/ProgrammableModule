@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tile.schema.json",
+  "title": "地块定义",
+  "description": "未指定地块始终为void；void不能注册为地块ID。",
+  "type": "object",
+  "required": [
+	"format_version",
+	"id",
+	"name",
+	"texture",
+	"collision",
+    "radar_block"
+  ],
+  "properties": {
+	"format_version": {
+	  "const": 1
+	},
+	"id": {
+	  "type": "string",
+	  "minLength": 1,
+	  "maxLength": 128,
+	  "pattern": "^(?!void$)[A-Za-z0-9_.-]+$"
+	},
+	"name": {
+	  "type": "string",
+	  "maxLength": 65536,
+	  "minLength": 1
+	},
+	"texture": {
+	  "type": "string",
+	  "description": "安全资源路径；图片必须存在且可解码，运行时另行检查。",
+	  "allOf": [
+		{
+		  "pattern": "^(res|user)://[^/\\\\:]+(?:/[^/\\\\:]+)*$"
+		},
+		{
+		  "not": {
+			"pattern": "(?:^|/)\\.{1,2}(?:/|$)"
+		  }
+		},
+		{
+		  "pattern": "\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Ee]?[Gg]|[Ww][Ee][Bb][Pp]|[Ss][Vv][Gg])$"
+		}
+	  ]
+	},
+	"collision": {
+	  "type": "boolean",
+	  "description": "true 表示阻止机器通行。"
+	},
+	"radar_block": {
+	  "type": "boolean"
+	},
+	"properties": {
+	  "type": "object"
+	}
+  }
+}

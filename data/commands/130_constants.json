@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "constants",
+  "order": 130,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "常量",
+    "zh_HK": "常數",
+    "en": "Constants"
+  },
+  "description": {
+    "zh_CN": "用 constant 名称 = 数值表达式 声明一个只读数值；value 是 constant 的同义写法。常量可以在后面的动作参数、加减表达式和数值比较中引用，但不能重新赋值。顶层声明按源码顺序初始化，main 和各函数可读取全部全局名称。函数与代码块中的常量仅在各自词法作用域内可见；初始化后不会随 distance 读数自动改变。tick() 与 simultaneously 块内可读取已有常量，不能声明新常量。",
+    "zh_HK": "用 constant 名稱 = 數值運算式 宣告一個唯讀數值；value 是 constant 的同義寫法。常數可以在後續動作的參數、加減運算式和數值比較中引用，但不能重新賦值。頂層宣告會按原始碼順序初始化，main 和各函數可讀取所有全域名稱。函數與程式碼區塊中的常數只在各自的詞法作用域內可見；初始化後不會隨 distance 讀數自動改變。tick() 與 simultaneously 區塊內可讀取已有常數，但不能宣告新常數。",
+    "en": "Declare a read-only number with constant name = expression; value is an alias for constant. Use it in later action arguments, addition, subtraction, or numeric comparisons, but do not reassign it. Top-level declarations initialize in source order; main and each function can read all global names. Constants declared inside a function or block are visible only in their lexical scope. The stored value does not automatically follow changing distance readings. tick() and simultaneously blocks may read existing constants, but cannot declare new ones."
+  },
+  "syntax": "constant threshold = 2.5",
+  "requirements": {
+    "allow_variables": true
+  }
+}

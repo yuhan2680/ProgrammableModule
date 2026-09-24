@@ -1,0 +1,18 @@
+.godot/
+*.tmp
+*.bak
+test-results/
+
+# Local editor state and export output
+.DS_Store
+override.cfg
+*.app/
+*.exe
+*.dmg
+*.zip
+*.pck
+*.command
+builds/
+windows/
+__pycache__/
+*.pyc

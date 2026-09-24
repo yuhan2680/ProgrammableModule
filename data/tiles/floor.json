@@ -1,0 +1,9 @@
+{
+	"format_version": 1,
+	"id": "floor",
+	"name": "地板",
+	"texture": "res://assets/tiles/floor.svg",
+	"collision": false,
+	"radar_block": false,
+	"properties": {}
+}

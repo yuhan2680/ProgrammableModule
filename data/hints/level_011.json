@@ -1,0 +1,28 @@
+{
+  "format_version": 1,
+  "level_id": "level_011",
+  "assembly_help": "请先安装测距模块或雷达模块作为装配原点 (0,0)，移动模块放在右侧 (0.5,0)。",
+  "bindings": [
+    {
+      "role": "sensor",
+      "behavior": "RangefinderModule",
+      "index": 0
+    }
+  ],
+  "source": "main() {\n    loop {\n        {{function}}()\n    }\n}\n\nfunction {{function}}() {\n    if ({{sensor}}.distance(0) < 2.5) {\n        move(90, 1)\n    } else {\n        move(0, 0)\n    }\n}\n",
+  "max_steps": 1000,
+  "function_name": "dodge",
+  "alternatives": [
+    {
+      "assembly_help": "请先安装雷达模块作为装配原点 (0,0)，移动模块放在右侧 (0.5,0)。",
+      "bindings": [
+        {
+          "role": "sensor",
+          "behavior": "RadarModule",
+          "index": 0
+        }
+      ],
+      "source": "main() {\n    loop {\n        {{function}}()\n    }\n}\n\nfunction {{function}}() {\n    if ({{sensor}}.scan() != null) {\n        if ({{sensor}}.scan().Distance < 2.5) {\n            if ({{sensor}}.scan().Angle() < 10) {\n                move(90, 1)\n            } else {\n                if ({{sensor}}.scan().Angle() > 350) {\n                    move(90, 1)\n                } else {\n                    move(0, 0)\n                }\n            }\n        } else {\n            move(0, 0)\n        }\n    } else {\n        move(0, 0)\n    }\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,857 @@
+{
+  "format_version": 1,
+  "id": "level_011",
+  "name": "第十一关 · 巧能躲避",
+  "width": 15,
+  "height": 13,
+  "tiles": [
+    {
+      "x": 1,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 11,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 4.5,
+      "y": 9.5
+    },
+    "modules": [
+      {
+        "id": "sensor",
+        "module_id": "rangefinder",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0.5,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [
+    {
+      "id": "radar_hunter",
+      "position": {
+        "x": 10.5,
+        "y": 9.5
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": -0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": "radar",
+          "module_id": "radar",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      ],
+      "behavior": "radar_lunge",
+      "properties": {
+        "attack_module_id": "blade",
+        "radar_module_id": "radar",
+        "attack_angle": 180,
+        "stand_off": 1.0,
+        "approach_distance": 3.0,
+        "recovery_ticks": 10
+      }
+    }
+  ],
+  "objects": [],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装 2 个模块，目标是成功躲过敌人的 5 次近战攻击。\n\n敌人有移动、近战和雷达三个模块。本关继承第十关开放的玩家雷达、scan()、常量和变量，可以自由使用这些能力。"
+    },
+    {
+      "speaker": "引导",
+      "text": "建议先安装测距模块作为装配原点 (0,0)，命名为 sensor，在右侧偏移 (0.5,0) 安装移动模块并命名为 drive。\n\n测距用来观察右侧敌人是否靠近，移动用来离开它即将攻击的横线。"
+    },
+    {
+      "speaker": "引导",
+      "text": "敌人每次扫描只锁定你当时的位置：先绕到这个位置的右侧准备，再向左接近到前方一格，随后立即向左攻击。\n\n它不会在这次接近过程中重新瞄准。出手后短暂恢复，再扫描你的新位置。"
+    },
+    {
+      "speaker": "引导",
+      "text": "function 可以把一组动作封装成有名字的函数，例如 function dodge() { ... }。在 main() 内写 dodge()，就会执行这个函数的内容。\n\n函数写在 main() 外面；调用完成后，程序会回到调用处继续执行。函数名称由你自己选择。"
+    },
+    {
+      "speaker": "引导",
+      "text": "把测距判断和闪避动作放在函数里，再在 main() 的 loop 中反复调用它。\n\n当右侧敌人足够靠近时，向上或向下移出攻击横线；敌人还远时，继续观察。注意测距读数从模块中心开始，移动要留足时间。"
+    },
+    {
+      "speaker": "引导",
+      "text": "每次实际攻击落空才会计入一次成功闪避。只要这名敌人的近战命中你的任何模块，本次练习就会失败。\n\n观察右上方的敌人状态与闪避次数；摧毁敌人或让它停止出手都不能代替躲过 5 次攻击。"
+    },
+    {
+      "speaker": "引导",
+      "text": "初始程序只提供 main() 和 function 框架，请自己填写函数、条件和动作。函数暂不接收参数，也不返回数值；本关同时开放 constant 常量与 variable 变量，可保存闪避距离和测距结果。\n\n练习最多持续 90 秒。暂停冻结敌人的扫描、接近和恢复；重置位置保留代码和装配，并重新从零记录闪避次数。"
+    },
+    {
+      "text": "雷达可替代测距模块，与一个移动模块搭配。用 variable target = scan() 保存最近敌人的扫描结果；先用 if (target != null) 判断是否找到敌人，再读取 target.Angle()、target.Distance 或 target.Position。\n\nAngle() 是相对雷达的方向角，Distance 是距离；Position 是敌人的地图坐标，可用 Position.x 和 Position.y 读取。扫描结果是当时的快照，需要在循环中重新扫描才能更新。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 11,
+      "description": "用函数封装测距与闪避，在雷达敌人锁定后及时离开攻击横线，连续躲过五次攻击。",
+      "module_limit": 2,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting",
+        "rangefinder",
+        "radar"
+      ],
+      "allow_tick": true,
+      "allow_named_calls": true,
+      "allow_loops": true,
+      "allow_conditionals": true,
+      "allow_simultaneous": true,
+      "allow_distance": true,
+      "allow_functions": true,
+      "max_ticks": 900,
+      "goal": {
+        "type": "dodge_attacks",
+        "enemy_id": "radar_hunter",
+        "attack_count": 5
+      },
+      "starter_program": "main() {\n    \n}\n\nfunction dodge() {\n    \n}\n",
+      "allow_variables": true,
+      "allow_random": true,
+      "allow_radar": true
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "if_else",
+  "order": 80,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "条件分支",
+    "zh_HK": "條件分支",
+    "en": "Conditional Branches"
+  },
+  "description": {
+    "zh_CN": "根据条件选择 if 或 else 中的一段动作。if 中必须填写动作；else 可以省略，省略时条件为假就继续后续指令。显式写出的 else 也不能留空。第七关可用具名射击模块的 ready() 查询；第九关解锁测距后，还可比较 distance(角度) 的读数与数字，支持 <、<=、>、>=、==、!=。进入分支时检查一次条件，完成该分支后才继续执行；常变量与赋值需另行解锁；不支持逻辑组合。",
+    "zh_HK": "根據條件選擇 if 或 else 中的一組動作。if 中必須填寫動作；else 可以省略，省略時若條件為假，就會繼續執行後續指令。明確寫出的 else 也不能留空。第七關可用具名射擊模組的 ready() 查詢；第九關解鎖測距後，還可比較 distance(角度) 的讀數與數字，支援 <、<=、>、>=、==、!=。進入分支時會檢查一次條件，完成該分支後才繼續執行；常數、變數與賦值須另行解鎖；不支援邏輯組合。",
+    "en": "Choose the if or else actions according to a condition. The if body must contain actions. else is optional: a false condition then continues with the next instruction. An explicit else body must not be empty. Level 7 supports a named shooting module’s ready() query. After rangefinding unlocks in Level 9, distance(angle) readings can also be compared with numbers using <, <=, >, >=, ==, or !=. Check the condition once when entering, then finish the selected branch. Constants, variables, and assignment require their own unlock; logical combinations are not supported."
+  },
+  "syntax": "if (module.ready()) {\n    ...\n} else {\n    ...\n}",
+  "requirements": {
+    "allow_conditionals": true
+  }
+}

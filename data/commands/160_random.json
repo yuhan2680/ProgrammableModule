@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "random",
+  "order": 160,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "数值函数",
+    "zh_HK": "數值函數",
+    "en": "Numeric Functions"
+  },
+  "title": {
+    "zh_CN": "随机小数",
+    "zh_HK": "隨機小數",
+    "en": "Random Number"
+  },
+  "description": {
+    "zh_CN": "从第十关开始解锁。random() 返回 0 到 1 之间的随机小数（包含两端），不需要安装特定模块，也不消耗逻辑时间。可直接用于数值参数，例如 move(0, random())；解锁条件后也可用 if (random() < 0.5) 选择动作。每次实际求值都会重新取随机数；保存到常量或变量后，读取该名称不会重新随机。它返回数值，不能单独写成一行动作，也不能写成 模块名.random()。",
+    "zh_HK": "從第十關開始解鎖。random() 傳回 0 到 1 之間的隨機小數（包含兩端），不需要安裝特定模組，也不消耗邏輯時間。可直接用於數值參數，例如 move(0, random())；解鎖條件分支後，也可用 if (random() < 0.5) 選擇動作。每次實際求值都會重新取得隨機數；保存到常數或變數後，讀取該名稱不會重新取隨機數。它傳回數值，不能單獨寫成一行動作，也不能寫成 模組名稱.random()。",
+    "en": "Unlocked from level 10. random() returns a random number between 0 and 1, inclusive. It requires no particular module and consumes no logical time. Use it directly in a numeric argument, for example move(0, random()), or select an action with if (random() < 0.5) when conditionals are unlocked. Each evaluation draws a new number; reading a stored constant or variable does not draw again. This is a value-returning function, not a standalone action or a module.random() method."
+  },
+  "syntax": "random()",
+  "requirements": {
+    "allow_random": true
+  }
+}

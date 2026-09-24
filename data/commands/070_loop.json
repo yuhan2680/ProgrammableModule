@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "loop",
+  "order": 70,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "循环",
+    "zh_HK": "循環",
+    "en": "Loop"
+  },
+  "description": {
+    "zh_CN": "在 main() 内无限重复花括号中的指令，仍按顺序等待每个动作完成。loop 不写括号或次数，循环体不能留空，也不能放进 tick()。到达关卡目标、失败或停止运行时结束；暂停保留当前位置。当前没有 break 或 continue；有限范围遍历使用另行解锁的 for。",
+    "zh_HK": "在 main() 內無限重複大括號中的指令，仍會依次等待每個動作完成。loop 不寫括號或次數，循環內容不能留空，也不能放進 tick()。達成關卡目標、失敗或停止執行時結束；暫停會保留目前的執行位置。目前沒有 break 或 continue；有限範圍遍歷使用另行解鎖的 for。",
+    "en": "Repeat the instructions inside braces indefinitely within main(), still waiting for each action in order. loop has no parentheses or count, cannot be empty, and cannot appear in tick(). It ends when the level succeeds, fails, or is stopped; pausing preserves progress. break and continue are not supported; use the separately unlocked for loop for a finite range."
+  },
+  "syntax": "loop {\n    ...\n}",
+  "requirements": {
+    "allow_loops": true
+  }
+}

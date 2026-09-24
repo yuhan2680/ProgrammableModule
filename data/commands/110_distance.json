@@ -1,0 +1,26 @@
+{
+  "format_version": 1,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "状态查询",
+    "zh_HK": "狀態查詢",
+    "en": "Queries"
+  },
+  "id": "distance",
+  "order": 110,
+  "title": {
+    "zh_CN": "方向测距",
+    "zh_HK": "方向測距",
+    "en": "Directional Distance"
+  },
+  "description": {
+    "zh_CN": "读取测距模块实际中心到指定方向第一个障碍表面的距离，以格为单位。角度为 0° 向右、90° 向上、180° 向左、270° 向下；墙壁、void、地图边界和阻挡对象会终止测量，本机模块不遮挡。查询不移动机器、不消耗逻辑时间。读数可用于动作的数值参数或 if 比较，也可用加减运算预留占地，例如 move(0, distance(0) - 0.5)。余量必须按真实装配选择，单条细射线不保证整台机器的移动路径安全；不能把查询单独写成动作。 无名称调用要求恰好一个可用测距模块；有多个时，请用模块名指定。",
+    "zh_HK": "讀取測距模組實際中心到指定方向第一個障礙物表面的距離，以格為單位。角度為 0° 向右、90° 向上、180° 向左、270° 向下；牆壁、void、地圖邊界和阻擋物件會終止測量，本機模組不會遮擋。查詢不會移動機器，也不消耗邏輯時間。讀數可用於動作的數值參數或 if 比較，也可透過加減運算預留模組所需空間，例如 move(0, distance(0) - 0.5)。預留空間必須按實際裝配選擇，單條細射線不能保證整台機器的移動路徑安全；不能把查詢單獨寫成動作。沒有指定名稱的呼叫要求剛好有一個可用測距模組；有多個時，請用模組名稱指定。",
+    "en": "Read the distance in tiles from the rangefinder’s actual center to the first obstacle surface in a direction. Angles are 0° right, 90° up, 180° left, and 270° down. Walls, void, map boundaries, and blocking objects stop the reading; your robot’s own modules do not. Queries neither move the robot nor consume logic time. Use readings in numeric action arguments or if comparisons, adding or subtracting clearance, for example move(0, distance(0) - 0.5). Choose clearance for the actual assembly: one thin ray cannot guarantee that the whole robot’s swept path is safe. A query cannot be a standalone action. An unnamed call requires exactly one available rangefinder; name the desired module if there is more than one."
+  },
+  "syntax": "distance(angle)",
+  "requirements": {
+    "allow_distance": true,
+    "module_behavior": "RangefinderModule"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "level_id": "level_009",
+  "assembly_help": "请先安装测距模块作为装配原点 (0,0)，移动模块放在下方 (0,0.5)。",
+  "bindings": [
+    {
+      "role": "sensor",
+      "behavior": "RangefinderModule",
+      "index": 0
+    }
+  ],
+  "source": "main() {\n    loop {\n        move(0, {{sensor}}.distance(0) - 0.5)\n        move(90, {{sensor}}.distance(90) - 0.5)\n        move(180, {{sensor}}.distance(180) - 0.5)\n        move(90, {{sensor}}.distance(90) - 0.5)\n    }\n}\n",
+  "max_steps": 2200
+}

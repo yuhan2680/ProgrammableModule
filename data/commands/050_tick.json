@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "tick",
+  "order": 50,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "逐帧回调",
+    "zh_HK": "逐幀回呼",
+    "en": "Tick Callback"
+  },
+  "description": {
+    "zh_CN": "放在 main() 外的可选回调，每个逻辑 tick 执行一次；当前每秒 10 个逻辑 tick。它不能替代 main()，只允许有限的 attack、shoot，以及已解锁的有限条件分支；不允许 move 或 loop。暂停时不会执行。",
+    "zh_HK": "放在 main() 外的可選回呼，每個邏輯 tick 執行一次；目前每秒有 10 個邏輯 tick。它不能取代 main()，只允許有限的 attack、shoot，以及已解鎖的有限條件分支；不允許 move 或 loop。暫停時不會執行。",
+    "en": "An optional callback outside main() that runs once per logic tick, currently 10 times per second. It cannot replace main(). Only finite attack/shoot actions and unlocked finite conditionals are allowed; move and loop are not allowed. It does not run while paused."
+  },
+  "syntax": "tick() {\n    ...\n}",
+  "requirements": {
+    "allow_tick": true
+  }
+}

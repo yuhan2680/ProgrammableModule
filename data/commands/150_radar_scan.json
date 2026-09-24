@@ -1,0 +1,26 @@
+{
+  "format_version": 1,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "状态查询",
+    "zh_HK": "狀態查詢",
+    "en": "Queries"
+  },
+  "id": "scan",
+  "order": 150,
+  "title": {
+    "zh_CN": "雷达扫描",
+    "zh_HK": "雷達掃描",
+    "en": "Radar Scan"
+  },
+  "description": {
+    "zh_CN": "扫描雷达范围内最近的可见敌方机器，返回该次扫描的目标快照；没有目标时返回 null（也可写 Null）。查询不消耗逻辑 tick。可用 variable target = scan() 保存结果，再用 if (target != null) 判断；目标移动后需要重新扫描，旧快照不会自动刷新。多个雷达同时可用时，请用模块名.scan() 指定来源。",
+    "zh_HK": "掃描雷達範圍內最近的可見敵方機器，傳回該次掃描的目標快照；沒有目標時傳回 null（也可寫 Null）。查詢不消耗邏輯 tick。可用 variable target = scan() 保存結果，再用 if (target != null) 判斷；目標移動後需要重新掃描，舊快照不會自動更新。多個雷達同時可用時，請用模組名稱.scan() 指定來源。",
+    "en": "Scans for the nearest visible hostile machine in radar range and returns a snapshot from that scan, or null (also written Null) when none is found. The query consumes no logical ticks. Store the result with variable target = scan(), then check if (target != null). Scan again after targets move; an old snapshot does not update itself. If more than one radar is available, select one with module.scan()."
+  },
+  "syntax": "scan()",
+  "requirements": {
+    "allow_radar": true,
+    "module_behavior": "RadarModule"
+  }
+}

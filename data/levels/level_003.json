@@ -1,0 +1,194 @@
+{
+  "format_version": 1,
+  "id": "level_003",
+  "name": "第三关 · 初出茅庐",
+  "width": 10,
+  "height": 5,
+  "tiles": [
+    {
+      "x": 1,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 3,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 1.5,
+      "y": 2.5
+    },
+    "modules": [
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [],
+  "objects": [
+    {
+      "id": "training_obstacle",
+      "type": "destructible",
+      "position": {
+        "x": 6.5,
+        "y": 2.5
+      },
+      "size": 1,
+      "properties": {
+        "max_health": 1
+      }
+    }
+  ],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装两个模块。建议先安装一个移动模块作为装配原点 (0,0)，在右侧偏移 (0.5, 0) 安装一个近战模块。每个模块占 0.5 × 0.5 格。"
+    },
+    {
+      "speaker": "引导",
+      "text": "障碍物中心在出生点右侧 5 格。近战只能攻击距离本模块中心 2 格内的目标；方向与 move 相同，0° 向右。"
+    },
+    {
+      "speaker": "引导",
+      "text": "试着先 move(0, 3)，再另起一行写 attack(0)。移动完成后才攻击，靠近后不要直接撞进障碍物。"
+    },
+    {
+      "speaker": "引导",
+      "text": "摧毁障碍物即通关，无需到达绿色终点。射程不足或方向不对会挥空；灰色 void、墙体与已落下的闸门会挡住攻击。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 3,
+      "description": "解锁近战模块与 attack(角度)。靠近右侧 5 格处的障碍物，在 2 格射程内将它摧毁。",
+      "module_limit": 2,
+      "allowed_modules": [
+        "movement",
+        "melee"
+      ],
+      "goal": {
+        "type": "destroy_object",
+        "object_id": "training_obstacle"
+      },
+      "starter_program": "main() {\n    // 先移动靠近障碍物，再向右攻击。\n}\n"
+    }
+  }
+}

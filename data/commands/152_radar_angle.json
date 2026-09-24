@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "状态查询",
+    "zh_HK": "狀態查詢",
+    "en": "Queries"
+  },
+  "id": "radar_angle",
+  "order": 152,
+  "title": {
+    "zh_CN": "目标角度",
+    "zh_HK": "目標角度",
+    "en": "Target Angle"
+  },
+  "description": {
+    "zh_CN": "读取扫描快照中目标相对于扫描雷达的方向角。先检查 target != null，再读取 Angle()；0° 向右、90° 向上、180° 向左、270° 向下。结果为数字，可用作动作角度或数值比较。Angle 区分大小写。",
+    "zh_HK": "讀取掃描快照中，目標相對於掃描雷達的方向角。先檢查 target != null，再讀取 Angle()；0° 向右、90° 向上、180° 向左、270° 向下。結果為數字，可用作動作角度或數值比較。Angle 區分大小寫。",
+    "en": "Reads the target direction relative to the scanning radar from a scan snapshot. Check target != null before reading Angle(). Directions are 0° right, 90° up, 180° left, and 270° down. The result is numeric and can be used as an action angle or in a comparison. Angle is case-sensitive."
+  },
+  "syntax": "target.Angle()",
+  "requirements": {
+    "allow_radar": true,
+    "module_behavior": "RadarModule",
+    "allow_variables": true
+  }
+}

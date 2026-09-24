@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "id": "named_attack",
+  "order": 62,
+  "category": "action",
+  "category_title": {"zh_CN": "动作指令", "zh_HK": "動作指令", "en": "Actions"},
+  "title": {"zh_CN": "具名近战攻击", "zh_HK": "具名近戰攻擊", "en": "Named Melee Attack"},
+  "description": {
+    "zh_CN": "用组装页设置的近战模块名称替换 module。只有这个模块沿指定角度攻击，其他近战模块不会随之出手。射程从选中模块的实际中心计算，沿用该模块配置的射程与伤害；挥空也消耗一个逻辑 tick。需要本关开放具名调用。",
+    "zh_HK": "用組裝頁設定的近戰模組名稱取代 module。只有該模組會沿指定角度攻擊，其他近戰模組不會一起出手。射程從所選模組的實際中心計算，沿用該模組設定的射程與傷害；揮空也會消耗一個邏輯 tick。需要本關開放具名呼叫。",
+    "en": "Replace module with the melee module name assigned in assembly. Only this module attacks in the given direction; other melee modules do not strike. Reach starts at the selected module's actual center and uses its configured range and damage. A miss still takes one logic tick. Named calls must be unlocked for this level."
+  },
+  "syntax": "module.attack(angle)",
+  "requirements": {"allow_named_calls": true, "module_behavior": "MeleeModule"}
+}

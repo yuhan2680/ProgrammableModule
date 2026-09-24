@@ -1,0 +1,10 @@
+{
+  "format_version": 1,
+  "id": "iron_bars",
+  "name": "铁栅栏",
+  "texture": "res://assets/tiles/iron_bars.svg",
+  "collision": true,
+  "radar_block": false,
+  "attack_block": false,
+  "properties": {}
+}

@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "状态查询",
+    "zh_HK": "狀態查詢",
+    "en": "Queries"
+  },
+  "id": "radar_distance",
+  "order": 154,
+  "title": {
+    "zh_CN": "目标距离",
+    "zh_HK": "目標距離",
+    "en": "Target Distance"
+  },
+  "description": {
+    "zh_CN": "读取该次扫描记录的雷达模块中心到敌方机器参考位置的直线距离。先检查 target != null；Distance 返回数字，也支持 Distance() 写法。它反映雷达与目标之间的距离，不是沿指定方向的障碍测距，也不是整台机器能够安全移动的距离。目标移动后应再次 scan() 获取新快照。",
+    "zh_HK": "讀取該次掃描記錄的雷達模組中心到敵方機器參考位置的直線距離。先檢查 target != null；Distance 傳回數字，也支援 Distance() 寫法。它反映雷達與目標之間的距離，並非沿指定方向的障礙物測距，也不是整台機器能夠安全移動的距離。目標移動後應再次 scan() 取得新快照。",
+    "en": "Reads the straight-line distance from the radar module center to the enemy machine’s reference position recorded by a scan. Check target != null first. Distance returns a number; Distance() is also accepted. It measures the target distance, not an obstacle ray or the entire robot’s safe travel distance. Use scan() again to get a fresh snapshot after a target moves."
+  },
+  "syntax": "target.Distance",
+  "requirements": {
+    "allow_radar": true,
+    "module_behavior": "RadarModule",
+    "allow_variables": true
+  }
+}

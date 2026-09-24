@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "functions",
+  "order": 120,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "自定义函数",
+    "zh_HK": "自訂函數",
+    "en": "Custom Functions"
+  },
+  "description": {
+    "zh_CN": "用 function 为一组指令命名，随后用函数名() 调用。定义写在 main() 外，可位于调用之前或之后；定义本身不会执行。调用后顺序执行函数体，完成后回到调用位置继续。函数体可以使用本关已解锁的动作、条件、循环与同时执行块，也可以调用其他已声明函数；不能直接或间接调用自身。当前只支持无参数、无返回值的函数；本关另行解锁常量与变量时，函数也可读写其作用域内的数值绑定。tick() 与 simultaneously 块内不接受函数调用。",
+    "zh_HK": "用 function 為一組指令命名，之後用函數名稱() 呼叫。定義寫在 main() 外，可放在呼叫之前或之後；定義本身不會執行。呼叫後會依次執行函數內容，完成後回到呼叫位置繼續。函數內容可以使用本關已解鎖的動作、條件、循環與同時執行區塊，也可以呼叫其他已宣告的函數；不能直接或間接呼叫自身。目前只支援沒有參數、沒有傳回值的函數；本關另行解鎖常數與變數時，函數也可讀寫其作用域內的數值綁定。tick() 與 simultaneously 區塊內不接受函數呼叫。",
+    "en": "Use function to name a group of commands, then call it with name(). Define it outside main(), before or after its calls; defining a function does not run it. A call executes the body in order, then resumes after the call. Function bodies can use this level’s unlocked actions, conditions, loops, simultaneous blocks, and other declared functions. Direct and indirect recursion are not allowed. Functions currently take no arguments and return no values. If this level separately unlocks constants and variables, functions may also use numeric bindings in their scope. Function calls are not allowed inside tick() or simultaneously blocks."
+  },
+  "syntax": "function dodge() {\n    ...\n}\n\ndodge()",
+  "requirements": {
+    "allow_functions": true
+  }
+}

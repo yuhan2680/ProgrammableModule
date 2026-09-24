@@ -1,0 +1,10 @@
+{
+	"format_version": 1,
+	"id": "rangefinder",
+	"name": "测距模块",
+	"description": "distance(角度)：从本模块中心沿指定方向测量到首个墙壁、障碍物或其他机器部件表面的距离。忽略自身机器，不消耗逻辑 tick；测量值不是整台机器可以安全移动的距离。",
+	"size": {"width": 0.5, "height": 0.5},
+	"texture": "res://assets/modules/rangefinder.svg",
+	"script_type": "RangefinderModule",
+	"properties": {}
+}

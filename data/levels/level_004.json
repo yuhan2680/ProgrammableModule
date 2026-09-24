@@ -1,0 +1,254 @@
+{
+  "format_version": 1,
+  "id": "level_004",
+  "name": "第四关 · 远程打击",
+  "width": 12,
+  "height": 5,
+  "tiles": [
+    {
+      "x": 1,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 3,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 1.5,
+      "y": 2.5
+    },
+    "modules": [
+      {
+        "id": "gun",
+        "module_id": "shooting",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [
+    {
+      "id": "guard",
+      "position": {
+        "x": 7.5,
+        "y": 2.5
+      },
+      "modules": [
+        {
+          "id": "guard_drive",
+          "module_id": "movement",
+          "offset": {
+            "x": -0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "guard_blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ],
+      "behavior": "approach_attack",
+      "properties": {
+        "move_angle": 180,
+        "move_distance": 4.5,
+        "attack_angle": 180
+      }
+    }
+  ],
+  "objects": [],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关只能安装一个模块。选择新解锁的射击模块，在图纸任意网格位置放置，落点记为 (0,0)。敌人在你右侧 6 格处，由前方移动模块和后方近战模块组成。"
+    },
+    {
+      "speaker": "引导",
+      "text": "shoot(角度) 会发射子弹，0° 向右。子弹飞行中逐渐减速，速度越快，命中伤害越高；速度降到零时消失。每颗子弹只命中最先碰到的目标。"
+    },
+    {
+      "speaker": "引导",
+      "text": "main() 只执行一次。把 shoot(0) 写进 tick()，它就会每个逻辑 tick 调用一次，实现持续射击。保留一个空的 main() 入口。"
+    },
+    {
+      "speaker": "引导",
+      "text": "射击模块有冷却时间。冷却中的 shoot 调用不会发射，也不会报错；不需要手动等待，继续在 tick() 中调用即可。暂停也会冻结冷却与子弹。"
+    },
+    {
+      "speaker": "引导",
+      "text": "敌人会向左移动 4.5 格，然后向左近战攻击。近战一次只命中一个模块，打掉前方移动模块并不等于击毁整台敌人；用持续射击摧毁两个模块。"
+    },
+    {
+      "speaker": "引导",
+      "text": "你只要存活并击毁敌人的所有模块即可通关。为避免僵持，练习在 15 秒后结束；失败后保留代码和装配，重新运行会恢复双方和全部冷却。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 4,
+      "description": "安装一个射击模块，在 tick() 中持续射击，击毁从右侧接近的双模块敌人。",
+      "module_limit": 1,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting"
+      ],
+      "allow_tick": true,
+      "max_ticks": 150,
+      "goal": {
+        "type": "destroy_enemy",
+        "enemy_id": "guard"
+      },
+      "starter_program": "main() {\n    // main 只执行一次。\n}\n\ntick() {\n    // 在这里持续向右射击。\n}\n"
+    }
+  }
+}

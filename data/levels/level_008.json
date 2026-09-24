@@ -1,0 +1,330 @@
+{
+  "format_version": 1,
+  "id": "level_008",
+  "name": "第八关 · 左右为“铃”",
+  "width": 12,
+  "height": 10,
+  "tiles": [
+    {
+      "x": 5,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 8,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 5.5,
+      "y": 7.5
+    },
+    "modules": [
+      {
+        "id": "left",
+        "module_id": "melee",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0.5,
+          "y": 0
+        }
+      },
+      {
+        "id": "right",
+        "module_id": "melee",
+        "offset": {
+          "x": 1,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [],
+  "objects": [
+    {
+      "id": "alarm_left",
+      "type": "paired_alarm",
+      "position": {
+        "x": 3.5,
+        "y": 7.5
+      },
+      "size": 0.5,
+      "properties": {
+        "max_health": 1,
+        "partner_id": "alarm_right"
+      }
+    },
+    {
+      "id": "alarm_right",
+      "type": "paired_alarm",
+      "position": {
+        "x": 8.5,
+        "y": 7.5
+      },
+      "size": 0.5,
+      "properties": {
+        "max_health": 1,
+        "partner_id": "alarm_left"
+      }
+    },
+    {
+      "id": "exit_gate",
+      "type": "security_gate",
+      "position": {
+        "x": 5.5,
+        "y": 4.5
+      },
+      "size": 1,
+      "properties": {
+        "required_object_ids": [
+          "alarm_left",
+          "alarm_right"
+        ]
+      }
+    },
+    {
+      "id": "exit_gate_right",
+      "type": "security_gate",
+      "position": {
+        "x": 6.5,
+        "y": 4.5
+      },
+      "size": 1,
+      "properties": {
+        "required_object_ids": [
+          "alarm_left",
+          "alarm_right"
+        ]
+      }
+    }
+  ],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装 3 个模块。两个警报器分别在出生点左侧 2 格、右侧 3 格。\n\n它们互相监视：只摧毁其中一个，另一个就会触发警报；全部解除前，移动机器也会立即失败。"
+    },
+    {
+      "speaker": "引导",
+      "text": "装配原点不一定要放移动模块。建议先放置近战模块作为装配原点 (0,0)，命名为 left；再向右共边放移动模块 drive，偏移 (0.5,0)；最右侧放近战模块 right，偏移 (1,0)。\n\n每个模块宽半格，三个模块沿边连接。"
+    },
+    {
+      "speaker": "引导",
+      "text": "近战射程从出手模块的实际中心计算，为 2 格。上面的装配让两个近战模块都够得到各自的警报器。\n\n不要先移动来接近目标；通过组装位置解决左右距离不同的问题。"
+    },
+    {
+      "speaker": "引导",
+      "text": "新指令 simultaneously { ... } 会同时启动块内的动作。把两个具名攻击分别写在块内，每行一个，让 left 向左、right 向右出手。\n\n两个警报器必须在同一个逻辑 tick 内被摧毁。顺序写在 main() 中，会先完成第一击，来不及等待第二击。"
+    },
+    {
+      "speaker": "引导",
+      "text": "同时执行块内至少写两条 move、attack 或 shoot 动作，可用模块名指定实例。每个模块一次只能承担一个动作；整台机器同时最多执行一次移动。\n\n块内不再嵌套 loop、if 或 simultaneously，也不能把同时执行块写在 tick() 中。"
+    },
+    {
+      "speaker": "引导",
+      "text": "同时执行块会等待其中全部动作完成，才继续后面的代码。两个警报器解除后，上方安全门自动打开。\n\n随后向上移动 6 格，让机器中心到达绿色终点，才算完成越狱。"
+    },
+    {
+      "speaker": "引导",
+      "text": "本关初始代码只有 main() 框架，请自己填写同时攻击和脱离路线。\n\n暂停会冻结全部动作；重置位置或重新运行会恢复警报器与安全门，保留你的代码和装配。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 8,
+      "description": "用 simultaneously 同时解除左右警报器，再向上逃离；解除前不能移动。",
+      "module_limit": 3,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting"
+      ],
+      "allow_tick": true,
+      "allow_named_calls": true,
+      "allow_loops": true,
+      "allow_conditionals": true,
+      "allow_simultaneous": true,
+      "goal": {
+        "type": "escape_alarms",
+        "alarm_ids": [
+          "alarm_left",
+          "alarm_right"
+        ],
+        "position": {
+          "x": 5.5,
+          "y": 1.5
+        },
+        "radius": 0.25
+      },
+      "starter_program": "main() {\n    \n}\n"
+    }
+  }
+}

@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "level.schema.json",
+  "title": "游戏关卡",
+  "description": "关卡复用地图格式，在 properties.level 附加玩法规则。未配置 goal 的普通地图作为沙盒运行。动态边界、引用、装配和终点地形仍由游戏验证。",
+  "allOf": [
+    {
+      "$ref": "map.schema.json"
+    },
+    {
+      "type": "object",
+      "required": [
+        "player_spawn"
+      ],
+      "properties": {
+        "player_spawn": {
+          "type": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "level": {
+              "$ref": "#/$defs/level"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "level": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "order": {
+          "type": "integer",
+          "minimum": -1000000,
+          "maximum": 1000000,
+          "default": 0
+        },
+        "module_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "allowed_modules": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "map.schema.json#/$defs/id"
+          }
+        },
+        "starter_program": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "goal": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/goal"
+            }
+          ]
+        },
+        "allow_tick": {
+          "type": "boolean",
+          "default": false
+        },
+        "max_ticks": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 36000,
+          "default": 0,
+          "description": "模拟 tick 上限；0 表示不限时。暂停不计时。"
+        },
+        "allow_named_calls": {
+          "type": "boolean",
+          "default": false,
+          "description": "允许以模块实例名限定调用接收者；省略时不开放。"
+        },
+        "allow_loops": {
+          "type": "boolean",
+          "default": false,
+          "description": "允许 main() 中的无限 loop { ... }；tick() 仍只允许有限短动作，省略时不开放循环。"
+        },
+        "allow_conditionals": {
+          "type": "boolean",
+          "default": false,
+          "description": "允许 if (模块名.ready()) { ... } else { ... }；需同时允许具名调用与射击，两个分支都必须包含动作。"
+        },
+        "allow_simultaneous": {
+          "type": "boolean",
+          "default": false,
+          "description": "允许 main() 中的 simultaneously { ... }；包含 2..256 条直接 move / attack / shoot 动作，同一 tick 启动并等待全部完成。块内不允许嵌套结构或重复占用实际模块，最多一个机身移动。tick() 不允许此块，省略时不开放。"
+        },
+        "allow_distance": {
+          "type": "boolean",
+          "default": false,
+          "description": "显式解锁 distance(角度) 测距查询、数值加减与比较；旧关卡省略时关闭。"
+        },
+        "allow_functions": {
+          "type": "boolean",
+          "default": false,
+          "description": "独立解锁顶层 function 名称() { ... } 与无参函数调用；不解锁变量、返回值或递归。"
+        },
+        "allow_variables": {
+          "type": "boolean",
+          "default": false,
+          "description": "允许constant/value常量、variable变量、赋值与数值名称引用；旧关卡缺省关闭。"
+        },
+        "allow_radar": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否开放玩家雷达 scan() 和扫描结果读取。"
+        },
+        "allow_random": {
+          "type": "boolean",
+          "default": false,
+          "description": "独立开放 random() 与 randomInt(a, b) 数值表达式；无需模块，旧关卡缺省关闭。"
+        },
+        "allow_for": {
+          "type": "boolean",
+          "default": false,
+          "description": "独立解锁 for (角度 in 起点..终点 step 步长) 有限循环；区间包含两端，省略步长为1；旧地图缺省关闭。"
+        }
+      }
+    },
+    "goal": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "position"
+          ],
+          "properties": {
+            "position": {
+              "$ref": "map.schema.json#/$defs/position"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 0.25,
+              "default": 0.25
+            },
+            "type": {
+              "const": "reach_position"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "object_id"
+          ],
+          "properties": {
+            "type": {
+              "const": "destroy_object"
+            },
+            "object_id": {
+              "$ref": "map.schema.json#/$defs/id"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "enemy_id"
+          ],
+          "properties": {
+            "type": {
+              "const": "destroy_enemy"
+            },
+            "enemy_id": {
+              "$ref": "map.schema.json#/$defs/id"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "enemy_id",
+            "object_id",
+            "position"
+          ],
+          "properties": {
+            "type": {
+              "const": "escape_prison"
+            },
+            "enemy_id": {
+              "$ref": "map.schema.json#/$defs/id"
+            },
+            "object_id": {
+              "$ref": "map.schema.json#/$defs/id"
+            },
+            "position": {
+              "$ref": "map.schema.json#/$defs/position"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 0.25,
+              "default": 0.25
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "alarm_ids",
+            "position"
+          ],
+          "properties": {
+            "type": {
+              "const": "escape_alarms"
+            },
+            "alarm_ids": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "map.schema.json#/$defs/id"
+              },
+              "description": "必须引用一对互相绑定的 paired_alarm；两者全部摧毁且玩家存活并抵达出口才完成。"
+            },
+            "position": {
+              "$ref": "map.schema.json#/$defs/position"
+            },
+            "radius": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 0.25,
+              "default": 0.25
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "enemy_id",
+            "attack_count"
+          ],
+          "properties": {
+            "type": {
+              "const": "dodge_attacks"
+            },
+            "enemy_id": {
+              "$ref": "map.schema.json#/$defs/id"
+            },
+            "attack_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            }
+          },
+          "description": "引用 radar_lunge 敌人，实际落空攻击达到指定次数后完成；该敌人命中任意玩家模块即失败。"
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "destroy_waves"
+            }
+          },
+          "description": "击毁所有 wave_approach_attack 分波敌人，尚未生成的波次也必须完成。"
+        }
+      ]
+    }
+  }
+}

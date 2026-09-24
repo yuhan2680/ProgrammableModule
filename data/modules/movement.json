@@ -1,0 +1,10 @@
+{
+	"format_version": 1,
+	"id": "movement",
+	"name": "移动模块",
+	"description": "提供移动能力。多个移动模块的速度相加；每个模块均占据独立空间。",
+	"size": {"width": 0.5, "height": 0.5},
+	"texture": "res://assets/modules/movement.svg",
+	"script_type": "MovementModule",
+	"properties": {"move_speed": 1.0}
+}

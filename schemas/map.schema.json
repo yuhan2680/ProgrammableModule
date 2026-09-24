@@ -1,0 +1,833 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "map.schema.json",
+  "title": "稀疏地图文档",
+  "description": "允许保存无出生点草稿。运行需非空出生点。尺寸相关边界、重复坐标/ID、内容引用与完整模块占地由GDScript校验。未知字段保留。",
+  "type": "object",
+  "required": [
+	"format_version",
+	"id",
+	"name",
+	"width",
+	"height",
+    "tiles"
+  ],
+  "properties": {
+	"format_version": {
+	  "const": 1
+	},
+	"id": {
+	  "$ref": "#/$defs/id"
+	},
+	"name": {
+	  "type": "string",
+	  "maxLength": 65536,
+	  "minLength": 1
+	},
+	"width": {
+	  "type": "integer",
+	  "minimum": 1,
+	  "maximum": 256
+	},
+	"height": {
+	  "type": "integer",
+	  "minimum": 1,
+	  "maximum": 256
+	},
+	"tiles": {
+	  "type": "array",
+	  "maxItems": 65536,
+	  "items": {
+		"type": "object",
+		"required": [
+		  "x",
+		  "y",
+          "tile_id"
+		],
+		"properties": {
+		  "x": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 255
+		  },
+		  "y": {
+			"type": "integer",
+			"minimum": 0,
+			"maximum": 255
+		  },
+		  "tile_id": {
+			"$ref": "#/$defs/id"
+		  }
+		}
+	  }
+	},
+	"player_spawn": {
+	  "anyOf": [
+		{
+		  "type": "null"
+		},
+		{
+		  "$ref": "#/$defs/machine"
+		}
+	  ]
+	},
+	"enemies": {
+	  "type": "array",
+	  "maxItems": 1024,
+	  "items": {
+		"$ref": "#/$defs/enemy"
+	  }
+	},
+	"objects": {
+	  "type": "array",
+	  "maxItems": 1024,
+	  "items": {
+		"$ref": "#/$defs/world_object"
+	  }
+	},
+	"dialogue": {
+	  "type": "array",
+	  "maxItems": 4096,
+	  "items": {
+		"type": "object",
+		"required": [
+          "text"
+		],
+		"properties": {
+		  "text": {
+			"type": "string",
+			"maxLength": 65536
+		  },
+		  "speaker": {
+			"type": "string",
+			"maxLength": 65536
+		  }
+		}
+	  }
+	},
+	"properties": {
+	  "type": "object"
+	}
+  },
+  "$defs": {
+	"id": {
+	  "type": "string",
+	  "minLength": 1,
+	  "maxLength": 128,
+	  "pattern": "^(?!void$)[A-Za-z0-9_.-]+$"
+	},
+	"position": {
+	  "type": "object",
+	  "required": [
+		"x",
+        "y"
+	  ],
+	  "properties": {
+		"x": {
+		  "type": "number",
+		  "minimum": 0,
+		  "exclusiveMaximum": 256
+		},
+		"y": {
+		  "type": "number",
+		  "minimum": 0,
+		  "exclusiveMaximum": 256
+		}
+	  },
+	  "description": "以地图地块为单位；x向右、y向下。运行时检查x<width、y<height。"
+	},
+	"offset": {
+	  "type": "object",
+	  "required": [
+		"x",
+        "y"
+	  ],
+	  "properties": {
+		"x": {
+		  "type": "number",
+		  "minimum": -256,
+		  "maximum": 256
+		},
+		"y": {
+		  "type": "number",
+		  "minimum": -256,
+		  "maximum": 256
+		}
+	  }
+	},
+	"modules": {
+	  "type": "array",
+	  "minItems": 1,
+	  "maxItems": 256,
+	  "items": {
+		"type": "object",
+		"required": [
+		  "id",
+		  "module_id",
+          "offset"
+		],
+		"properties": {
+		  "id": {
+			"$ref": "#/$defs/id"
+		  },
+		  "module_id": {
+			"$ref": "#/$defs/id"
+		  },
+		  "offset": {
+			"$ref": "#/$defs/offset"
+		  }
+		}
+	  }
+	},
+	"machine": {
+	  "type": "object",
+	  "required": [
+		"position",
+        "modules"
+	  ],
+	  "properties": {
+		"position": {
+		  "$ref": "#/$defs/position"
+		},
+		"modules": {
+		  "$ref": "#/$defs/modules"
+		}
+	  }
+	},
+	"entity": {
+	  "type": "object",
+	  "required": [
+        "position"
+	  ],
+	  "properties": {
+		"id": {
+		  "$ref": "#/$defs/id"
+		},
+		"position": {
+		  "$ref": "#/$defs/position"
+		},
+		"modules": {
+		  "$ref": "#/$defs/modules"
+		}
+	  },
+	  "description": "敌人与未知对象保留为元数据；受支持对象类型另由 world_object 验证。"
+	},
+	"world_object": {
+	  "allOf": [
+		{
+		  "$ref": "#/$defs/entity"
+		},
+		{
+		  "if": {
+			"properties": {
+			  "type": {
+				"const": "timed_gate"
+			  }
+			},
+			"required": [
+              "type"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+              "properties"
+			],
+			"properties": {
+			  "size": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 256,
+				"default": 1
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+                  "close_after_ticks"
+				],
+				"properties": {
+				  "close_after_ticks": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 1000000
+				  }
+				}
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "type": {
+				"const": "destructible"
+			  }
+			},
+			"required": [
+              "type"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+              "properties"
+			],
+			"properties": {
+			  "size": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 256,
+				"default": 1
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+                  "max_health"
+				],
+				"properties": {
+				  "max_health": {
+					"type": "number",
+					"exclusiveMinimum": 0,
+					"maximum": 1000000000
+				  }
+				}
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "type": {
+				"const": "prison_alarm"
+			  }
+			},
+			"required": [
+              "type"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+              "properties"
+			],
+			"properties": {
+			  "size": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 256,
+				"default": 1
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+				  "max_health",
+                  "guard_id"
+				],
+				"properties": {
+				  "max_health": {
+					"type": "number",
+					"exclusiveMinimum": 0,
+					"maximum": 1000000000
+				  },
+				  "guard_id": {
+					"$ref": "#/$defs/id"
+				  }
+				}
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "type": {
+				"const": "paired_alarm"
+			  }
+			},
+			"required": [
+              "type"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+              "properties"
+			],
+			"properties": {
+			  "size": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 256,
+				"default": 1
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+				  "max_health",
+                  "partner_id"
+				],
+				"properties": {
+				  "max_health": {
+					"type": "number",
+					"exclusiveMinimum": 0,
+					"maximum": 1000000000
+				  },
+				  "partner_id": {
+					"$ref": "#/$defs/id",
+					"description": "必须引用另一个 paired_alarm，且对方的 partner_id 必须引用本对象；禁止自引用、缺失、错类型和不对称配对，由运行时校验。"
+				  }
+				}
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "type": {
+				"const": "security_gate"
+			  }
+			},
+			"required": [
+              "type"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+              "properties"
+			],
+			"properties": {
+			  "size": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 256,
+				"default": 1
+			  },
+			  "properties": {
+				"type": "object",
+				"properties": {
+				  "required_enemy_ids": {
+					"type": "array",
+					"maxItems": 1024,
+					"uniqueItems": true,
+					"items": {
+					  "$ref": "#/$defs/id"
+					}
+				  },
+				  "required_object_ids": {
+					"type": "array",
+					"maxItems": 1024,
+					"uniqueItems": true,
+					"items": {
+					  "$ref": "#/$defs/id"
+					}
+				  }
+				},
+				"anyOf": [
+				  {
+					"required": [
+                      "required_enemy_ids"
+					],
+					"properties": {
+					  "required_enemy_ids": {
+						"minItems": 1
+					  }
+					}
+				  },
+				  {
+					"required": [
+                      "required_object_ids"
+					],
+					"properties": {
+					  "required_object_ids": {
+						"minItems": 1
+					  }
+					}
+				  }
+				],
+				"description": "所有引用都必须被摧毁；敌人必须使用已注册行为，对象仅允许 destructible / prison_alarm / paired_alarm，不允许门间依赖或自引用。"
+			  }
+			}
+		  }
+		}
+	  ]
+	},
+	"enemy": {
+	  "allOf": [
+		{
+		  "$ref": "#/$defs/entity"
+		},
+		{
+		  "if": {
+			"properties": {
+			  "behavior": {
+				"const": "approach_attack"
+			  }
+			},
+			"required": [
+              "behavior"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+			  "modules",
+              "properties"
+			],
+			"properties": {
+			  "id": {
+				"not": {
+				  "const": "player"
+				}
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+				  "move_angle",
+				  "move_distance",
+                  "attack_angle"
+				],
+				"properties": {
+				  "move_angle": {
+					"type": "number"
+				  },
+				  "move_distance": {
+					"type": "number",
+					"minimum": 0,
+					"maximum": 512
+				  },
+				  "attack_angle": {
+					"type": "number"
+				  }
+				}
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {"behavior": {"const": "advance_attack"}},
+			"required": ["behavior"]
+		  },
+		  "then": {
+			"required": ["id", "modules", "properties"],
+			"properties": {
+			  "id": {"not": {"const": "player"}},
+			  "properties": {
+				"type": "object",
+				"required": ["move_angle", "attack_angle"],
+				"properties": {
+				  "move_angle": {"type": "number"},
+				  "attack_angle": {"type": "number"},
+				  "module_health": {
+					"type": "object",
+					"maxProperties": 256,
+					"additionalProperties": {"type": "number", "minimum": 0.01, "maximum": 1000000},
+					"description": "可选的本敌人模块实例耐久覆盖；键必须引用 modules 中的已有实例 ID，省略时沿用模块定义。只改变运行实例，不改变共享内容。"
+				  }
+				},
+				"description": "可信持续推进近战行为；每 tick 按真实移动速度沿 move_angle 前进，同时沿 attack_angle 攻击。无需 move_distance；碰墙或失去驱动后仍可近战。"
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "behavior": {
+				"const": "alarm_guard"
+			  }
+			},
+			"required": [
+              "behavior"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+              "modules"
+			],
+			"properties": {
+			  "id": {
+				"not": {
+				  "const": "player"
+				}
+			  },
+			  "properties": {
+				"type": "object",
+				"description": "可信静止守卫；监狱警报被摧毁时，守卫仍存活则立即处决玩家。警报通过 guard_id 关联守卫。"
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "behavior": {
+				"const": "radar_lunge"
+			  }
+			},
+			"required": [
+		      "behavior"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+			  "modules",
+		      "properties"
+			],
+			"properties": {
+			  "id": {
+				"not": {
+				  "const": "player"
+				}
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+				  "attack_module_id",
+				  "radar_module_id",
+				  "attack_angle",
+				  "stand_off",
+				  "approach_distance",
+		          "recovery_ticks"
+				],
+				"properties": {
+				  "attack_module_id": {
+					"$ref": "#/$defs/id"
+				  },
+				  "radar_module_id": {
+					"$ref": "#/$defs/id"
+				  },
+				  "attack_angle": {
+					"type": "number"
+				  },
+				  "stand_off": {
+					"type": "number",
+					"minimum": 0.5,
+					"maximum": 32
+				  },
+				  "approach_distance": {
+					"type": "number",
+					"minimum": 0.5,
+					"maximum": 32
+				  },
+				  "recovery_ticks": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 600
+				  }
+				},
+				"description": "固定雷达锁定→准备点→前方接近→近战→恢复。绑定的独立模块能力和实际占地由游戏验证。"
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "behavior": {
+				"const": "random_wander"
+			  }
+			},
+			"required": [
+		      "behavior"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+			  "modules",
+		      "properties"
+			],
+			"properties": {
+			  "id": {
+				"not": {
+				  "const": "player"
+				}
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+				  "speed_scale",
+				  "turn_min_ticks",
+		          "turn_max_ticks"
+				],
+				"properties": {
+				  "speed_scale": {
+					"type": "number",
+					"exclusiveMinimum": 0,
+					"maximum": 1
+				  },
+				  "turn_min_ticks": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 600
+				  },
+				  "turn_max_ticks": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 600
+				  },
+				  "seed": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 2147483647
+				  },
+				  "module_health": {
+					"type": "object",
+					"maxProperties": 256,
+					"additionalProperties": {
+					  "type": "number",
+					  "minimum": 0.01,
+					  "maximum": 1000000
+					}
+				  }
+				},
+				"description": "可信随机游走；转向下限不得大于上限，至少有一个移动模块。使用真实移动与完整扫掠，种子可选，耐久仅覆盖本敌人实例。"
+			  }
+			}
+		  }
+		},
+		{
+		  "if": {
+			"properties": {
+			  "behavior": {
+				"const": "wave_approach_attack"
+			  }
+			},
+			"required": [
+		      "behavior"
+			]
+		  },
+		  "then": {
+			"required": [
+			  "id",
+			  "modules",
+		      "properties"
+			],
+			"properties": {
+			  "id": {
+				"not": {
+				  "const": "player"
+				}
+			  },
+			  "properties": {
+				"type": "object",
+				"required": [
+				  "wave_order",
+				  "spawn_delay_ticks",
+				  "move_angle",
+				  "move_distance",
+		          "attack_angle"
+				],
+				"properties": {
+				  "wave_order": {
+					"type": "integer",
+					"minimum": 1,
+					"maximum": 64
+				  },
+				  "spawn_delay_ticks": {
+					"type": "integer",
+					"minimum": 0,
+					"maximum": 600
+				  },
+				  "move_angle": {
+					"type": "number"
+				  },
+				  "move_distance": {
+					"type": "number",
+					"minimum": 0,
+					"maximum": 512
+				  },
+				  "attack_angle": {
+					"type": "number"
+				  },
+				  "wreck_fade_seconds": {
+	"type": "number",
+	"exclusiveMinimum": 0,
+	"maximum": 30,
+	"description": "整台敌人被毁后的显示淡出秒数；缺省保留旧残骸。"
+  },
+  "random_spawn": {
+	"type": "object",
+	"required": [
+	  "center",
+	  "radius",
+      "body_offset"
+	],
+	"properties": {
+	  "center": {
+		"type": "object",
+		"required": [
+		  "x",
+          "y"
+		],
+		"properties": {
+		  "x": {
+			"type": "number",
+			"minimum": -512,
+			"maximum": 512
+		  },
+		  "y": {
+			"type": "number",
+			"minimum": -512,
+			"maximum": 512
+		  }
+		}
+	  },
+	  "body_offset": {
+		"type": "object",
+		"required": [
+		  "x",
+          "y"
+		],
+		"properties": {
+		  "x": {
+			"type": "number",
+			"minimum": -512,
+			"maximum": 512
+		  },
+		  "y": {
+			"type": "number",
+			"minimum": -512,
+			"maximum": 512
+		  }
+		}
+	  },
+	  "radius": {
+		"type": "number",
+		"minimum": 1,
+		"maximum": 512
+	  },
+	  "seed": {
+		"type": "integer",
+		"minimum": 0,
+		"maximum": 2147483647,
+		"description": "仅测试副本使用；正式随机教学不固定种子。"
+	  }
+	},
+	"description": "双模块随机径向出生，运行前验证实际占地；不修改地图或玩家雷达角度语义。"
+  },
+				  "module_health": {
+					"type": "object",
+					"maxProperties": 256,
+					"additionalProperties": {
+					  "type": "number",
+					  "minimum": 0.01,
+					  "maximum": 1000000
+					}
+				  }
+				},
+				"description": "有限连续分波；wave_order 从 1 连续且全图唯一。前波所有真实模块被毁后等待 spawn_delay_ticks 才激活下一波；需要真实移动及近战模块，位移与攻击沿用普通命令。"
+			  }
+			}
+		  }
+		}
+	  ]
+	}
+  }
+}

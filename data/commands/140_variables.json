@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "variables",
+  "order": 140,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "变量与赋值",
+    "zh_HK": "變數與賦值",
+    "en": "Variables and Assignment"
+  },
+  "description": {
+    "zh_CN": "用 variable 名称 = 数值表达式 声明可修改的数值，再用 名称 = 新表达式 更新。引用必须在声明之后，赋值只能修改变量，不能修改 constant/value 常量。顶层名称由 main 和各函数共享；函数不能读取调用者的局部变量。if/else 和 loop 的子块有独立词法作用域，内层可声明同名变量而不改变外层值。tick() 与 simultaneously 块内可读取已有变量，不能声明或赋值。每次重新运行会按初始表达式重新创建变量。",
+    "zh_HK": "用 variable 名稱 = 數值運算式 宣告可修改的數值，再用 名稱 = 新運算式 更新。引用必須在宣告之後，賦值只能修改變數，不能修改 constant/value 常數。頂層名稱由 main 和各函數共用；函數不能讀取呼叫者的區域變數。if/else 和 loop 的子區塊有獨立的詞法作用域，內層可宣告同名變數而不改變外層的值。tick() 與 simultaneously 區塊內可讀取已有變數，但不能宣告或賦值。每次重新執行時，都會按初始運算式重新建立變數。",
+    "en": "Declare a mutable number with variable name = expression, then update it with name = new_expression. A local name must be declared before use, and assignment can only modify variables, not constant/value bindings. Top-level names are shared by main and every function; functions cannot read a caller’s local variables. if/else and loop sub-blocks have their own lexical scope, and an inner declaration may shadow an outer name without changing its value. tick() and simultaneously blocks can read existing variables but cannot declare or assign them. Each new run recreates values from their initial expressions."
+  },
+  "syntax": "variable direction = 90\ndirection = 270",
+  "requirements": {
+    "allow_variables": true
+  }
+}

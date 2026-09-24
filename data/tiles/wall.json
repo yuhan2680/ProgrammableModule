@@ -1,0 +1,10 @@
+{
+  "format_version": 1,
+  "id": "wall",
+  "name": "墙壁",
+  "texture": "res://assets/tiles/wall.svg",
+  "collision": true,
+  "radar_block": true,
+  "attack_block": true,
+  "properties": {}
+}

@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "level_id": "level_012",
+  "assembly_help": "请先安装测距模块 sensor 作为装配原点 (0,0)，在右侧 (0.5,0) 安装射击模块 gun。",
+  "bindings": [
+    {
+      "role": "sensor",
+      "behavior": "RangefinderModule",
+      "index": 0
+    },
+    {
+      "role": "gun",
+      "behavior": "ShootingModule",
+      "index": 0
+    }
+  ],
+  "source": "main() {\n    variable aim = 0\n    loop {\n        for (angle in 0..315 step 45) {\n            if ({{sensor}}.distance(angle) < 6) {\n                aim = angle\n            }\n        }\n        {{gun}}.shoot(aim)\n    }\n}\n",
+  "max_steps": 900
+}

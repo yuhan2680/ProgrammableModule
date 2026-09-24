@@ -1,0 +1,14 @@
+{
+  "format_version": 1,
+  "level_id": "level_007",
+  "assembly_help": "请先安装移动模块作为装配原点 (0,0)，右侧 (0.5,0) 安装射击模块。",
+  "bindings": [
+    {
+      "role": "gun",
+      "behavior": "ShootingModule",
+      "index": 0
+    }
+  ],
+  "source": "main() {\n    loop {\n        if ({{gun}}.ready()) {\n            {{gun}}.shoot(0)\n        } else {\n            move(180, 0.1)\n        }\n    }\n}\n",
+  "max_steps": 1000
+}

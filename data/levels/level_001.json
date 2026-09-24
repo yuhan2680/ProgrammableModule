@@ -1,0 +1,154 @@
+{
+	"format_version": 1,
+	"id": "level_001",
+	"name": "第一关 · 初次移动",
+	"width": 8,
+	"height": 9,
+	"tiles": [
+		{
+			"x": 1,
+			"y": 1,
+			"tile_id": "floor"
+		},
+		{
+			"x": 2,
+			"y": 1,
+			"tile_id": "floor"
+		},
+		{
+			"x": 3,
+			"y": 1,
+			"tile_id": "floor"
+		},
+		{
+			"x": 4,
+			"y": 1,
+			"tile_id": "floor"
+		},
+		{
+			"x": 5,
+			"y": 1,
+			"tile_id": "floor"
+		},
+		{
+			"x": 1,
+			"y": 2,
+			"tile_id": "floor"
+		},
+		{
+			"x": 1,
+			"y": 3,
+			"tile_id": "floor"
+		},
+		{
+			"x": 1,
+			"y": 4,
+			"tile_id": "floor"
+		},
+		{
+			"x": 2,
+			"y": 4,
+			"tile_id": "floor"
+		},
+		{
+			"x": 3,
+			"y": 4,
+			"tile_id": "floor"
+		},
+		{
+			"x": 4,
+			"y": 4,
+			"tile_id": "floor"
+		},
+		{
+			"x": 5,
+			"y": 4,
+			"tile_id": "floor"
+		},
+		{
+			"x": 5,
+			"y": 5,
+			"tile_id": "floor"
+		},
+		{
+			"x": 5,
+			"y": 6,
+			"tile_id": "floor"
+		},
+		{
+			"x": 1,
+			"y": 7,
+			"tile_id": "floor"
+		},
+		{
+			"x": 2,
+			"y": 7,
+			"tile_id": "floor"
+		},
+		{
+			"x": 3,
+			"y": 7,
+			"tile_id": "floor"
+		},
+		{
+			"x": 4,
+			"y": 7,
+			"tile_id": "floor"
+		},
+		{
+			"x": 5,
+			"y": 7,
+			"tile_id": "floor"
+		}
+	],
+	"player_spawn": {
+		"position": {
+			"x": 1.5,
+			"y": 7.5
+		},
+		"modules": [
+			{
+				"id": "drive",
+				"module_id": "movement",
+				"offset": {
+					"x": 0,
+					"y": 0
+				}
+			}
+		]
+	},
+	"enemies": [],
+	"objects": [],
+	"dialogue": [
+		{
+			"speaker": "教程",
+			"text": "欢迎来到第一关。请先在空白组装区域放置一个移动模块，确认装配后再编写程序。此关最多携带一个模块。"
+		},
+		{
+			"speaker": "教程",
+			"text": "move(角度, 距离) 会等待本次移动完成后再执行下一行。0° 向右、90° 向上、180° 向左、270° 向下；距离以地板格数计算。"
+		},
+		{
+			"speaker": "教程",
+			"text": "沿白色地板到达绿色终点，灰色区域是不可通行的 void。路线是右 4、上 3、左 4、上 3、右 4；请把它写成逐行执行的 move 指令。"
+		}
+	],
+	"properties": {
+		"level": {
+			"order": 1,
+			"description": "用一个移动模块沿上下对齐的 S 形道路抵达终点。两段上行都为 3 格。",
+			"module_limit": 1,
+			"allowed_modules": [
+				"movement"
+			],
+			"goal": {
+				"position": {
+					"x": 5.5,
+					"y": 1.5
+				},
+				"radius": 0.25
+			},
+			"starter_program": "main() {\n    // 从这里开始：先向右移动四格。\n    move(0, 4)\n}\n"
+		}
+	}
+}

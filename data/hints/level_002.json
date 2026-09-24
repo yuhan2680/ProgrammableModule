@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "level_id": "level_002",
+  "assembly_help": "本关需要两个沿水平方向共边的移动模块，才能在闸门落下前通过。",
+  "bindings": [],
+  "source": "main() {\n    move(0, 8)\n}\n",
+  "max_steps": 1000
+}

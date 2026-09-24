@@ -1,0 +1,29 @@
+{
+  "format_version": 1,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "状态查询",
+    "zh_HK": "狀態查詢",
+    "en": "Queries"
+  },
+  "id": "radar_event",
+  "order": 155,
+  "title": {
+    "zh_CN": "雷达探测事件",
+    "zh_HK": "雷達偵測事件",
+    "en": "Radar Detection Event"
+  },
+  "description": {
+    "zh_CN": "先在顶层声明 variable target = null，再用真实雷达名称绑定 onDetected。EnemyPosition 是固定载荷名；箭头后只能填写此前已声明的全局变量，不能填写常量或局部变量。运行时每个逻辑 tick 都会将该雷达最新 scan() 目标快照写入 target；没有可见敌人时写入 null。同名局部变量不会改变事件写入的全局目标。main() 中先判断 target != null，再读取 target.Angle()、target.Position.x/y 或 target.Distance。事件块只允许这一条绑定，不放入动作、条件或任意处理代码。",
+    "zh_HK": "先在頂層宣告 variable target = null，再用實際雷達名稱綁定 onDetected。EnemyPosition 是固定的載荷名稱；箭頭後只能填寫此前已宣告的全域變數，不能填寫常數或區域變數。執行時，每個邏輯 tick 都會把該雷達最新的 scan() 目標快照寫入 target；沒有可見敵人時寫入 null。同名區域變數不會改變事件寫入的全域目標。main() 中先判斷 target != null，再讀取 target.Angle()、target.Position.x/y 或 target.Distance。事件區塊只允許這一項綁定，不可放入動作、條件或任意處理程式碼。",
+    "en": "Declare variable target = null at the top level, then bind onDetected using a real radar module name. EnemyPosition is the fixed payload name. After the arrow, use a global variable declared earlier, never a constant or local variable. Each simulation tick writes that radar's latest scan() target snapshot to target, or null when no enemy is visible. A local variable with the same name does not change the global destination. In main(), check target != null before reading target.Angle(), target.Position.x/y, or target.Distance. The event block contains only this binding, with no actions, conditions, or arbitrary handler code."
+  },
+  "syntax": "variable target = null\nradar.onDetected { EnemyPosition -> target }\nmain() {\n    // target: Angle(), Position.x/y, Distance\n}",
+  "requirements": {
+    "allow_radar_events": true,
+    "allow_radar": true,
+    "allow_named_calls": true,
+    "allow_variables": true,
+    "module_behavior": "RadarModule"
+  }
+}

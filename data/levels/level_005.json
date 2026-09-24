@@ -1,0 +1,348 @@
+{
+  "format_version": 1,
+  "id": "level_005",
+  "name": "第五关 · 越狱行动",
+  "width": 9,
+  "height": 9,
+  "tiles": [
+    {
+      "x": 3,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 7,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 4.5,
+      "y": 6.5
+    },
+    "modules": [
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "left",
+        "module_id": "melee",
+        "offset": {
+          "x": -0.5,
+          "y": 0
+        }
+      },
+      {
+        "id": "right",
+        "module_id": "melee",
+        "offset": {
+          "x": 0.5,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [
+    {
+      "id": "guard",
+      "position": {
+        "x": 2.5,
+        "y": 6.5
+      },
+      "modules": [
+        {
+          "id": "guard_blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ],
+      "behavior": "alarm_guard",
+      "properties": {}
+    }
+  ],
+  "objects": [
+    {
+      "id": "alarm",
+      "type": "prison_alarm",
+      "position": {
+        "x": 6.5,
+        "y": 6.5
+      },
+      "size": 1,
+      "properties": {
+        "max_health": 1,
+        "guard_id": "guard"
+      }
+    },
+    {
+      "id": "exit_gate_0",
+      "type": "security_gate",
+      "position": {
+        "x": 3.5,
+        "y": 4.5
+      },
+      "size": 1,
+      "properties": {
+        "required_enemy_ids": [
+          "guard"
+        ],
+        "required_object_ids": [
+          "alarm"
+        ]
+      }
+    },
+    {
+      "id": "exit_gate_1",
+      "type": "security_gate",
+      "position": {
+        "x": 4.5,
+        "y": 4.5
+      },
+      "size": 1,
+      "properties": {
+        "required_enemy_ids": [
+          "guard"
+        ],
+        "required_object_ids": [
+          "alarm"
+        ]
+      }
+    },
+    {
+      "id": "exit_gate_2",
+      "type": "security_gate",
+      "position": {
+        "x": 5.5,
+        "y": 4.5
+      },
+      "size": 1,
+      "properties": {
+        "required_enemy_ids": [
+          "guard"
+        ],
+        "required_object_ids": [
+          "alarm"
+        ]
+      }
+    }
+  ],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装 3 个模块。警卫在出生点左侧 2 格，警报器在右侧 2 格。先击毁警卫，再拆除警报器，最后向上逃出监狱。"
+    },
+    {
+      "speaker": "引导",
+      "text": "建议先安装移动模块作为装配原点 (0,0)，命名为 drive；左右各共边安装一个近战模块，分别命名为 left 和 right，偏移为 (-0.5, 0) 与 (0.5, 0)。选择模块后，在名称栏修改并应用。"
+    },
+    {
+      "speaker": "引导",
+      "text": "直接调用 attack(角度)，会同时调用所有可用的近战模块，各自从自己的位置攻击。给模块命名后，left.attack(180) 只调用 left，right 不会随之攻击或进入冷却。"
+    },
+    {
+      "speaker": "引导",
+      "text": "先让左侧模块向 180° 攻击警卫，再让右侧模块向 0° 攻击警报器。如果先拆掉警报器而警卫仍存活，警卫会立即处决整台机器，本次运行失败。"
+    },
+    {
+      "speaker": "引导",
+      "text": "警卫和警报器都被击毁后，上方出口门自动打开。使用 move(90, 5) 向上移动 5 格到绿色终点。仅拆除两个目标还不算逃脱。"
+    },
+    {
+      "speaker": "引导",
+      "text": "代码中的模块名区分大小写，请使用字母或下划线开头的名称。拼错名称或调用该模块不具备的能力，会显示错误位置；失败后仍保留代码和装配。"
+    },
+    {
+      "speaker": "引导",
+      "text": "命名调用也适用于 move 和 shoot；不带模块名时仍会调用所有同类模块。main() 按顺序执行；tick() 仍可持续调用短动作。如果同一 tick 内同时击毁警卫与警报器，也可安全逃脱。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 5,
+      "description": "给模块命名，先解除左侧警卫，再拆除右侧警报器，向上逃离监狱。",
+      "module_limit": 3,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting"
+      ],
+      "allow_tick": true,
+      "allow_named_calls": true,
+      "goal": {
+        "type": "escape_prison",
+        "enemy_id": "guard",
+        "object_id": "alarm",
+        "position": {
+          "x": 4.5,
+          "y": 1.5
+        },
+        "radius": 0.25
+      },
+      "starter_program": "main() {\n    // 先在组装页给模块命名为 drive、left、right。\n    // 使用 模块名.attack(角度)，先警卫、再警报器。\n    // 出口门打开后，再向上移动。\n}\n"
+    }
+  }
+}

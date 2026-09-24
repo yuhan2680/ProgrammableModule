@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "attack",
+  "order": 30,
+  "category": "action",
+  "category_title": {
+    "zh_CN": "动作指令",
+    "zh_HK": "動作指令",
+    "en": "Actions"
+  },
+  "title": {
+    "zh_CN": "近战攻击",
+    "zh_HK": "近戰攻擊",
+    "en": "Melee Attack"
+  },
+  "description": {
+    "zh_CN": "沿指定角度近战攻击，角度方向与 move 相同。从近战模块的实际中心检测射程内第一个可命中的目标；射程与伤害来自模块配置，默认射程为 2 格。挥空也会消耗一个逻辑 tick。需要近战模块。",
+    "zh_HK": "沿指定角度進行近戰攻擊，角度方向與 move 相同。從近戰模組的實際中心偵測射程內第一個可命中的目標；射程與傷害由模組設定決定，預設射程為 2 格。揮空也會消耗一個邏輯 tick。需要近戰模組。",
+    "en": "Attack in the given direction, using the same angle convention as move. The first hittable target is checked from the melee module’s actual center. Range and damage come from its configuration; the default range is 2 cells. A miss still takes one logic tick. A melee module is required."
+  },
+  "syntax": "attack(angle)",
+  "requirements": {
+    "module_behavior": "MeleeModule"
+  }
+}

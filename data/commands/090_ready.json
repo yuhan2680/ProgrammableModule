@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "id": "ready",
+  "order": 90,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "状态查询",
+    "zh_HK": "狀態查詢",
+    "en": "Queries"
+  },
+  "title": {
+    "zh_CN": "射击就绪查询",
+    "zh_HK": "射擊就緒查詢",
+    "en": "Shooting Readiness"
+  },
+  "description": {
+    "zh_CN": "在 if 条件中查询指定射击模块下一动作 tick 是否可以开火。需要模块名称和空括号，不接受参数，也不能独立写成动作语句。查询不消耗逻辑时间、不发射弹丸、不改变冷却；它不会预留本次射击机会。",
+    "zh_HK": "在 if 條件中查詢指定射擊模組能否在下一個動作 tick 開火。需要模組名稱和空括號，不接受參數，也不能獨立寫成動作語句。查詢不消耗邏輯時間、不發射彈丸、不改變冷卻；它不會預留本次射擊機會。",
+    "en": "Use in an if condition to check whether the named shooting module can fire on the next action tick. A module name and empty parentheses are required. It takes no arguments and cannot be used as a standalone action. The query consumes no logic time, fires no projectile, and changes no cooldown; it does not reserve a shot."
+  },
+  "syntax": "module.ready()",
+  "requirements": {
+    "allow_conditionals": true,
+    "allow_named_calls": true,
+    "module_behavior": "ShootingModule"
+  }
+}

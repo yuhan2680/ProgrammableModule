@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "状态查询",
+    "zh_HK": "狀態查詢",
+    "en": "Queries"
+  },
+  "id": "radar_position",
+  "order": 153,
+  "title": {
+    "zh_CN": "目标位置",
+    "zh_HK": "目標位置",
+    "en": "Target Position"
+  },
+  "description": {
+    "zh_CN": "读取扫描时目标的世界位置向量。先检查 target != null；Position.x 和 Position.y 分别返回横向与纵向坐标，也可先用 variable position = target.Position 保存向量，再读取 position.x 或 position.y。Position、x、y 是属性，不写括号；属性名区分大小写。",
+    "zh_HK": "讀取掃描時目標的世界位置向量。先檢查 target != null；Position.x 和 Position.y 分別傳回橫向與縱向坐標，也可先用 variable position = target.Position 保存向量，再讀取 position.x 或 position.y。Position、x、y 是屬性，不寫括號；屬性名稱區分大小寫。",
+    "en": "Reads the target’s world-position vector at the time of the scan. Check target != null first. Position.x and Position.y return its horizontal and vertical coordinates. You can store the vector with variable position = target.Position, then read position.x or position.y. Position, x, and y are case-sensitive properties without parentheses."
+  },
+  "syntax": "target.Position\ntarget.Position.x\ntarget.Position.y",
+  "requirements": {
+    "allow_radar": true,
+    "module_behavior": "RadarModule",
+    "allow_variables": true
+  }
+}

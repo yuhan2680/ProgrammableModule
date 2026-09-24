@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "level_id": "level_003",
+  "assembly_help": "请安装一个移动模块和一个近战模块；建议先安装移动模块作为装配原点 (0,0)，近战在右侧 (0.5,0)。",
+  "bindings": [],
+  "source": "main() {\n    move(0, 3)\n    attack(0)\n}\n",
+  "max_steps": 1000
+}

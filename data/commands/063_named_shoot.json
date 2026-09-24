@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "id": "named_shoot",
+  "order": 63,
+  "category": "action",
+  "category_title": {"zh_CN": "动作指令", "zh_HK": "動作指令", "en": "Actions"},
+  "title": {"zh_CN": "具名射击", "zh_HK": "具名射擊", "en": "Named Shoot"},
+  "description": {
+    "zh_CN": "用组装页设置的射击模块名称替换 module。只有这个模块沿指定角度发射弹丸，不会调用其他射击模块；发射位置和冷却均属于这个模块。它尚在冷却时调用不会开火，也不会报错。需要本关开放具名调用。",
+    "zh_HK": "用組裝頁設定的射擊模組名稱取代 module。只有該模組會沿指定角度發射彈丸，不會呼叫其他射擊模組；發射位置和冷卻均屬於該模組。冷卻期間呼叫不會開火，也不會報錯。需要本關開放具名呼叫。",
+    "en": "Replace module with the shooting module name assigned in assembly. Only this module fires in the given direction; other guns are not called. The firing position and cooldown belong to this module. Calling it during cooldown does not fire and is not an error. Named calls must be unlocked for this level."
+  },
+  "syntax": "module.shoot(angle)",
+  "requirements": {"allow_named_calls": true, "module_behavior": "ShootingModule"}
+}

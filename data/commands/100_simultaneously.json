@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "simultaneously",
+  "order": 100,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "同时执行",
+    "zh_HK": "同時執行",
+    "en": "Simultaneous Actions"
+  },
+  "description": {
+    "zh_CN": "同时启动花括号内至少两条 move、attack 或 shoot 动作，可通过模块名指定实例。所有动作完成后才执行块后代码；shoot 完成指发射动作结束，不会等待弹丸命中。各动作不能占用同一模块，整台机器同时最多执行一次移动。块内只写直接动作，不嵌套 loop、if 或同时执行块；不能放在 tick() 中。不同武器同时开火不保证弹丸同时命中，目标距离和弹速仍会影响命中时机。",
+    "zh_HK": "同時啟動大括號內至少兩個 move、attack 或 shoot 動作，可透過模組名稱指定實例。所有動作完成後才執行區塊後的程式碼；shoot 完成是指發射動作結束，不會等待彈丸命中。各動作不能佔用同一模組，整台機器同時最多執行一次移動。區塊內只寫直接動作，不可再加入 loop、if 或同時執行區塊；不能放在 tick() 中。不同武器同時開火不保證彈丸會同時命中，目標距離和彈速仍會影響命中時機。",
+    "en": "Start at least two move, attack, or shoot actions together. Module names can select instances. Continue after the block only once all actions finish; shoot finishes its firing action without waiting for the projectile to hit. Actions cannot share a module, and the robot can perform at most one move at once. Use direct actions only, without nested loop, if, or simultaneous blocks, and never inside tick(). Firing different weapons together does not guarantee simultaneous impacts; target distance and projectile speed still matter."
+  },
+  "syntax": "simultaneously {\n    ...\n}",
+  "requirements": {
+    "allow_simultaneous": true
+  }
+}

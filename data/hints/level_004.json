@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "level_id": "level_004",
+  "assembly_help": "请在图纸任意网格位置安装一个射击模块，落点记为 (0,0)。",
+  "bindings": [],
+  "source": "main() {\n}\ntick() {\n    shoot(0)\n}\n",
+  "max_steps": 1000
+}

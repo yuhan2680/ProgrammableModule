@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "random_int",
+  "order": 161,
+  "category": "query",
+  "category_title": {
+    "zh_CN": "数值函数",
+    "zh_HK": "數值函數",
+    "en": "Numeric Functions"
+  },
+  "title": {
+    "zh_CN": "区间随机整数",
+    "zh_HK": "區間隨機整數",
+    "en": "Random Integer in a Range"
+  },
+  "description": {
+    "zh_CN": "从第十关开始解锁。randomInt(a, b) 返回 a 到 b 之间的随机整数，包含 a 和 b。两个参数必须是 -2147483648 到 2147483647 范围内的整数，且 a 不能大于 b；例如 randomInt(0, 359) 选择一个整数角度，randomInt(-2, 2) 可以返回 -2、-1、0、1、2，randomInt(3, 3) 总是返回 3。不需要特定模块，不消耗逻辑时间。可写 move(randomInt(0, 359), 0.5)，也可在解锁后存入常量或变量。每次求值重新随机；不支持 模块名.randomInt() 或单独一行动作。",
+    "zh_HK": "從第十關開始解鎖。randomInt(a, b) 傳回 a 到 b 之間的隨機整數，包含 a 和 b。兩個參數必須是 -2147483648 到 2147483647 範圍內的整數，而且 a 不能大於 b；例如 randomInt(0, 359) 會選擇一個整數角度，randomInt(-2, 2) 可以傳回 -2、-1、0、1、2，randomInt(3, 3) 總會傳回 3。不需要特定模組，也不消耗邏輯時間。可寫 move(randomInt(0, 359), 0.5)，也可在解鎖後存入常數或變數。每次求值都會重新取隨機數；不支援 模組名稱.randomInt() 或單獨一行動作。",
+    "en": "Unlocked from level 10. randomInt(a, b) returns a random integer from a through b, including both bounds. Both arguments must be integers from -2147483648 to 2147483647, with a no greater than b. For example, randomInt(0, 359) picks an integer angle, randomInt(-2, 2) can return -2, -1, 0, 1, or 2, and randomInt(3, 3) always returns 3. No particular module or logical time is needed. Use move(randomInt(0, 359), 0.5), or store the result in an unlocked constant or variable. Each evaluation draws again; module.randomInt() and standalone action calls are not supported."
+  },
+  "syntax": "randomInt(a, b)",
+  "requirements": {
+    "allow_random": true
+  }
+}

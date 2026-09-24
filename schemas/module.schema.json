@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "module.schema.json",
+  "title": "模块定义",
+  "description": "数据驱动模块。行为由运行时注册表解析；未知字段保留。",
+  "type": "object",
+  "required": [
+	"format_version",
+	"id",
+	"name",
+	"size",
+	"texture",
+    "script_type"
+  ],
+  "properties": {
+	"format_version": {
+	  "const": 1
+	},
+	"id": {
+	  "type": "string",
+	  "minLength": 1,
+	  "maxLength": 128,
+	  "pattern": "^(?!void$)[A-Za-z0-9_.-]+$"
+	},
+	"name": {
+	  "type": "string",
+	  "maxLength": 65536,
+	  "minLength": 1
+	},
+	"description": {
+	  "type": "string",
+	  "maxLength": 65536
+	},
+	"size": {
+	  "type": "object",
+	  "required": [
+		"width",
+        "height"
+	  ],
+	  "properties": {
+		"width": {
+		  "type": "number",
+		  "minimum": 0.001,
+		  "maximum": 256
+		},
+		"height": {
+		  "type": "number",
+		  "minimum": 0.001,
+		  "maximum": 256
+		}
+	  }
+	},
+	"texture": {
+	  "type": "string",
+	  "description": "安全资源路径；图片必须存在且可解码，运行时另行检查。",
+	  "allOf": [
+		{
+		  "pattern": "^(res|user)://[^/\\\\:]+(?:/[^/\\\\:]+)*$"
+		},
+		{
+		  "not": {
+			"pattern": "(?:^|/)\\.{1,2}(?:/|$)"
+		  }
+		},
+		{
+		  "pattern": "\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Ee]?[Gg]|[Ww][Ee][Bb][Pp]|[Ss][Vv][Gg])$"
+		}
+	  ]
+	},
+	"script_type": {
+	  "type": "string",
+	  "minLength": 1,
+	  "maxLength": 128,
+	  "pattern": "^(?!void$)[A-Za-z0-9_.-]+$"
+	},
+	"properties": {
+	  "type": "object",
+	  "properties": {
+		"max_health": {
+		  "type": "number",
+		  "exclusiveMinimum": 0,
+		  "maximum": 1000000000,
+		  "default": 1
+		}
+	  }
+	}
+  },
+  "allOf": [
+	{
+	  "if": {
+		"properties": {
+		  "script_type": {
+			"const": "MovementModule"
+		  }
+		},
+		"required": [
+          "script_type"
+		]
+	  },
+	  "then": {
+		"required": [
+          "properties"
+		],
+		"properties": {
+		  "properties": {
+			"type": "object",
+			"required": [
+              "move_speed"
+			],
+			"properties": {
+			  "move_speed": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"description": "每秒地图单位；多个可用移动模块的速度相加。"
+			  }
+			}
+		  }
+		}
+	  }
+	},
+	{
+	  "if": {
+		"properties": {
+		  "script_type": {
+			"const": "MeleeModule"
+		  }
+		},
+		"required": [
+          "script_type"
+		]
+	  },
+	  "then": {
+		"required": [
+          "properties"
+		],
+		"properties": {
+		  "properties": {
+			"type": "object",
+			"required": [
+			  "range",
+              "damage"
+			],
+			"properties": {
+			  "range": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 256
+			  },
+			  "damage": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 1000000000
+			  },
+			  "cooldown_ticks": {
+				"type": "integer",
+				"minimum": 1,
+				"maximum": 1000000,
+				"default": 1
+			  }
+			}
+		  }
+		}
+	  }
+	},
+	{
+	  "if": {
+		"properties": {
+		  "script_type": {
+			"const": "ShootingModule"
+		  }
+		},
+		"required": [
+          "script_type"
+		]
+	  },
+	  "then": {
+		"required": [
+          "properties"
+		],
+		"properties": {
+		  "properties": {
+			"required": [
+			  "projectile_speed",
+			  "deceleration",
+			  "damage_per_speed",
+              "cooldown_ticks"
+			],
+			"properties": {
+			  "projectile_speed": {
+				"type": "number",
+				"minimum": 0.01,
+				"maximum": 256
+			  },
+			  "deceleration": {
+				"type": "number",
+				"minimum": 0.01,
+				"maximum": 256
+			  },
+			  "damage_per_speed": {
+				"type": "number",
+				"minimum": 0.01,
+				"maximum": 256
+			  },
+			  "cooldown_ticks": {
+				"type": "integer",
+				"minimum": 1,
+				"maximum": 1000000
+			  }
+			}
+		  }
+		}
+	  }
+	},
+	{
+	  "if": {
+		"properties": {
+		  "script_type": {
+			"const": "RadarModule"
+		  }
+		},
+		"required": [
+          "script_type"
+		]
+	  },
+	  "then": {
+		"required": [
+          "properties"
+		],
+		"properties": {
+		  "properties": {
+			"type": "object",
+			"required": [
+              "radar_range"
+			],
+			"properties": {
+			  "radar_range": {
+				"type": "number",
+				"exclusiveMinimum": 0,
+				"maximum": 512
+			  }
+			}
+		  }
+		}
+	  }
+	}
+  ]
+}

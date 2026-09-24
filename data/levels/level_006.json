@@ -1,0 +1,332 @@
+{
+  "format_version": 1,
+  "id": "level_006",
+  "name": "第六关 · 循环阶梯",
+  "width": 33,
+  "height": 23,
+  "tiles": [
+    {
+      "x": 31,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 31,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 28,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 29,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 30,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 31,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 28,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 25,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 26,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 27,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 28,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 25,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 22,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 23,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 24,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 25,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 22,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 22,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 20,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 21,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 21,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 21,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 21,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 1.5,
+      "y": 21.5
+    },
+    "modules": [
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [],
+  "objects": [],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装 1 个模块。选择移动模块，在图纸任意网格位置放置，落点记为 (0,0)。确认装配后开始编程。"
+    },
+    {
+      "speaker": "引导",
+      "text": "这条路线由重复的台阶组成。观察一组台阶的转弯位置和每段路的长度，想一想哪些动作可以反复使用。"
+    },
+    {
+      "speaker": "引导",
+      "text": "把重复执行的指令放进 loop { ... }。loop 后直接写花括号，不加小括号；块内按从上到下的顺序执行，每次移动完成后才开始下一条。"
+    },
+    {
+      "speaker": "引导",
+      "text": "程序区只保留了空的 loop 框架。请自己在花括号内写出走完一组台阶的动作，每行一条指令。填写后再运行，观察机器人是否沿着下一组台阶继续前进。"
+    },
+    {
+      "speaker": "引导",
+      "text": "loop 会持续重复，并不是固定循环十次。机器人走完十组台阶到达绿色终点时，关卡会结束运行；不需要额外写停止指令。步长不对碰到灰色区域时会失败，并标出出错行。"
+    },
+    {
+      "speaker": "引导",
+      "text": "暂停会保留当前移动和循环进度，继续后接着走。停止或重置位置保留代码与装配，重新运行从起点开始。本阶段循环写在 main() 中，tick() 内不允许循环。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 6,
+      "description": "观察阶梯的重复规律，自己编写 loop 中的动作，到达终点。",
+      "module_limit": 1,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting"
+      ],
+      "allow_tick": true,
+      "allow_named_calls": true,
+      "allow_loops": true,
+      "goal": {
+        "type": "reach_position",
+        "position": {
+          "x": 31.5,
+          "y": 1.5
+        },
+        "radius": 0.25
+      },
+      "starter_program": "main() {\n    loop {\n        \n    }\n}\n"
+    }
+  }
+}

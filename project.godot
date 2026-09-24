@@ -1,0 +1,46 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
+[application]
+
+config/name="ProgrammableModule"
+run/main_scene="res://scenes/startup.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/bg_color=Color(1, 1, 1, 1)
+boot_splash/stretch_mode=0
+boot_splash/image="res://assets/ui/startup_track.png"
+config/icon="res://assets/app/app_icon.png"
+config/macos_native_icon="res://assets/app/app_icon.icns"
+config/windows_native_icon="res://assets/app/app_icon.ico"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/size/resizable=false
+window/size/window_width_override=1280
+window/size/window_height_override=800
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[dotnet]
+
+project/assembly_name="ProgrammableModule"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0.953, 0.961, 0.976, 1)

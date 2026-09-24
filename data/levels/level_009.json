@@ -1,0 +1,1173 @@
+{
+  "format_version": 1,
+  "id": "level_009",
+  "name": "第九关 · 蜿蜒穿行",
+  "width": 24,
+  "height": 22,
+  "tiles": [
+    {
+      "x": 2,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 18,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 19,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 19,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 2.5,
+      "y": 18.5
+    },
+    "modules": [
+      {
+        "id": "sensor",
+        "module_id": "rangefinder",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0,
+          "y": 0.5
+        }
+      }
+    ]
+  },
+  "enemies": [],
+  "objects": [],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装 2 个模块，新增测距模块。它能沿指定方向测量前方障碍的距离，但本身不能移动。\n\n搭配一个移动模块，让程序读取通道长度，自动走过这条长蛇形隧道。"
+    },
+    {
+      "speaker": "引导",
+      "text": "建议先放置测距模块作为装配原点 (0,0)，命名为 sensor；再在下方偏移 (0,0.5) 放移动模块，命名为 drive。\n\n两个半格模块沿边连接，测距模块位于机器的前上方。这个布局适合本关向右、向上、向左的路线。"
+    },
+    {
+      "speaker": "引导",
+      "text": "distance(角度) 返回测距模块中心到前方第一个障碍表面的距离。角度仍是 0° 向右、90° 向上、180° 向左、270° 向下。\n\n墙壁、void 和地图边界都会被检测到；本机模块不会挡住自己的测量。读取不会移动机器，也不消耗逻辑时间。"
+    },
+    {
+      "speaker": "引导",
+      "text": "测到的距离不是整台机器可以直接移动的距离。模块有宽度，走满读数会撞上墙。\n\n采用前面的装配时，向右可以写 move(0, distance(0) - 0.5)，在障碍前留下半格余量；向上和向左也要按各自方向重新测量。"
+    },
+    {
+      "speaker": "引导",
+      "text": "观察通道的重复规律：先向右，再向上；接着向左，再向上。把这一组方向放进 loop，每次执行移动时重新读取对应方向的距离。\n\n不用记住每段有多少格，也不用复制整条路线。到达绿色终点后，游戏会自动停止循环。"
+    },
+    {
+      "speaker": "引导",
+      "text": "也可以用 sensor.distance(角度) 明确指定测距模块。读数可加减一个余量，或用于 if 中的数值比较，例如 distance(90) > 0.5。\n\n查询要放在数值参数或条件里，不能单独写成动作；本关不需要变量。"
+    },
+    {
+      "speaker": "引导",
+      "text": "初始程序只有 main() 框架，请自己填写测距和循环。读数会随着机器位置实时变化，装配位置改变时也要重新考虑余量。\n\n暂停冻结当前动作；重置位置或重新运行会回到起点，保留你的代码与装配。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 9,
+      "description": "用测距模块读取前方空隙，留出机器占地，再交替向左右和上方穿过长蛇隧道。",
+      "module_limit": 2,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting",
+        "rangefinder"
+      ],
+      "allow_tick": true,
+      "allow_named_calls": true,
+      "allow_loops": true,
+      "allow_conditionals": true,
+      "allow_simultaneous": true,
+      "allow_distance": true,
+      "goal": {
+        "type": "reach_position",
+        "position": {
+          "x": 21.5,
+          "y": 2.5
+        },
+        "radius": 0.25
+      },
+      "starter_program": "main() {\n    \n}\n"
+    }
+  }
+}

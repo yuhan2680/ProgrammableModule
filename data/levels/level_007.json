@@ -1,0 +1,227 @@
+{
+  "format_version": 1,
+  "id": "level_007",
+  "name": "第七关 · 射击与躲避",
+  "width": 23,
+  "height": 5,
+  "tiles": [
+    {
+      "x": 1,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 18,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 19,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 20,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 21,
+      "y": 2,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 14.5,
+      "y": 2.5
+    },
+    "modules": [
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "gun",
+        "module_id": "shooting",
+        "offset": {
+          "x": 0.5,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [
+    {
+      "id": "pursuer",
+      "position": {
+        "x": 20.5,
+        "y": 2.5
+      },
+      "modules": [
+        {
+          "id": "pursuer_blade",
+          "module_id": "melee",
+          "offset": {
+            "x": -0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "pursuer_drive",
+          "module_id": "movement",
+          "offset": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ],
+      "behavior": "advance_attack",
+      "properties": {
+        "move_angle": 180,
+        "attack_angle": 180,
+        "module_health": {
+          "pursuer_blade": 10,
+          "pursuer_drive": 1
+        }
+      }
+    }
+  ],
+  "objects": [],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装两个模块。\n建议先安装移动模块作为装配原点 (0,0)，再沿水平方向共边安装射击模块，命名为 gun。\n\n通道只有一格宽，请留意整台机器的占地。"
+    },
+    {
+      "speaker": "引导",
+      "text": "敌人从出生点右侧六格处持续向左推进，并不断向左近战攻击。\n\n前方近战模块有更高耐久。保持存活并击毁全部敌方模块；只站着射击容易被追上。"
+    },
+    {
+      "speaker": "引导",
+      "text": "gun.ready() 查询指定射击模块是否冷却完毕，返回真或假。\n查询不会发射子弹，也不消耗时间。\n\n这里的 gun 必须与装配中射击模块的名称完全一致。"
+    },
+    {
+      "speaker": "引导",
+      "text": "用 if (gun.ready()) { ... } else { ... } 作出选择：条件为真时执行 if 的分支，否则执行 else 的分支。两个分支都需要你填写动作，运行时只执行其中一个。"
+    },
+    {
+      "speaker": "引导",
+      "text": "在 loop 中反复进行条件判断：可以开火时射击，冷却期间后退。\n\n观察地图和角度图例，自己决定方向与每次后退的距离。"
+    },
+    {
+      "speaker": "引导",
+      "text": "每次移动完成后，才会进行下一次条件判断。\n较短的后退步长能更及时地重新检查冷却。\n\n也要观察身后剩余的道路，灰色区域不能通过。"
+    },
+    {
+      "speaker": "引导",
+      "text": "练习最多持续三十秒。暂停会冻结移动、冷却和子弹；重新运行会恢复双方状态。\n\n初始代码只提供循环框架，请自己完成条件和动作。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 7,
+      "description": "用 if / else 判断射击冷却，边退边射，击败持续逼近的敌人。",
+      "module_limit": 2,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting"
+      ],
+      "allow_tick": true,
+      "allow_named_calls": true,
+      "allow_loops": true,
+      "allow_conditionals": true,
+      "max_ticks": 300,
+      "goal": {
+        "type": "destroy_enemy",
+        "enemy_id": "pursuer"
+      },
+      "starter_program": "main() {\n    loop {\n        \n    }\n}\n"
+    }
+  }
+}

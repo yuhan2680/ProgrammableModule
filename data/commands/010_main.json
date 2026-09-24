@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "id": "main",
+  "order": 10,
+  "category": "structure",
+  "category_title": {
+    "zh_CN": "程序结构",
+    "zh_HK": "程式結構",
+    "en": "Program Structure"
+  },
+  "title": {
+    "zh_CN": "程序入口",
+    "zh_HK": "程式入口",
+    "en": "Program Entry"
+  },
+  "description": {
+    "zh_CN": "程序必须包含且只包含一个 main()。花括号内的动作按顺序执行，上一条动作完成后才开始下一条；一行一条指令，不写分号。省略号表示需要自行填写的内容，不能直接作为代码运行。",
+    "zh_HK": "程式必須包含且只包含一個 main()。大括號內的動作會依次執行，上一個動作完成後才開始下一個；每行寫一條指令，不寫分號。省略號代表需要自行填寫的內容，不能直接當作程式碼執行。",
+    "en": "Every program needs exactly one main(). Actions inside its braces run in order; each action finishes before the next begins. Write one instruction per line without semicolons. The ellipsis is a placeholder to replace, not executable code."
+  },
+  "syntax": "main() {\n    ...\n}",
+  "requirements": {}
+}

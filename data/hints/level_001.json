@@ -1,0 +1,8 @@
+{
+  "format_version": 1,
+  "level_id": "level_001",
+  "assembly_help": "请在图纸任意网格位置安装一个移动模块，落点记为 (0,0)。",
+  "bindings": [],
+  "source": "main() {\n    move(0, 4)\n    move(90, 3)\n    move(180, 4)\n    move(90, 3)\n    move(0, 4)\n}\n",
+  "max_steps": 1000
+}

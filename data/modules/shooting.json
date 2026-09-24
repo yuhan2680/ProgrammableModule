@@ -1,0 +1,18 @@
+{
+  "format_version": 1,
+  "id": "shooting",
+  "name": "射击模块",
+  "description": "shoot(角度)：发射逐渐减速的弹丸；命中伤害与速度成正比。冷却 10 tick，冷却中调用无效果。",
+  "size": {
+    "width": 0.5,
+    "height": 0.5
+  },
+  "texture": "res://assets/modules/shooting.svg",
+  "script_type": "ShootingModule",
+  "properties": {
+    "projectile_speed": 8.0,
+    "deceleration": 4.0,
+    "damage_per_speed": 0.2,
+    "cooldown_ticks": 10
+  }
+}

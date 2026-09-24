@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "level_id": "level_014",
+  "assembly_help": "建议先安装雷达 radar 作为装配原点 (0,0)，右侧 (0.5,0) 射击 gun，左侧 (-0.5,0) 移动 drive。",
+  "bindings": [
+    {
+      "role": "radar",
+      "behavior": "RadarModule",
+      "index": 0
+    },
+    {
+      "role": "gun",
+      "behavior": "ShootingModule",
+      "index": 0
+    },
+    {
+      "role": "drive",
+      "behavior": "MovementModule",
+      "index": 0
+    }
+  ],
+  "source": "main() {\n    loop {\n        variable target = {{radar}}.scan()\n        if (target != null) {\n            {{gun}}.shoot(target.Angle())\n        } else {\n            {{drive}}.move(90, 0.1)\n        }\n    }\n}\n",
+  "max_steps": 2400
+}

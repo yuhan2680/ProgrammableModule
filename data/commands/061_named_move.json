@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "id": "named_move",
+  "order": 61,
+  "category": "action",
+  "category_title": {"zh_CN": "动作指令", "zh_HK": "動作指令", "en": "Actions"},
+  "title": {"zh_CN": "具名移动", "zh_HK": "具名移動", "en": "Named Move"},
+  "description": {
+    "zh_CN": "用组装页设置的移动模块名称替换 module。整台机器人仍一起移动，但只使用这个驱动的速度，不叠加其他移动模块。角度和距离规则与 move 相同；本指令只能放在 main() 的动作流程中，不能放在 tick() 中。需要本关开放具名调用。",
+    "zh_HK": "用組裝頁設定的移動模組名稱取代 module。整台機械人仍會一起移動，但只使用該驅動模組的速度，不會加上其他移動模組的速度。角度和距離規則與 move 相同；本指令只能放在 main() 的動作流程中，不能放在 tick() 中。需要本關開放具名呼叫。",
+    "en": "Replace module with the movement module name assigned in assembly. The whole robot moves, using only this drive's speed without adding other drives. Angle and distance follow the same rules as move. Use it in the main() action flow, never in tick(). Named calls must be unlocked for this level."
+  },
+  "syntax": "module.move(angle, distance)",
+  "requirements": {"allow_named_calls": true, "module_behavior": "MovementModule"}
+}

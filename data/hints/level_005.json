@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "level_id": "level_005",
+  "assembly_help": "请先安装移动模块作为装配原点 (0,0)，左右两侧 (-0.5,0) 与 (0.5,0) 各安装一个近战模块。",
+  "bindings": [
+    {
+      "role": "left",
+      "behavior": "MeleeModule",
+      "index": 0
+    },
+    {
+      "role": "right",
+      "behavior": "MeleeModule",
+      "index": 1
+    }
+  ],
+  "source": "main() {\n    {{left}}.attack(180)\n    {{right}}.attack(0)\n    move(90, 5)\n}\n",
+  "max_steps": 1000
+}

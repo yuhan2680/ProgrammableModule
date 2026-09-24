@@ -1,0 +1,16 @@
+{
+  "format_version": 1,
+  "id": "melee",
+  "name": "近战模块",
+  "description": "attack(角度)：从本模块中心沿指定方向攻击 2 格内的第一个障碍物。每次攻击消耗一个逻辑 tick。",
+  "size": {
+    "width": 0.5,
+    "height": 0.5
+  },
+  "texture": "res://assets/modules/melee.svg",
+  "script_type": "MeleeModule",
+  "properties": {
+    "range": 2.0,
+    "damage": 1.0
+  }
+}

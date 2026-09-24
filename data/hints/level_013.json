@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "level_id": "level_013",
+  "assembly_help": "建议先安装雷达模块作为装配原点 (0,0)，命名为 radar；在右侧 (0.5,0) 安装射击模块，命名为 gun。",
+  "bindings": [
+    {
+      "role": "radar",
+      "behavior": "RadarModule",
+      "index": 0
+    },
+    {
+      "role": "gun",
+      "behavior": "ShootingModule",
+      "index": 0
+    }
+  ],
+  "source": "main() {\n    variable aim = 0\n    loop {\n        variable target = {{radar}}.scan()\n        if (target != null) {\n            aim = target.Angle()\n        }\n        {{gun}}.shoot(aim)\n    }\n}\n",
+  "max_steps": 1800
+}

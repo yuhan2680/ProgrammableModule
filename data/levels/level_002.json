@@ -1,0 +1,126 @@
+{
+  "format_version": 1,
+  "id": "level_002",
+  "name": "第二关 · 限时闸门",
+  "width": 13,
+  "height": 7,
+  "tiles": [
+    {
+      "x": 1,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 3,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 1.5,
+      "y": 3.5
+    },
+    "modules": [
+      {
+        "id": "drive",
+        "module_id": "movement",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [],
+  "objects": [
+    {
+      "id": "speed_gate",
+      "type": "timed_gate",
+      "position": {
+        "x": 7.5,
+        "y": 3.5
+      },
+      "size": 1,
+      "properties": {
+        "close_after_ticks": 35
+      }
+    }
+  ],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "这一关是一格宽的水平直路，没有上下转弯。终点在出生点右侧 8 格。"
+    },
+    {
+      "speaker": "引导",
+      "text": "闸门在运行后的第 35 tick（3.5 秒）落下。一个移动模块速度不够；两个移动模块叠加为 2 格/秒，可以在落下前完全通过。"
+    },
+    {
+      "speaker": "引导",
+      "text": "先安装移动模块作为装配原点 (0,0)，再向右共边安装第二个，偏移为 (0.5, 0)。编写 move(0, 8)，全程只向右移动。"
+    },
+    {
+      "speaker": "引导",
+      "text": "倒计时从运行程序开始；暂停冻结倒计时，停止或重新运行会重新打开闸门。落下时被闸门碰到也会失败。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 2,
+      "description": "只向右前进 8 格。在 3.5 秒后落下的闸门前，用两个移动模块叠加速度抢先通过。",
+      "module_limit": 2,
+      "allowed_modules": [
+        "movement"
+      ],
+      "goal": {
+        "position": {
+          "x": 9.5,
+          "y": 3.5
+        },
+        "radius": 0.08
+      },
+      "starter_program": "main() {\n    move(0, 8)\n}\n"
+    }
+  }
+}

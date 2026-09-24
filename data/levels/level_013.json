@@ -1,0 +1,2031 @@
+{
+  "format_version": 1,
+  "id": "level_013",
+  "name": "第十三关 · 十面埋伏",
+  "width": 19,
+  "height": 19,
+  "tiles": [
+    {
+      "x": 1,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 1,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 2,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 3,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 4,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 5,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 6,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 7,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 8,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 9,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 10,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 11,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 12,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 13,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 14,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 15,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 16,
+      "tile_id": "floor"
+    },
+    {
+      "x": 1,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 2,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 3,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 4,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 5,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 6,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 7,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 8,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 9,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 10,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 11,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 12,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 13,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 14,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 15,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 16,
+      "y": 17,
+      "tile_id": "floor"
+    },
+    {
+      "x": 17,
+      "y": 17,
+      "tile_id": "floor"
+    }
+  ],
+  "player_spawn": {
+    "position": {
+      "x": 9.5,
+      "y": 9.5
+    },
+    "modules": [
+      {
+        "id": "radar",
+        "module_id": "radar",
+        "offset": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": "gun",
+        "module_id": "shooting",
+        "offset": {
+          "x": 0.5,
+          "y": 0
+        }
+      }
+    ]
+  },
+  "enemies": [
+    {
+      "id": "wave_01",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 15.5,
+        "y": 9.5
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 1,
+        "spawn_delay_ticks": 0,
+        "move_angle": 180,
+        "attack_angle": 180,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_02",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 14.354101966249685,
+        "y": 5.973288486245162
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 2,
+        "spawn_delay_ticks": 10,
+        "move_angle": 216,
+        "attack_angle": 216,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_03",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 11.354101966249685,
+        "y": 3.793660902229079
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 3,
+        "spawn_delay_ticks": 10,
+        "move_angle": 252,
+        "attack_angle": 252,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_04",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 7.645898033750316,
+        "y": 3.793660902229078
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 4,
+        "spawn_delay_ticks": 10,
+        "move_angle": 288,
+        "attack_angle": 288,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_05",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 4.645898033750316,
+        "y": 5.973288486245161
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 5,
+        "spawn_delay_ticks": 10,
+        "move_angle": 324,
+        "attack_angle": 324,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_06",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 3.5,
+        "y": 9.5
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 6,
+        "spawn_delay_ticks": 10,
+        "move_angle": 0,
+        "attack_angle": 0,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_07",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 4.645898033750315,
+        "y": 13.026711513754838
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 7,
+        "spawn_delay_ticks": 10,
+        "move_angle": 36,
+        "attack_angle": 36,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_08",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 7.645898033750314,
+        "y": 15.206339097770922
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 8,
+        "spawn_delay_ticks": 10,
+        "move_angle": 72,
+        "attack_angle": 72,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_09",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 11.354101966249683,
+        "y": 15.206339097770922
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 9,
+        "spawn_delay_ticks": 10,
+        "move_angle": 108,
+        "attack_angle": 108,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "wave_10",
+      "behavior": "wave_approach_attack",
+      "position": {
+        "x": 14.354101966249683,
+        "y": 13.02671151375484
+      },
+      "modules": [
+        {
+          "id": "blade",
+          "module_id": "melee",
+          "offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        },
+        {
+          "id": "engine",
+          "module_id": "movement",
+          "offset": {
+            "x": 1,
+            "y": 0
+          }
+        }
+      ],
+      "properties": {
+        "wave_order": 10,
+        "spawn_delay_ticks": 10,
+        "move_angle": 144,
+        "attack_angle": 144,
+        "move_distance": 4.5,
+        "module_health": {
+          "blade": 2.0,
+          "engine": 2.0
+        },
+        "wreck_fade_seconds": 3.0,
+        "random_spawn": {
+          "center": {
+            "x": 9.5,
+            "y": 9.5
+          },
+          "radius": 6.0,
+          "body_offset": {
+            "x": 0.5,
+            "y": 0
+          }
+        }
+      }
+    }
+  ],
+  "objects": [],
+  "dialogue": [
+    {
+      "speaker": "引导",
+      "text": "本关最多安装 2 个模块。10 波敌人会从任意方向依次来袭，击毁当前敌人的全部模块后，下一波才会出现。\n\n守住中心，消灭所有来敌。敌人的移动和近战模块都更坚固，需要持续命中。"
+    },
+    {
+      "speaker": "引导",
+      "text": "建议先安装雷达模块作为装配原点 (0,0)，命名为 radar；在右侧 (0.5,0) 安装射击模块，命名为 gun。\n\n本关按这一相邻布局练习雷达瞄准。射击从实际枪口出发，装配位置会影响命中。"
+    },
+    {
+      "speaker": "引导",
+      "text": "用 radar.scan() 探测最近的可见敌人，返回目标快照。没有敌人时，结果为 null。\n\n与固定八方向测距不同，雷达能发现任意角度的敌人。此前解锁的模块和指令仍可使用。"
+    },
+    {
+      "speaker": "引导",
+      "text": "可以用 variable target = radar.scan() 保存本次扫描。先判断 target != null，再读取 target.Angle()，把方向交给 gun.shoot(...)。\n\n目标快照不会跟随敌人更新，下一轮需要重新扫描。"
+    },
+    {
+      "speaker": "引导",
+      "text": "先用 variable aim = 0 保存瞄准方向；发现目标时更新 aim，在条件判断之后调用 gun.shoot(aim)。把扫描和射击放入 loop 持续执行。\n\n下一波尚未出现时，也要执行射击动作让时间继续推进；只反复扫描的空转循环会被停止。"
+    },
+    {
+      "speaker": "引导",
+      "text": "射击有冷却，弹丸需要飞行时间且会逐渐减速。及时扫描、保持射击，不要在击毁一个模块后就停止。\n\n整台敌人被击毁后，残骸会在约 3 秒内淡出。淡出不影响下一波的出现与击毁计数。"
+    },
+    {
+      "speaker": "引导",
+      "text": "本关最多持续 180 秒。右上方的状态提示显示波次、击毁数量和射击冷却。\n\n暂停会冻结战斗与残骸淡出；重置位置会恢复全部 10 波并重新随机来袭角度，保留代码与装配。"
+    }
+  ],
+  "properties": {
+    "level": {
+      "order": 13,
+      "description": "用雷达锁定任意方向的来敌，持续制导射击，守住中心并击毁全部 10 波敌人。",
+      "module_limit": 2,
+      "allowed_modules": [
+        "movement",
+        "melee",
+        "shooting",
+        "rangefinder",
+        "radar"
+      ],
+      "allow_tick": true,
+      "allow_named_calls": true,
+      "allow_loops": true,
+      "allow_conditionals": true,
+      "allow_simultaneous": true,
+      "allow_distance": true,
+      "allow_functions": true,
+      "allow_variables": true,
+      "allow_radar": true,
+      "allow_random": true,
+      "allow_for": true,
+      "max_ticks": 1800,
+      "goal": {
+        "type": "destroy_waves"
+      },
+      "starter_program": "main() {\n    \n}\n"
+    }
+  }
+}

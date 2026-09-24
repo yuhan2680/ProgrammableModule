@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "command.schema.json",
+  "title": "只读指令资料",
+  "description": "每个文件是一项只读说明。增加此JSON只增加指令资料条目，不会增加或解锁DSL执行能力。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "id",
+    "order",
+    "category",
+    "category_title",
+    "title",
+    "description",
+    "syntax"
+  ],
+  "properties": {
+    "format_version": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "order": {
+      "type": "integer",
+      "minimum": -1000000,
+      "maximum": 1000000
+    },
+    "category": {
+      "$ref": "#/$defs/id"
+    },
+    "category_title": {
+      "$ref": "#/$defs/localizedShort"
+    },
+    "title": {
+      "$ref": "#/$defs/localizedShort"
+    },
+    "description": {
+      "$ref": "#/$defs/localizedLong"
+    },
+    "syntax": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "\\S"
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_tick": {
+          "type": "boolean",
+          "default": false
+        },
+        "allow_loops": {
+          "type": "boolean",
+          "default": false
+        },
+        "allow_named_calls": {
+          "type": "boolean",
+          "default": false
+        },
+        "allow_conditionals": {
+          "type": "boolean",
+          "default": false
+        },
+        "allow_simultaneous": {
+          "type": "boolean",
+          "default": false,
+          "description": "此指令说明需本关显式解锁 simultaneously；仅影响目录的可用状态，不改变 DSL 执行权限。"
+        },
+        "allow_random": {
+          "type": "boolean",
+          "default": false,
+          "description": "要求本关显式解锁 random() 与 randomInt(a, b)，不依赖模块。"
+        },
+        "module_behavior": {
+          "$ref": "#/$defs/id",
+          "description": "本关允许模块中至少一种的已注册行为名称，例如 MovementModule。"
+        },
+        "allow_distance": {
+          "type": "boolean",
+          "default": false,
+          "description": "显式解锁 distance(角度) 测距查询、数值加减与比较；旧关卡省略时关闭。"
+        },
+        "allow_for": {
+          "type": "boolean",
+          "default": false,
+          "description": "要求本关显式解锁 for 范围遍历与块内只读迭代值，不要求常变量权限或特定模块。"
+        },
+        "allow_functions": {
+          "type": "boolean",
+          "default": false,
+          "description": "要求本关显式解锁 function 自定义函数。"
+        },
+        "allow_variables": {
+          "type": "boolean",
+          "default": false,
+          "description": "要求本关显式解锁常量、变量与赋值。"
+        },
+        "allow_radar": {
+          "type": "boolean",
+          "default": false,
+          "description": "要求本关显式解锁玩家雷达扫描与目标快照。"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "not": {
+        "const": "void"
+      }
+    },
+    "localizedShort": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_-]{2,32}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 256,
+        "pattern": "\\S"
+      }
+    },
+    "localizedLong": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 16,
+      "propertyNames": {
+        "pattern": "^[A-Za-z0-9_-]{2,32}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096,
+        "pattern": "\\S"
+      }
+    }
+  }
+}

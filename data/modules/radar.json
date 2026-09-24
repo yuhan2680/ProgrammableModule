@@ -1,0 +1,10 @@
+{
+	"format_version": 1,
+	"id": "radar",
+	"name": "雷达模块",
+	"description": "scan()：从本模块中心探测范围内最近的可见敌人，返回方向、位置和距离；没有目标时返回 null。雷达会被遮挡，读取结果不消耗逻辑 tick。",
+	"size": {"width": 0.5, "height": 0.5},
+	"texture": "res://assets/modules/radar.svg",
+	"script_type": "RadarModule",
+	"properties": {"radar_range": 32.0}
+}

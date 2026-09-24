@@ -1,0 +1,24 @@
+{
+  "format_version": 1,
+  "level_id": "level_010",
+  "assembly_help": "请先安装雷达作为装配原点 (0,0)，右侧 (0.5,0) 安装射击模块，下方 (0,0.5) 安装移动模块。",
+  "bindings": [
+    {
+      "role": "radar",
+      "behavior": "RadarModule",
+      "index": 0
+    },
+    {
+      "role": "gun",
+      "behavior": "ShootingModule",
+      "index": 0
+    },
+    {
+      "role": "drive",
+      "behavior": "MovementModule",
+      "index": 0
+    }
+  ],
+  "source": "main() {\n    loop {\n        if ({{radar}}.scan() != null) {\n            if ({{gun}}.ready()) {\n                {{gun}}.shoot({{radar}}.scan().Angle())\n            } else {\n                if ({{radar}}.scan().Distance > 2) {\n                    move({{radar}}.scan().Angle(), 0.3)\n                } else {\n                    move(0, 0)\n                }\n            }\n        } else {\n            move(0, 0)\n        }\n    }\n}\n",
+  "max_steps": 1200
+}

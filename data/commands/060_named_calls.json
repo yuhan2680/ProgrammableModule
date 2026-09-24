@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "id": "named_calls",
+  "order": 60,
+  "category": "action",
+  "category_title": {
+    "zh_CN": "动作指令",
+    "zh_HK": "動作指令",
+    "en": "Actions"
+  },
+  "title": {
+    "zh_CN": "具名模块调用",
+    "zh_HK": "具名模組呼叫",
+    "en": "Named Module Calls"
+  },
+  "description": {
+    "zh_CN": "把 module 替换成你在组装页设置的模块名称，只调用这个模块的对应能力。名称区分大小写，须以英文字母或下划线开头，后续可用英文字母、数字、下划线，且不能使用保留字。指定移动模块时仍移动整台机器人，但只使用该驱动的速度。",
+    "zh_HK": "把 module 換成你在組裝頁設定的模組名稱，只呼叫該模組的對應能力。名稱區分大小寫，須以英文字母或底線開頭，其後可用英文字母、數字、底線，而且不能使用保留字。指定移動模組時仍會移動整台機械人，但只使用該驅動模組的速度。",
+    "en": "Replace module with the name assigned in assembly to call only that module’s matching ability. Names are case-sensitive, start with an English letter or underscore, and then use letters, digits, or underscores; reserved words are not allowed. A named move still moves the whole robot, using only the selected drive’s speed."
+  },
+  "syntax": "module.move(angle, distance)\nmodule.attack(angle)\nmodule.shoot(angle)",
+  "requirements": {
+    "allow_named_calls": true
+  }
+}
