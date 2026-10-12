@@ -31,6 +31,13 @@
     "level": {
       "type": "object",
       "properties": {
+        "creator": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F\\u2028\\u2029]*$",
+          "default": "",
+          "description": "可选的玩家创作者署名；保留玩家原文，不随界面语言翻译。编辑器去除首尾空白，留空时省略该字段。"
+        },
         "description": {
           "type": "string",
           "maxLength": 65536

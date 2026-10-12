@@ -84,5 +84,5 @@ func show_popup() -> void:
 func _layout_arrow() -> void:
 	if _arrow == null:
 		return
-	_arrow.size = Vector2(9, 9)
-	_arrow.position = Vector2(size.x - 12, (size.y - 9) * 0.5)
+	_arrow.size = Vector2(12, 12)
+	_arrow.position = Vector2(size.x - 15, (size.y - 12) * 0.5)

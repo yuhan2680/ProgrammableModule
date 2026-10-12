@@ -53,6 +53,8 @@ func _run() -> void:
 			_game._show_main_page()
 			await _settle()
 			await _click(_game.find_child("SettingsButton", true, false) as Control)
+			if not await _wait_settings_transition():
+				continue
 			await _check_about("%dx%d_%s" % [dimensions.x, dimensions.y, locale], locale)
 	_game.queue_free()
 	await _settle()
@@ -98,7 +100,19 @@ func _check_about(context: String, locale: String) -> void:
 		return
 	_check(root.get_visible_rect().grow(1).encloses(card.get_global_rect()) and card.size.y > card.size.x, "竖向关于卡片完整位于窗口内 " + context)
 	_check(card.get_global_rect().grow(1).encloses(scroll.get_global_rect()) and card.get_global_rect().grow(1).encloses(close.get_global_rect()), "正文滚动与关闭按钮位于卡片内 " + context)
-	_check(scroll.get_global_rect().end.y <= close.global_position.y and close.has_focus(), "关闭按钮常驻正文下方并获得默认焦点 " + context)
+	var close_rect := close.get_global_rect()
+	var panel_style := card.get_theme_stylebox("panel") as StyleBoxFlat
+	var close_style := close.get_theme_stylebox("normal") as StyleBoxFlat
+	_check(close.get_parent() == card and close.size.is_equal_approx(Vector2(28, 28)) and close.has_focus(), "小关闭按钮常驻卡片右上角并获得默认焦点 " + context)
+	_check(close.text.is_empty() and close.icon != null and close.icon.resource_path == "res://assets/ui/close.svg" and close.atr(close.tooltip_text) == _game.tr("关闭"), "关闭使用叉号图标及本土化悬停名称 " + context)
+	if _check(panel_style != null and close_style != null, "卡片和关闭按钮具有实际圆角样式 " + context):
+		var panel_radius := float(panel_style.corner_radius_top_right)
+		var corner_center := card.global_position + Vector2(card.size.x - panel_radius, panel_radius)
+		var top_inset := close_rect.position.y - card.global_position.y
+		var right_inset := card.get_global_rect().end.x - close_rect.end.x
+		_check(close_rect.get_center().distance_to(corner_center) < 0.1 and absf(top_inset - right_inset) < 0.1 and top_inset > 0.0, "按钮圆心与卡片右上圆角同心且顶部右侧边距等距 " + context)
+		_check(close_style.corner_radius_top_left == 14 and close_style.corner_radius_top_right == 14 and close_style.corner_radius_bottom_left == 14 and close_style.corner_radius_bottom_right == 14, "关闭底板为完整小圆形 " + context)
+	_check(scroll.global_position.y >= close_rect.end.y and not scroll.is_ancestor_of(close), "正文位于关闭专用区下方，滚动不会遮盖按钮 " + context)
 	_check(not error.is_visible_in_tree(), "打开时无残留外链错误 " + context)
 	_check_content(dialog, locale, context)
 	await _capture(context + "_about")
@@ -128,6 +142,7 @@ func _check_about(context: String, locale: String) -> void:
 	_check(dialog.is_open() and error.is_visible_in_tree() and not _game._message_dialog.visible, "系统打开失败在关于窗口内反馈 " + context)
 	_check(error.atr(error.text) == _game.tr("打开链接失败，请稍后重试。") and (locale == "zh_CN" or error.atr(error.text) != error.text), "外链失败反馈按当前语言显示 " + context)
 	_check(scroll.get_global_rect().grow(1).encloses(error.get_global_rect()) and card.get_global_rect().grow(1).encloses(close.get_global_rect()), "错误就地可见且不挤走关闭按钮 " + context)
+	_check(close.get_global_rect().is_equal_approx(close_rect), "遍历链接、正文滚动和错误反馈不移动关闭按钮 " + context)
 	await _capture(context + "_about_error")
 	_opener_result = OK
 	await _click(close)
@@ -136,6 +151,10 @@ func _check_about(context: String, locale: String) -> void:
 	await _key(KEY_ENTER)
 	await _animate()
 	_check(dialog.is_open() and close.has_focus() and not error.is_visible_in_tree(), "入口回车重新打开并清空失败反馈 " + context)
+	await _key(KEY_ENTER)
+	_check(not dialog.is_open() and entry.has_focus(), "回车激活聚焦的叉号并恢复关于入口 " + context)
+	await _key(KEY_ENTER)
+	await _animate()
 	await _key(KEY_ESCAPE)
 	_check(not dialog.is_open() and entry.has_focus() and _game.page == GameShell.Page.SETTINGS, "Esc只关闭关于并恢复入口焦点 " + context)
 	await _open_entry(entry)
@@ -234,7 +253,7 @@ func _record_link(url: String) -> int:
 func _click(control: Control, button: MouseButton = MOUSE_BUTTON_LEFT, fraction: Vector2 = Vector2(0.5, 0.5)) -> void:
 	if not _check(control != null, "待点击控件存在"):
 		return
-	var point := control.global_position + control.size * fraction
+	var point := control.get_global_transform_with_canvas() * (control.size * fraction)
 	var motion := InputEventMouseMotion.new()
 	motion.position = point
 	motion.global_position = point
@@ -259,6 +278,15 @@ func _key(keycode: Key, shift: bool = false) -> void:
 		event.pressed = pressed
 		root.push_input(event, true)
 	await _settle()
+
+
+## 只在真实主菜单设置入口等待有限时长，动画完成后再验证页面和可操作面板。
+func _wait_settings_transition() -> bool:
+	var deadline := Time.get_ticks_msec() + 3000
+	while _game._menu_transitioning and Time.get_ticks_msec() < deadline:
+		await process_frame
+	await _settle()
+	return _check(not _game._menu_transitioning and _game.page == GameShell.Page.SETTINGS and _game.settings_panel != null, "真实设置转场按时完成并进入可操作设置面板")
 
 
 ## 等容器和焦点的延迟布局完成，不用硬编码坐标替代实际布局。

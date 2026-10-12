@@ -5,13 +5,21 @@ extends RefCounted
 signal changed
 
 const DEFAULT_VOLUME: float = 1.0
+const DEFAULT_SYSTEM_SOUND_VOLUME: float = 1.0
+const SYSTEM_SOUND_BUS: String = "SystemSounds"
 const DEFAULT_LANGUAGE: String = "zh_CN"
 const DEFAULT_TAB_COMPLETION: bool = true
 const DEFAULT_ASSEMBLY_FREE_ZOOM: bool = false
 const DEFAULT_WINDOW_RESOLUTION: String = "1280x800"
-const SUPPORTED_WINDOW_RESOLUTIONS: Array[String] = ["1024x640", "1152x720", "1280x800", "1440x900", "1600x1000", "1920x1200", "maximized"]
+# 跨平台同时提供常见宽屏与原有 16:10 尺寸；按宽、高递增，屏幕回退仍能选择最大可容纳窗口。
+const SUPPORTED_WINDOW_RESOLUTIONS: Array[String] = [
+	"1024x640", "1152x720", "1280x720", "1280x800", "1366x768", "1440x900",
+	"1600x900", "1600x1000", "1920x1080", "1920x1200", "2560x1440", "3840x2160", "maximized",
+]
+const DEFAULT_UI_SCALE: int = 100
+const SUPPORTED_UI_SCALES: Array[int] = [100, 110, 125, 150, 200]
 const DEFAULT_CODE_HINTS: String = "normal"
-const DEFAULT_CODE_COLOR_MODE: String = "light"
+const DEFAULT_CODE_COLOR_MODE: String = "dark"
 const DEFAULT_MENU_BACKGROUND_MODE: String = "default"
 const DEFAULT_MENU_BACKGROUND_PATH: String = "res://assets/backgrounds/main_menu.png"
 const SUPPORTED_MENU_BACKGROUND_MODES: Array[String] = ["default", "solid", "custom"]
@@ -23,16 +31,18 @@ const MAX_CUSTOM_BACKGROUNDS: int = 256
 const SUPPORTED_CODE_HINTS: Array[String] = ["none", "normal", "more"]
 const SUPPORTED_CODE_COLOR_MODES: Array[String] = ["light", "dark"]
 # 保留旧存档的 en 语言代码；语言自名只负责显示，不触发配置迁移。
-const SUPPORTED_LANGUAGES: Array[String] = ["zh_CN", "zh_HK", "en"]
-const LANGUAGE_LABELS: Array[String] = ["简体中文", "繁體中文", "English"]
+const SUPPORTED_LANGUAGES: Array[String] = ["zh_CN", "zh_HK", "es", "en"]
+const LANGUAGE_LABELS: Array[String] = ["简体中文", "繁體中文", "Español", "English"]
 const MAX_CONFIG_BYTES: int = 65536
 
 var storage_path: String = "user://settings.json"
 var volume: float = DEFAULT_VOLUME
+var system_sound_volume: float = DEFAULT_SYSTEM_SOUND_VOLUME
 var language: String = DEFAULT_LANGUAGE
 var tab_completion: bool = DEFAULT_TAB_COMPLETION
 var assembly_free_zoom: bool = DEFAULT_ASSEMBLY_FREE_ZOOM
 var window_resolution: String = DEFAULT_WINDOW_RESOLUTION
+var ui_scale: int = DEFAULT_UI_SCALE
 var code_hints: String = DEFAULT_CODE_HINTS
 var code_color_mode: String = DEFAULT_CODE_COLOR_MODE
 var menu_background_mode: String = DEFAULT_MENU_BACKGROUND_MODE
@@ -74,17 +84,21 @@ func load_settings() -> DataResult:
 	if not loaded.get("audio") is Dictionary or not loaded.get("interface") is Dictionary:
 		return _finish_load(DataResult.failure("设置文件缺少有效的 audio 或 interface 对象，已使用默认设置。"))
 	var volume_value: Variant = loaded["audio"].get("master_volume")
+	# 旧配置未设置系统提示音时使用完整音量，仅补内存默认值，不在载入时写盘。
+	var system_sound_value: Variant = loaded["audio"].get("system_sound_volume", DEFAULT_SYSTEM_SOUND_VOLUME)
 	var language_value: Variant = loaded["interface"].get("language")
 	# 旧版配置没有补全字段，首次使用新功能时保持默认开启，不改写原文件。
 	var completion_value: Variant = loaded["interface"].get("tab_completion", DEFAULT_TAB_COMPLETION)
 	var hints_value: Variant = loaded["interface"].get("code_hints", DEFAULT_CODE_HINTS)
-	# 旧版文件继续使用浅色代码区；读取仅补齐内存默认值，不写回配置。
+	# 未选择代码配色时使用深色；已有明确选择保持不变，读取不写回配置。
 	var color_mode_value: Variant = loaded["interface"].get("code_color_mode", DEFAULT_CODE_COLOR_MODE)
 	# 旧配置缺省关闭自由缩放，读取不会自动迁移或覆盖原文件。
 	var free_zoom_value: Variant = loaded["interface"].get("assembly_free_zoom", DEFAULT_ASSEMBLY_FREE_ZOOM)
 	# 旧配置沿用默认窗口尺寸，只补内存值；具体窗口操作由显示层处理。
 	var resolution_value: Variant = loaded["interface"].get("window_resolution", DEFAULT_WINDOW_RESOLUTION)
-	var validation := _validate_values(volume_value, language_value, completion_value, hints_value, color_mode_value, free_zoom_value, resolution_value)
+	# 旧配置默认 100%，平台与显示器可用性由窗口控制器决定，不在数据层查询系统。
+	var scale_value: Variant = loaded["interface"].get("ui_scale", DEFAULT_UI_SCALE)
+	var validation := _validate_values(volume_value, language_value, completion_value, hints_value, color_mode_value, free_zoom_value, resolution_value, system_sound_value, scale_value)
 	var background_mode: Variant = loaded["interface"].get("menu_background_mode", DEFAULT_MENU_BACKGROUND_MODE)
 	var background_id: Variant = loaded["interface"].get("menu_background_id", "")
 	var backgrounds: Variant = loaded["interface"].get("custom_backgrounds", [])
@@ -93,10 +107,12 @@ func load_settings() -> DataResult:
 	if not validation.is_ok():
 		return _finish_load(DataResult.failure("设置文件内容无效，已使用默认设置。\n" + "\n".join(validation.errors)))
 	volume = float(volume_value)
+	system_sound_volume = float(system_sound_value)
 	language = language_value
 	tab_completion = completion_value
 	assembly_free_zoom = free_zoom_value
 	window_resolution = resolution_value
+	ui_scale = int(scale_value)
 	code_hints = hints_value
 	code_color_mode = color_mode_value
 	menu_background_mode = background_mode
@@ -108,7 +124,7 @@ func load_settings() -> DataResult:
 
 ## 将当前设置写入同目录临时文件，回读成功后才替换已有配置。
 func save_settings() -> DataResult:
-	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution)
+	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution, system_sound_volume, ui_scale)
 	if validation.is_ok():
 		validation = _validate_background_values(menu_background_mode, menu_background_id, custom_backgrounds)
 	if validation.is_ok():
@@ -120,12 +136,14 @@ func save_settings() -> DataResult:
 	# 只更新已知字段，保留顶层与设置分组中未来版本添加的内容。
 	var audio_data: Dictionary = next_config.get("audio", {}).duplicate(true)
 	audio_data["master_volume"] = volume
+	audio_data["system_sound_volume"] = system_sound_volume
 	next_config["audio"] = audio_data
 	var interface_data: Dictionary = next_config.get("interface", {}).duplicate(true)
 	interface_data["language"] = language
 	interface_data["tab_completion"] = tab_completion
 	interface_data["assembly_free_zoom"] = assembly_free_zoom
 	interface_data["window_resolution"] = window_resolution
+	interface_data["ui_scale"] = ui_scale
 	interface_data["code_hints"] = code_hints
 	interface_data["code_color_mode"] = code_color_mode
 	interface_data["menu_background_mode"] = menu_background_mode
@@ -164,7 +182,7 @@ func save_settings() -> DataResult:
 
 ## 使用线性 0..1 音量；零音量真正静音，不接受布尔值或非有限数值。
 func set_volume(value: Variant) -> DataResult:
-	var validation := _validate_values(value, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution)
+	var validation := _validate_values(value, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution, system_sound_volume, ui_scale)
 	if not validation.is_ok():
 		return _remember_result(validation)
 	volume = float(value)
@@ -174,9 +192,21 @@ func set_volume(value: Variant) -> DataResult:
 	return result
 
 
-## 支持简体中文与 English，切换时通过 TranslationServer 通知现有控件。
+## 系统提示音使用独立线性增益，并继续受 Master 主音量控制；无效值不会改动当前设置。
+func set_system_sound_volume(value: Variant) -> DataResult:
+	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution, value, ui_scale)
+	if not validation.is_ok():
+		return _remember_result(validation)
+	system_sound_volume = float(value)
+	_apply_runtime()
+	var result := save_settings()
+	changed.emit()
+	return result
+
+
+## 支持简体中文、香港繁体、西班牙语与英语，切换时通过 TranslationServer 通知现有控件。
 func set_language(value: Variant) -> DataResult:
-	var validation := _validate_values(volume, value, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution)
+	var validation := _validate_values(volume, value, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution, system_sound_volume, ui_scale)
 	if not validation.is_ok():
 		return _remember_result(validation)
 	language = value
@@ -188,7 +218,7 @@ func set_language(value: Variant) -> DataResult:
 
 ## 补全偏好立即通知编辑器，磁盘写入失败时仍保留本次选择并返回明确错误。
 func set_tab_completion(value: Variant) -> DataResult:
-	var validation := _validate_values(volume, language, value, code_hints, code_color_mode, assembly_free_zoom, window_resolution)
+	var validation := _validate_values(volume, language, value, code_hints, code_color_mode, assembly_free_zoom, window_resolution, system_sound_volume, ui_scale)
 	if not validation.is_ok():
 		return _remember_result(validation)
 	tab_completion = value
@@ -199,7 +229,7 @@ func set_tab_completion(value: Variant) -> DataResult:
 
 ## 自由缩放仅改变装配图的查看方式；有效开关即时通知界面，保存失败仍保留当前选择。
 func set_assembly_free_zoom(value: Variant) -> DataResult:
-	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, value, window_resolution)
+	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, value, window_resolution, system_sound_volume, ui_scale)
 	if not validation.is_ok():
 		return _remember_result(validation)
 	assembly_free_zoom = value
@@ -210,7 +240,7 @@ func set_assembly_free_zoom(value: Variant) -> DataResult:
 
 ## 分辨率只保存预设标识；有效选择即时通知显示层，写盘失败仍保留本次内存选择。
 func set_window_resolution(value: Variant) -> DataResult:
-	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, value)
+	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, value, system_sound_volume, ui_scale)
 	if not validation.is_ok():
 		return _remember_result(validation)
 	window_resolution = value
@@ -219,9 +249,20 @@ func set_window_resolution(value: Variant) -> DataResult:
 	return result
 
 
+## 百分比持久化与其他偏好采用同一原子校验，平台限制由显示层负责。
+func set_ui_scale(value: Variant) -> DataResult:
+	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution, system_sound_volume, value)
+	if not validation.is_ok():
+		return _remember_result(validation)
+	ui_scale = int(value)
+	var result := save_settings()
+	changed.emit()
+	return result
+
+
 ## 代码提示的数量独立于 Tab 补全；即时通知界面，保存失败也保留当前选择。
 func set_code_hints(value: Variant) -> DataResult:
-	var validation := _validate_values(volume, language, tab_completion, value, code_color_mode, assembly_free_zoom, window_resolution)
+	var validation := _validate_values(volume, language, tab_completion, value, code_color_mode, assembly_free_zoom, window_resolution, system_sound_volume, ui_scale)
 	if not validation.is_ok():
 		return _remember_result(validation)
 	code_hints = value
@@ -232,7 +273,7 @@ func set_code_hints(value: Variant) -> DataResult:
 
 ## 代码区配色独立保存；有效选择即时通知编辑器，写盘失败仍保留当前外观。
 func set_code_color_mode(value: Variant) -> DataResult:
-	var validation := _validate_values(volume, language, tab_completion, code_hints, value, assembly_free_zoom, window_resolution)
+	var validation := _validate_values(volume, language, tab_completion, code_hints, value, assembly_free_zoom, window_resolution, system_sound_volume, ui_scale)
 	if not validation.is_ok():
 		return _remember_result(validation)
 	code_color_mode = value
@@ -481,10 +522,12 @@ func _remove_import_copy(path: String) -> void:
 ## 将默认状态恢复到内存，读取失败时不部分采用损坏文件中的其它字段。
 func _reset_defaults() -> void:
 	volume = DEFAULT_VOLUME
+	system_sound_volume = DEFAULT_SYSTEM_SOUND_VOLUME
 	language = DEFAULT_LANGUAGE
 	tab_completion = DEFAULT_TAB_COMPLETION
 	assembly_free_zoom = DEFAULT_ASSEMBLY_FREE_ZOOM
 	window_resolution = DEFAULT_WINDOW_RESOLUTION
+	ui_scale = DEFAULT_UI_SCALE
 	code_hints = DEFAULT_CODE_HINTS
 	code_color_mode = DEFAULT_CODE_COLOR_MODE
 	menu_background_mode = DEFAULT_MENU_BACKGROUND_MODE
@@ -502,13 +545,21 @@ func _finish_load(result: DataResult) -> DataResult:
 	return result
 
 
-## Master 总线使用线性值转换后的分贝，零值单独静音以避免负无限分贝。
+## 两级总线分别应用线性增益；提示音只送到 Master 一次，零值独立静音以避免负无限分贝。
 func _apply_runtime() -> void:
 	GameI18n.install()
 	var master := AudioServer.get_bus_index("Master")
 	if master >= 0:
 		AudioServer.set_bus_mute(master, volume == 0.0)
 		AudioServer.set_bus_volume_db(master, linear_to_db(volume) if volume > 0.0 else -80.0)
+	var system_sound := AudioServer.get_bus_index(SYSTEM_SOUND_BUS)
+	if system_sound < 0:
+		AudioServer.add_bus()
+		system_sound = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(system_sound, SYSTEM_SOUND_BUS)
+	AudioServer.set_bus_send(system_sound, "Master")
+	AudioServer.set_bus_mute(system_sound, system_sound_volume == 0.0)
+	AudioServer.set_bus_volume_db(system_sound, linear_to_db(system_sound_volume) if system_sound_volume > 0.0 else -80.0)
 	TranslationServer.set_locale(language)
 
 
@@ -520,11 +571,13 @@ func _validate_path() -> DataResult:
 
 
 ## 在所有公开入口复用真实类型与值域校验。
-func _validate_values(volume_value: Variant, language_value: Variant, completion_value: Variant, hints_value: Variant, color_mode_value: Variant, free_zoom_value: Variant, resolution_value: Variant) -> DataResult:
+func _validate_values(volume_value: Variant, language_value: Variant, completion_value: Variant, hints_value: Variant, color_mode_value: Variant, free_zoom_value: Variant, resolution_value: Variant, system_sound_value: Variant, scale_value: Variant) -> DataResult:
 	if not DataValidation.is_number(volume_value) or float(volume_value) < 0.0 or float(volume_value) > 1.0:
 		return DataResult.failure("主音量必须是 0..1 的有限数字。")
+	if not DataValidation.is_number(system_sound_value) or float(system_sound_value) < 0.0 or float(system_sound_value) > 1.0:
+		return DataResult.failure("系统提示音音量必须是 0..1 的有限数字。")
 	if not language_value is String or not language_value in SUPPORTED_LANGUAGES:
-		return DataResult.failure("语言必须为简体中文（zh_CN）、繁體中文（zh_HK）或 English（en）。")
+		return DataResult.failure("语言必须为简体中文（zh_CN）、繁體中文（zh_HK）、Español（es）或 English（en）。")
 	if not completion_value is bool:
 		return DataResult.failure("Tab 补全必须为布尔值。")
 	if not hints_value is String or not hints_value in SUPPORTED_CODE_HINTS:
@@ -535,6 +588,8 @@ func _validate_values(volume_value: Variant, language_value: Variant, completion
 		return DataResult.failure("装配图尺寸自由缩放必须为布尔值。")
 	if not resolution_value is String or not resolution_value in SUPPORTED_WINDOW_RESOLUTIONS:
 		return DataResult.failure("窗口分辨率必须为预设尺寸或最大化。")
+	if not DataValidation.is_integer(scale_value, 100, 200) or not int(scale_value) in SUPPORTED_UI_SCALES:
+		return DataResult.failure("界面缩放必须为 100%、110%、125%、150% 或 200%。")
 	return DataResult.success()
 
 

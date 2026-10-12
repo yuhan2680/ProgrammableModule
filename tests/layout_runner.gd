@@ -1,5 +1,5 @@
 extends SceneTree
-## 新外观的布局回归：在两种窗口尺寸和语言下检查关键控件仍可见、可操作。
+## 新外观的布局回归：在两种窗口尺寸和中西英语言下检查关键控件仍可见、可操作。
 
 var _checks := 0
 var _failures := 0
@@ -10,7 +10,7 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 
-## 用实际页面验证中英切换和最小窗口，滚动画布只检查其可见视口边界。
+## 用实际页面验证中西英切换和最小窗口，滚动画布只检查其可见视口边界。
 func _run() -> void:
 	var game: GameShell = load("res://scenes/game.tscn").instantiate()
 	var temporary := "user://tests/layout_%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
@@ -19,6 +19,7 @@ func _run() -> void:
 	game.settings_path = temporary.path_join("settings.json")
 	root.add_child(game)
 	await _settle()
+	game._clear_progress_dialog.use_native_dialog = false
 	# 一张真实导入地图覆盖不足七列时的占位与列宽，夹具仅写本次测试目录。
 	DirAccess.make_dir_recursive_absolute(game.user_levels_directory)
 	var imported := game.catalog.levels[0].document.duplicate_document()
@@ -28,7 +29,7 @@ func _run() -> void:
 	game.catalog.refresh(game.registry)
 	for dimensions: Vector2i in [Vector2i(1280, 800), Vector2i(1000, 740)]:
 		root.size = dimensions
-		for locale: String in ["zh_CN", "en"]:
+		for locale: String in ["zh_CN", "es", "en"]:
 			game.settings.set_language(locale)
 			game._show_main_page()
 			await _settle()
@@ -60,7 +61,7 @@ func _run() -> void:
 			await _settle()
 			_level_navigation_matches(game, expected_back, expected_navigation, "第一关编程 " + navigation_message)
 			await _program_toolbar_layout(game, navigation_message)
-			_expect(not game.workbench._assembly_panel.preparation_mode and game.workbench._assembly_panel.header == null, "工作台装配页签保持原布局 " + navigation_message)
+			_expect(game.workbench._tabs.get_tab_count() == 1 and game.workbench.find_child("WorkbenchModePill", true, false) == null, "编程只保留代码页而不嵌入重复装配页签 " + navigation_message)
 			_inside(game.workbench._code, "代码编辑区 " + locale)
 			_inside(game.workbench._run_button, "运行按钮 " + locale)
 			_inside(game.workbench._world_scroll, "地图观察区 " + locale)
@@ -103,7 +104,7 @@ func _run() -> void:
 				await _return_to_level_navigation(game, expected_back, expected_navigation, "第 %d 关返回 " % (index + 1) + navigation_message)
 			game._open_editor()
 			await _settle()
-			_inside(game._editor._canvas.get_parent(), "地图编辑器视口 " + locale)
+			_editor_viewport_inside(game._editor, navigation_message)
 			_inside(game._back_button, "返回按钮 " + locale)
 			await _editor_playtest_navigation(game, expected_back, expected_navigation, navigation_message)
 	game._show_main_page()
@@ -114,9 +115,20 @@ func _run() -> void:
 	quit(0 if _failures == 0 else 1)
 
 
-## 设置与选关复用相同导航位置，两个分组采用左标签、右控件且不会随翻译溢出。
+## 检查真正负责裁剪的视区，不把绘图合成父层误认为有布局矩形的 Control。
+func _editor_viewport_inside(editor: MapEditor, message: String) -> void:
+	var view := editor._map_view
+	_inside(view, "地图编辑器视口 " + message)
+	_inside(view._content, "地图编辑器可见裁剪区域 " + message)
+	var visible_bounds := Rect2(view.global_position + view.usable_rect.position, view.usable_rect.size)
+	_expect(view.clip_contents and view._content.clip_contents and view._content.is_ancestor_of(editor._canvas), "地图画布确实位于可见裁剪祖先内 " + message)
+	_expect(view.get_global_rect().encloses(visible_bounds) and view._content.get_global_rect().is_equal_approx(visible_bounds), "实际裁剪范围与有效地图画幅一致，滚动轨道不算绘图区 " + message)
+
+
+## 设置导航移入共享白卡，保留原药丸尺寸；分组翻译后仍保持控件在行内。
 func _settings_layout_matches(game: GameShell, expected_back: Rect2, expected_navigation: Rect2, message: String) -> void:
-	_level_navigation_matches(game, expected_back, expected_navigation, "设置 " + message)
+	var card_offset := game._menu_card.global_position + Vector2(24, 24) - expected_navigation.position
+	_level_navigation_matches(game, Rect2(expected_back.position + card_offset, expected_back.size), Rect2(expected_navigation.position + card_offset, expected_navigation.size), "设置白卡内导航 " + message)
 	_expect(not game._text_back_button.is_visible_in_tree() and not game._subtitle.is_visible_in_tree() and not game._save_label.is_visible_in_tree(), "设置隐藏重复文字导航、副标题和页脚 " + message)
 	var card := game.find_child("SettingsCard", true, false) as Control
 	var volume_row := game.find_child("VolumeRow", true, false) as Control
@@ -149,16 +161,12 @@ func _settings_layout_matches(game: GameShell, expected_back: Rect2, expected_na
 	if clear == null:
 		return
 	_expect(clear.get_global_rect().position.y >= language_rect.end.y, "清除入口位于语言行下方，纵向溢出交由滚动验证 " + message)
-	_expect(clear.get_parent() == language_row.get_parent() and absf(clear.get_global_rect().position.x - language_rect.position.x) < 1.0 and absf(clear.size.x - language_rect.size.x) < 1.0, "语言与清除属于同一组且上下两行等宽对齐 " + message)
-	var clear_user := game.find_child("ClearUserLevelsButton", true, false) as Button
-	_expect(TranslationServer.translate(clear.text) == game.tr("清除预设进度") and clear_user != null and TranslationServer.translate(clear_user.text) == game.tr("清除用户关卡"), "两种清除操作名称及当前语言完整区分 " + message)
-	if clear_user != null:
-		_expect(clear_user.get_parent() == language_row.get_parent(), "用户清除保留在更多分组的相同行容器内 " + message)
-		_expect(clear_user.get_global_rect().position.y >= clear.get_global_rect().end.y and absf(clear_user.get_global_rect().position.x - language_rect.position.x) < 1.0 and absf(clear_user.size.x - language_rect.size.x) < 1.0, "用户清除在预设清除下方且三行等宽对齐 " + message)
+	_expect(clear.get_parent() == language_row.get_parent() and absf(clear.get_global_rect().position.x - language_rect.position.x) < 1.0 and absf(clear.get_global_rect().size.x - language_rect.size.x) < 1.0, "语言与清除属于同一组且上下两行等宽对齐 " + message)
+	_expect(TranslationServer.translate(clear.text) == game.tr("清除预设进度") and game.find_child("ClearUserLevelsButton", true, false) == null, "更多仅保留预设进度清除，用户地图使用玩家关卡列表 " + message)
+	var clear_style := clear.get_theme_stylebox("hover") as StyleBoxFlat
+	_expect(clear_style != null and clear_style.corner_radius_bottom_left > 0 and clear_style.corner_radius_top_left == 0, "最后一行清除入口底角与更多分组衔接 " + message)
 	await _settings_free_zoom_layout(game, message)
 	await _clear_modal_layout(game, clear, ClearProgressDialog.WARNING_BODY, "预设 " + message)
-	if clear_user != null:
-		await _clear_modal_layout(game, clear_user, ClearProgressDialog.USER_LEVELS_WARNING_BODY, "用户 " + message)
 
 
 ## 新缩放开关位于 Tab 下方，滚动后通过真实点击验证中英文标签和输入均可用。
@@ -257,7 +265,7 @@ func _level_navigation_matches(game: GameShell, expected_back: Rect2, expected_n
 		var header := game.workbench.header
 		_expect(header.is_visible_in_tree() and not game._header.is_visible_in_tree() and not game._subtitle.is_visible_in_tree() and not game._save_label.is_visible_in_tree(), "编程使用独立顶部栏并隐藏底部常规保存提示 " + message)
 		_expect(game._back_button == header.back_button and header.back_button.get_global_rect().is_equal_approx(expected_back) and header.navigation.get_global_rect().is_equal_approx(expected_navigation), "编程返回药丸与选关导航位置和尺寸一致 " + message)
-		_expect(header.back_button.icon != null and header.back_button.text.is_empty() and header.back_button.get_tooltip() == game.tr("返回地图编辑器" if game._editor_playtest else "返回关卡"), "编程返回图标采用当前语言的目标提示 " + message)
+		_expect(header.back_button.icon != null and header.back_button.text.is_empty() and header.back_button.get_tooltip().begins_with(game.tr("编辑模块")), "编程返回图标采用当前语言的装配目标提示 " + message)
 		_inside(header.navigation, "编程返回药丸 " + message)
 		return
 	var navigation := game.find_child("GameNavigation", true, false) as Control
@@ -447,6 +455,9 @@ func _command_reference_layout(game: GameShell, message: String) -> void:
 func _return_to_level_navigation(game: GameShell, expected_back: Rect2, expected_navigation: Rect2, message: String) -> void:
 	game._back_button.pressed.emit()
 	await _settle()
+	_expect(game.page == GameShell.Page.ASSEMBLY and game.session != null, "编程先返回独立装配页并保留会话 " + message)
+	game._back_button.pressed.emit()
+	await _settle()
 	_expect(game.page == GameShell.Page.LEVELS and game.session == null, "胶囊返回按钮仍进入选关页并结束关卡会话 " + message)
 	var back := game.find_child("LevelBackButton", true, false) as Button
 	var navigation := game.find_child("LevelNavigation", true, false) as Control
@@ -477,6 +488,9 @@ func _editor_playtest_navigation(game: GameShell, expected_back: Rect2, expected
 	_level_navigation_matches(game, expected_back, expected_navigation, "编辑器试玩编程 " + message)
 	game._back_button.pressed.emit()
 	await _settle()
+	_expect(game.page == GameShell.Page.ASSEMBLY and game.session != null, "试玩编程先返回独立装配页 " + message)
+	game._back_button.pressed.emit()
+	await _settle()
 	_expect(game.page == GameShell.Page.EDITOR and game._editor == editor and game._editor.editor_document == editor_document and game.session == null, "试玩药丸返回恢复原编辑器文档并结束会话 " + message)
 	_expect(not app_icon.is_visible_in_tree() and not game._header.is_visible_in_tree() and game._back_button == header.back_button and header.back_button.is_visible_in_tree() and header.back_button.get_global_rect().is_equal_approx(expected_back) and header.navigation.get_global_rect().is_equal_approx(expected_navigation), "结束试玩后恢复同一编辑器工具栏及精确导航位置 " + message)
 
@@ -499,14 +513,14 @@ func _level_categories_inside(game: GameShell, message: String) -> void:
 	var imported_grid := game.find_child("ImportedLevelGrid", true, false) as GridContainer
 	var toggle := game.find_child("TutorialToggleButton", true, false) as Button
 	var import_button := game.find_child("ImportLevelButton", true, false) as Button
-	var custom := game.find_child("LevelButton_15", true, false) as Button
+	var custom := game.find_child("LevelButton_16", true, false) as Button
 	var ready := scroll != null and sections != null and tutorial != null and imported != null and grid != null and imported_grid != null and toggle != null and import_button != null and custom != null
 	_expect(ready, "教学和导入分类的全部布局节点存在 " + message)
 	if not ready:
 		return
-	_expect(scroll.get_child(0) == sections and tutorial.get_parent() == sections and imported.get_parent() == sections, "两个分类共用纵向滚动容器 " + message)
+	_expect(scroll.is_ancestor_of(sections) and tutorial.get_parent() == sections and imported.get_parent() == sections, "两个分类共用纵向滚动容器 " + message)
 	var title := _find_translated_label(tutorial, game.tr("教学关卡"))
-	var imported_title := _find_translated_label(imported, game.tr("导入关卡"))
+	var imported_title := _find_translated_label(imported, game.tr("玩家关卡"))
 	_expect(title != null and imported_title != null, "两个分类标题采用当前语言 " + message)
 	if title != null:
 		_inside(title, "教学分类标题 " + message)
@@ -520,7 +534,7 @@ func _level_categories_inside(game: GameShell, message: String) -> void:
 	_expect(import_button.get_parent().get_parent() == imported_grid and import_button.get_parent().get_index() == 0, "导入入口固定在独立网格第一格 " + message)
 	_expect(custom.get_parent().get_parent() == imported_grid and custom.get_parent().get_index() == 1, "真实导入关卡位于加号之后 " + message)
 	var cards: Array[Button] = []
-	for index in range(15):
+	for index in range(16):
 		var card := game.find_child("LevelButton_%d" % index, true, false) as Button
 		_expect(card != null and card.is_visible_in_tree() == (index < 7), "默认仅前七张教学卡片可见，第 %d 张 " % (index + 1) + message)
 		if card == null:
@@ -537,7 +551,7 @@ func _level_categories_inside(game: GameShell, message: String) -> void:
 			_inside(card, "默认教学卡片 %d " % (index + 1) + message)
 			_expect(absf(card.get_global_rect().position.y - cards[0].get_global_rect().position.y) <= 1.0, "默认七张教学卡片位于同一行 " + message)
 	_check_category_columns(cards, import_button, custom, scroll, message)
-	_expect(TranslationServer.translate(toggle.text) == ("Show More (15)" if TranslationServer.get_locale().begins_with("en") else "展示更多（15）"), "折叠按钮总数只包含教学关卡 " + message)
+	_expect(TranslationServer.translate(toggle.text) == ("Show More (16)" if TranslationServer.get_locale().begins_with("en") else "Mostrar más (16)" if TranslationServer.get_locale() == "es" else "展示更多（16）"), "折叠按钮总数只包含教学关卡 " + message)
 	toggle.pressed.emit()
 	await _settle()
 	# 切换可能重建列表，重新取当前节点检查真实展开后的几何位置。
@@ -546,9 +560,9 @@ func _level_categories_inside(game: GameShell, message: String) -> void:
 	imported_grid = game.find_child("ImportedLevelGrid", true, false) as GridContainer
 	toggle = game.find_child("TutorialToggleButton", true, false) as Button
 	import_button = game.find_child("ImportLevelButton", true, false) as Button
-	custom = game.find_child("LevelButton_15", true, false) as Button
+	custom = game.find_child("LevelButton_16", true, false) as Button
 	cards.clear()
-	for index in range(15):
+	for index in range(16):
 		var card := game.find_child("LevelButton_%d" % index, true, false) as Button
 		_expect(card != null and card.is_visible_in_tree(), "展开后第 %d 张教学卡片可见 " % (index + 1) + message)
 		if card == null:
@@ -559,7 +573,7 @@ func _level_categories_inside(game: GameShell, message: String) -> void:
 			_expect(card.get_global_rect().position.y > cards[0].get_global_rect().end.y and absf(card.get_global_rect().position.x - cards[index - 7].get_global_rect().position.x) <= 1.0, "后续教学卡片进入对齐的第二行 " + message)
 	_expect(imported_grid.get_global_rect().position.y > grid.get_global_rect().end.y, "导入分类排在完整教学网格下方 " + message)
 	_check_category_columns(cards, import_button, custom, scroll, message)
-	_expect(TranslationServer.translate(toggle.text) == ("Show Less" if TranslationServer.get_locale().begins_with("en") else "收起"), "展开按钮翻译完整 " + message)
+	_expect(TranslationServer.translate(toggle.text) == ("Show Less" if TranslationServer.get_locale().begins_with("en") else "Mostrar menos" if TranslationServer.get_locale() == "es" else "收起"), "展开按钮翻译完整 " + message)
 	toggle.pressed.emit()
 	await _settle()
 

@@ -13,6 +13,14 @@ const METADATA_DIALOG_SIZE := Vector2i(456, 342) # 原 760 × 570 窗口的 60%�
 var editor_document := MapEditorDocument.new()
 var registry := ContentRegistry.new()
 var settings: GameSettings
+# 新图可由外壳注入玩家署名；载入已有地图仍保留其原作者。
+var default_creator: String = ""
+var player_levels_directory: String = "user://levels"
+var initial_map_path: String = ""
+var initial_map_opened := false
+var initial_map_error := PackedStringArray()
+var _managed_save_path: String = ""
+var _assigned_new_id: String = ""
 
 var _canvas: MapEditorCanvas
 var _map_view: MapEditorViewport
@@ -21,17 +29,36 @@ var _zoom_in_button: Button
 var _guide_button: Button
 var _guide_menu: WorkbenchGuideMenu
 var _status: Label
-var _file_label: Button
 var _header: MapEditorHeader
 var _actions_menu: MapEditorActionsMenu
 var _id_field: LineEdit
 var _name_field: LineEdit
+var _subtitle_field: LineEdit
+var _creator_field: LineEdit
+var _identity_uncommitted := false
+var _identity_source: MapDocument
+var _level_guide_button: Button
+var _level_guide_editor: MapGuideEditor
 var _width_field: SpinBox
 var _height_field: SpinBox
 var _dimension_texts: Dictionary = {}
 var _time_limit_field: LineEdit
 var _time_limit_text := "60"
+var _gate_add_button: Button
+var _gate_remove_button: Button
+var _gate_timer_field: LineEdit
+var _new_gate_seconds := MapEditorTimedGate.DEFAULT_SECONDS
+var _gate_timer_text := "6"
+var _gate_timer_baseline := "6"
+var _gate_timer_edited := false
+var _gate_document: MapDocument
+var _gate_edit_source: MapDocument
+var _gate_edit_target := ""
 var _module_limit_field: SpinBox
+var _restriction_choice: ModuleRestrictionChoice
+var _restriction_picker: ModuleRestrictionPicker
+var _command_button: Button
+var _command_menu: CommandRestrictionMenu
 var _player_health_field: LineEdit
 var _player_health_text := "1"
 var _player_health_baseline := "1"
@@ -49,6 +76,10 @@ var _brush: OptionButton
 var _undo_button: Button
 var _redo_button: Button
 var _play_button: Button
+var _save_level_button: Button
+var _test_feedback: Label
+var _test_feedback_errors := PackedStringArray()
+var _test_validation_active := false
 var _file_dialog: FileDialog
 var _dirty_dialog: ConfirmationDialog
 var _message_dialog: AcceptDialog
@@ -61,13 +92,16 @@ var _file_operation: String = ""
 var _default_module_id: String = ""
 var _syncing_fields: bool = false
 var _metadata_color_mode := ""
+var _properties_card: PanelContainer
+var _presentation_scale := 1.0
 
 
-# 用途：载入内容目录、构建最小界面并打开示例地图，失败时显示可诊断错误。
+# 用途：先载入内容目录，再打开外层指定草稿；普通入口仍使用示例地图。
 func _ready() -> void:
 	_build_ui()
 	if settings != null:
 		settings.changed.connect(_sync_metadata_color)
+		settings.changed.connect(_refresh_test_feedback)
 	_sync_metadata_color()
 	editor_document.changed.connect(_on_document_changed)
 	var content_result: DataResult = _load_catalog()
@@ -75,19 +109,43 @@ func _ready() -> void:
 	_canvas.registry = registry
 	if not content_result.is_ok():
 		_new_document()
-		_show_errors("内容加载失败", content_result.errors)
+		if initial_map_path.is_empty():
+			_show_errors("内容加载失败", content_result.errors)
+		else:
+			initial_map_error = content_result.errors.duplicate()
 		return
-	if FileAccess.file_exists(DEFAULT_MAP_PATH):
+	if not initial_map_path.is_empty():
+		initial_map_opened = _load_document(initial_map_path, false)
+		if not initial_map_opened:
+			_new_document()
+	elif FileAccess.file_exists(DEFAULT_MAP_PATH):
 		_load_document(DEFAULT_MAP_PATH)
 	else:
 		_new_document()
+
+
+## 外壳负责编辑页整体几何；独立窗口和浮层同步显示比例，不修改地图、视图缩放或编辑历史。
+func set_presentation_scale(factor: float) -> void:
+	_presentation_scale = maxf(1.0, factor)
+	if not is_node_ready():
+		return
+	_header.set_presentation_scale(_presentation_scale)
+	for dialog: Window in [_dirty_dialog, _message_dialog, _metadata_dialog]:
+		dialog.content_scale_factor = _presentation_scale
+	for menu in [_actions_menu, _guide_menu, _restriction_picker, _command_menu, _enemy_panel._picker]:
+		if menu.is_open():
+			menu._update_placement.call_deferred()
+	if _level_guide_editor.is_open():
+		_level_guide_editor._layout_dialog.call_deferred()
+	if _metadata_dialog.visible:
+		_fit_metadata_dialog.call_deferred()
 
 
 # 用途：提供常见保存和撤销快捷键，文本编辑控件仍使用自身的撤销操作。
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not is_visible_in_tree() or not event is InputEventKey or not event.pressed or event.echo:
 		return
-	if not (event.ctrl_pressed or event.meta_pressed) or _metadata_dialog.visible or _file_dialog.visible or _dirty_dialog.visible or _actions_menu.is_open() or _guide_menu.is_open():
+	if not (event.ctrl_pressed or event.meta_pressed) or _metadata_dialog.visible or _file_dialog.visible or _dirty_dialog.visible or _actions_menu.is_open() or _guide_menu.is_open() or _level_guide_editor.is_open() or _restriction_picker.is_open() or _command_menu.is_open():
 		return
 	if event.keycode == KEY_O:
 		_request_action("open")
@@ -131,33 +189,21 @@ func _build_ui() -> void:
 	_actions_menu = MapEditorActionsMenu.new()
 	_actions_menu.name = "MapEditorActionsMenu"
 	add_child(_actions_menu)
+	_actions_menu.open_requested.connect(_request_action.bind("open"))
 	_actions_menu.save_as_requested.connect(_save_document.bind(true))
 	_actions_menu.validate_requested.connect(_validate_document)
 	_actions_menu.metadata_requested.connect(_open_metadata)
 	visibility_changed.connect(_on_editor_visibility_changed)
-	# 路径保留原有未保存标记，同时承接旧“打开”操作，避免图标栏继续堆叠按钮。
-	_file_label = Button.new()
-	_file_label.name = "MapEditorOpenButton"
-	_file_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-	_file_label.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_file_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_file_label.clip_text = true
-	_file_label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	_file_label.add_theme_font_size_override("font_size", 13)
-	_file_label.add_theme_color_override("font_color", GameTheme.MUTED)
-	_file_label.add_theme_color_override("font_hover_color", GameTheme.ACCENT)
-	_file_label.custom_minimum_size.y = 24
-	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
-		var style := GameTheme.box(Color.TRANSPARENT, Color("A7CDFF") if state == "focus" else Color.TRANSPARENT, 6)
-		style.set_content_margin_all(0)
-		_file_label.add_theme_stylebox_override(state, style)
-	_file_label.pressed.connect(_request_action.bind("open"))
-	layout.add_child(_file_label)
-	var workspace := HSplitContainer.new()
+	# 打开入口统一放在更多菜单，路径不再单独占据工作区上方一行。
+	_header.title_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	# 地图区吸收剩余宽度，属性卡片只取表单所需宽度，不提供可拖动分隔线。
+	var workspace := HBoxContainer.new()
+	workspace.name = "MapEditorWorkspace"
+	workspace.add_theme_constant_override("separation", 12)
 	workspace.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	workspace.split_offset = 810
 	layout.add_child(workspace)
-	var map_panel := PanelContainer.new()
+	var map_panel := Control.new()
+	map_panel.name = "MapEditorMapRegion"
 	map_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	map_panel.custom_minimum_size.x = 360
 	workspace.add_child(map_panel)
@@ -166,6 +212,7 @@ func _build_ui() -> void:
 	map_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	map_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	map_panel.add_child(map_area)
+	map_area.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_map_view = MapEditorViewport.new()
 	_map_view.name = "MapEditorViewport"
 	map_area.add_child(_map_view)
@@ -174,33 +221,74 @@ func _build_ui() -> void:
 	_canvas.point_placement_cancelled.connect(_cancel_point_tool)
 	_canvas.enemy_placement_cancelled.connect(_cancel_point_tool)
 	_canvas.enemy_placement_requested.connect(_place_enemy)
+	_canvas.enemy_selection_requested.connect(_on_enemy_selection_requested)
+	_canvas.paint_mode_changed.connect(_sync_enemy_remove_button)
+	_canvas.timed_gate_selected.connect(_select_timed_gate)
+	_canvas.timed_gate_placement_requested.connect(_place_timed_gate)
+	_canvas.timed_gate_removal_requested.connect(_remove_timed_gate)
+	_canvas.timed_gate_tool_cancelled.connect(_cancel_point_tool)
 	_canvas.stroke_started.connect(editor_document.begin_action)
 	_canvas.cell_requested.connect(_paint_cell)
 	_canvas.rectangle_requested.connect(_paint_rectangle)
 	_canvas.stroke_finished.connect(editor_document.end_action)
-	_build_map_controls(map_area)
+	_build_map_controls()
 	_build_properties(workspace)
 	_build_dialogs()
 	_update_history_buttons()
+	var focus_handler := preload("res://scripts/ui/map_editor_properties_focus.gd").new()
+	focus_handler.name = "MapEditorPropertiesFocus"
+	focus_handler.configure(self, _properties_card, _property_focus_blocked)
+	focus_handler.card_blank_clicked.connect(_on_property_card_blank_clicked)
+	add_child(focus_handler)
+
+
+## 卡片空白结束闸门及敌人框选工具；输入控件和地图点击仍保留连续放置。
+func _on_property_card_blank_clicked() -> void:
+	if _canvas.paint_mode in [MapEditorCanvas.PaintMode.GATE_ADD, MapEditorCanvas.PaintMode.GATE_REMOVE, MapEditorCanvas.PaintMode.ENEMY_SELECT]:
+		_cancel_point_tool()
+
+
+## 浮层内部和模态窗口的点击不改变背景表单；收起后的空白点击可正常取消焦点。
+func _property_focus_blocked(include_menus: bool = true) -> bool:
+	if _file_dialog.visible or _dirty_dialog.visible or _message_dialog.visible or _metadata_dialog.visible or _level_guide_editor.is_open():
+		return true
+	return include_menus and (_actions_menu.is_open() or _guide_menu.is_open() or _restriction_picker.is_open() or _command_menu.is_open() or _enemy_panel._picker.is_open() or _brush.get_popup().visible)
+
 
 ## 属性使用紧凑横向表单；滚动条独占右侧留白，不与输入框或数字箭头重叠。
 func _build_properties(workspace: Control) -> void:
 	var card := PanelContainer.new()
+	_properties_card = card
 	card.name = "MapEditorPropertiesCard"
 	card.custom_minimum_size.x = 340
 	card.theme = _properties_theme()
 	var surface := GameTheme.card()
-	surface.content_margin_top = 14
-	surface.content_margin_right = 10
+	# 底部操作与白卡等距内缩，按钮圆角为白卡半径减去内缩，两个圆心保持重合。
+	var footer_inset := 8
+	surface.set_content_margin_all(footer_inset)
 	card.add_theme_stylebox_override("panel", surface)
 	workspace.add_child(card)
+	var layout := VBoxContainer.new()
+	layout.name = "MapEditorPropertiesLayout"
+	layout.add_theme_constant_override("separation", 8)
+	card.add_child(layout)
+	var body_inset := MarginContainer.new()
+	body_inset.name = "MapEditorPropertiesBodyInset"
+	body_inset.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	body_inset.add_theme_constant_override("margin_left", 10)
+	body_inset.add_theme_constant_override("margin_right", 2)
+	body_inset.add_theme_constant_override("margin_top", 6)
+	layout.add_child(body_inset)
 	var scroll := ScrollContainer.new()
 	scroll.name = "MapEditorPropertiesScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# 固定保留滚动条位置，透明淡出时表单和居中的名称行不会左右跳动。
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	scroll.follow_focus = true
-	card.add_child(scroll)
+	var content_fade := preload("res://scripts/ui/map_editor_properties_fade.gd").new()
+	content_fade.name = "MapEditorPropertiesFade"
+	body_inset.add_child(content_fade)
+	content_fade.set_scroll(scroll)
 	SettingsScrollFade.attach(scroll)
 	var gutter := MarginContainer.new()
 	gutter.name = "MapEditorPropertiesGutter"
@@ -215,24 +303,40 @@ func _build_properties(workspace: Control) -> void:
 	gutter.add_child(fields)
 	GameTheme.label(fields, "地图属性", 16)
 	# 右侧包含卡片内边距、滚动条和留白；在名称行左侧补齐相同的总距离。
-	var identity_inset := surface.content_margin_right + 18 + scroll.get_v_scroll_bar().get_combined_minimum_size().x - surface.content_margin_left
+	var identity_inset := 10 + 18 + scroll.get_v_scroll_bar().get_combined_minimum_size().x - 18
 	_build_identity_fields(fields, identity_inset)
+	_build_subtitle_field(fields, identity_inset)
+	_build_creator_field(fields, identity_inset)
 	_property_gap(fields, 6)
 	_build_dimensions(fields)
 	_property_gap(fields, 12)
 	_build_scene_controls(fields)
-	var footer_space := Control.new()
-	footer_space.custom_minimum_size.y = 24
-	footer_space.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	footer_space.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	fields.add_child(footer_space)
-	_play_button = _add_button(fields, "开始测试", _start_playtest)
-	GameTheme.primary(_play_button)
+	_property_gap(fields, 12)
+	_build_enemy_controls(fields)
+	_property_gap(fields, 12)
+	_test_feedback = GameTheme.label(layout, "", 12)
+	_test_feedback.name = "MapEditorTestFeedback"
+	_test_feedback.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	_test_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_test_feedback.add_theme_color_override("font_color", Color("bb3434"))
+	_test_feedback.hide()
+	var actions := HBoxContainer.new()
+	actions.name = "MapEditorFooterActions"
+	actions.add_theme_constant_override("separation", 16)
+	layout.add_child(actions)
+	_play_button = _add_button(actions, "开始测试", _start_playtest)
+	_play_button.name = "MapEditorStartTest"
+	_play_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_save_level_button = _add_button(actions, "保存关卡", _save_document.bind(false))
+	_save_level_button.name = "MapEditorSaveLevel"
+	_save_level_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	GameTheme.primary(_save_level_button)
 	# 主操作仍保留蓝色，仅缩小其本地留白，不影响其他页面的按钮样式。
-	for state in ["normal", "hover", "pressed", "hover_pressed"]:
-		_play_button.add_theme_stylebox_override(state, _compact_field_style(_play_button.get_theme_stylebox(state)))
-	var test_help := GameTheme.label(fields, "测试会进入组装和编程，最终模块占地在确认装配时检查。", 12, true)
-	test_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	for button in [_play_button, _save_level_button]:
+		for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+			var style := _compact_field_style(button.get_theme_stylebox(state)) as StyleBoxFlat
+			style.set_corner_radius_all(surface.corner_radius_bottom_right - footer_inset)
+			button.add_theme_stylebox_override(state, style)
 
 
 ## 名称和 ID 共用一行及等宽输入框，缩小字号和高度，整行相对卡片左右对称。
@@ -258,12 +362,121 @@ func _build_identity_fields(parent: Node, leading_inset: float) -> void:
 			style.content_margin_left = 6
 			style.content_margin_right = 6
 			field.add_theme_stylebox_override(state, style)
-		field.focus_exited.connect(_commit_identity)
-		field.text_submitted.connect(_on_identity_submitted)
 		if caption == "名称":
 			_name_field = field
+			field.focus_exited.connect(_commit_identity)
+			field.text_submitted.connect(_on_identity_submitted)
+			field.text_changed.connect(_on_identity_text_changed)
 		else:
 			_id_field = field
+			field.name = "MapEditorIdField"
+			field.editable = false
+			field.context_menu_enabled = false
+			field.selecting_enabled = true
+			field.theme_changed.connect(_fit_id_field_width.call_deferred)
+			_fit_id_field_width()
+
+
+## 为完整十位 ID 留出实际文字宽度，随字号变化重算；旧长 ID 不会把属性卡片无限撑宽。
+func _fit_id_field_width() -> void:
+	if not is_instance_valid(_id_field):
+		return
+	var font := _id_field.get_theme_font("font")
+	var font_size := _id_field.get_theme_font_size("font_size")
+	var width := 0.0
+	for digit in range(10):
+		width = maxf(width, font.get_string_size("map_" + str(digit).repeat(10), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+	var style := _id_field.get_theme_stylebox("read_only")
+	_id_field.custom_minimum_size.x = ceilf(width + style.get_margin(SIDE_LEFT) + style.get_margin(SIDE_RIGHT) + 1)
+
+
+## 副标题独占身份字段第二排，闪烁光标、留白和焦点提交沿用原生文字输入框。
+func _build_subtitle_field(parent: Node, leading_inset: float) -> void:
+	var margin := MarginContainer.new()
+	margin.name = "MapEditorSubtitleMargin"
+	margin.add_theme_constant_override("margin_left", maxi(0, roundi(leading_inset)))
+	parent.add_child(margin)
+	var row := HBoxContainer.new()
+	row.name = "MapEditorSubtitleRow"
+	row.add_theme_constant_override("separation", 6)
+	margin.add_child(row)
+	var caption := GameTheme.label(row, "副标题", 12)
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_subtitle_field = _add_line_edit(row, 76)
+	_subtitle_field.name = "MapEditorSubtitleField"
+	# 先过滤再限长，避免原生 max_length 把粘贴中的表情算入合法文字额度。
+	_subtitle_field.max_length = 0
+	_subtitle_field.custom_minimum_size.y = 26
+	GameTheme.font_size(_subtitle_field, "font_size", 12)
+	_subtitle_field.add_theme_constant_override("minimum_character_width", 0)
+	_subtitle_field.tooltip_text = "最多 70 个字符，支持文字、数字和常用标点，不支持表情。留空时显示默认目标说明。"
+	for state: StringName in ["normal", "focus", "read_only"]:
+		var style := _subtitle_field.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		style.content_margin_left = 6
+		style.content_margin_right = 6
+		_subtitle_field.add_theme_stylebox_override(state, style)
+	_subtitle_field.focus_exited.connect(_commit_identity)
+	_subtitle_field.text_submitted.connect(_on_identity_submitted)
+	_subtitle_field.text_changed.connect(_on_subtitle_text_changed)
+
+
+## 过滤键入和粘贴的非法字符并映射光标位置，不把中间编辑的光标跳到整行末尾。
+func _on_subtitle_text_changed(text: String) -> void:
+	if _syncing_fields:
+		return
+	var filtered := DataValidation.filter_level_subtitle(text)
+	if filtered != text:
+		var caret := DataValidation.filter_level_subtitle(text.substr(0, _subtitle_field.caret_column)).length()
+		_subtitle_field.text = filtered
+		_subtitle_field.caret_column = mini(caret, filtered.length())
+	_identity_uncommitted = true
+
+
+## 创作者位于副标题下方，沿用同尺寸浅色药丸输入框，内容不参与本土化。
+func _build_creator_field(parent: Node, leading_inset: float) -> void:
+	var margin := MarginContainer.new()
+	margin.name = "MapEditorCreatorMargin"
+	margin.add_theme_constant_override("margin_left", maxi(0, roundi(leading_inset)))
+	parent.add_child(margin)
+	var row := HBoxContainer.new()
+	row.name = "MapEditorCreatorRow"
+	row.add_theme_constant_override("separation", 6)
+	margin.add_child(row)
+	var caption := GameTheme.label(row, "创作者", 12)
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_creator_field = _add_line_edit(row, 76)
+	_creator_field.name = "MapEditorCreatorField"
+	# 保留完整粘贴内容与旧地图长署名，提交校验负责拒绝而不是输入时截断。
+	_creator_field.max_length = 0
+	_creator_field.custom_minimum_size.y = 26
+	_creator_field.add_theme_font_size_override("font_size", 12)
+	_creator_field.add_theme_constant_override("minimum_character_width", 0)
+	for state: StringName in ["normal", "focus", "read_only"]:
+		var style := _creator_field.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		style.content_margin_left = 6
+		style.content_margin_right = 6
+		_creator_field.add_theme_stylebox_override(state, style)
+	_creator_field.focus_exited.connect(_commit_identity)
+	_creator_field.text_submitted.connect(_on_identity_submitted)
+	_creator_field.text_changed.connect(_on_identity_text_changed)
+	var guide_label := GameTheme.label(row, "关卡引导", 12)
+	guide_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_level_guide_button = _view_button(row, "MapEditorLevelGuideButton", "assembly_add", _open_level_guide, 0, 1)
+	_level_guide_button.tooltip_text = tr("编辑关卡引导")
+	var guide_button_surface := GameTheme.box(GameTheme.SURFACE, Color.TRANSPARENT, 14)
+	guide_button_surface.set_content_margin_all(0)
+	_level_guide_button.add_theme_stylebox_override("normal", guide_button_surface)
+
+
+## 作者从属性行打开分页引导编辑，先提交身份表单并结束地图笔画。
+func _open_level_guide() -> void:
+	_map_view.finish_interaction()
+	if not _commit_identity():
+		return
+	_actions_menu.close_menu(false)
+	_guide_menu.close_menu(false)
+	_command_menu.close_menu(false)
+	_level_guide_editor.open_document(editor_document, _level_guide_button, _map_view)
 
 
 ## 场景编辑将尺寸与地形工具放入同一折叠内容，英文用 W/H 留出输入空间。
@@ -301,6 +514,7 @@ func _build_dimensions(parent: Node) -> void:
 	var apply := _add_button(dimensions, "应用尺寸", _resize_document)
 	apply.custom_minimum_size.x = 90
 	_build_paint_tools(body)
+	_build_timed_gate_controls(body)
 
 
 ## 在键入或粘贴时恢复最后有效内容；允许暂时留空，便于替换整段数字。
@@ -424,11 +638,121 @@ func _build_scene_controls(parent: Node) -> void:
 		button.custom_minimum_size.x = 92
 		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 			button.add_theme_color_override(state, Color("dd1d1d"))
+	_build_module_restrictions(body)
+	_build_command_restrictions(body)
 	_build_player_limits(body)
-	_property_gap(body, 12)
+
+
+## 禁止模块多选位于限时下方，长正文在固定药丸内走字而不扩宽属性面板。
+func _build_module_restrictions(parent: Control) -> void:
+	var row := HBoxContainer.new()
+	row.name = "MapEditorModuleRestrictions"
+	row.add_theme_constant_override("separation", 10)
+	parent.add_child(row)
+	_scene_label(row, "限制使用的模块", "MapEditorRestrictionLabel")
+	_restriction_choice = ModuleRestrictionChoice.new()
+	_restriction_choice.name = "MapEditorRestrictionChoice"
+	_restriction_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_restriction_choice)
+	_restriction_choice.pressed.connect(_open_module_restrictions)
+	_restriction_picker = ModuleRestrictionPicker.new()
+	_restriction_picker.name = "MapEditorRestrictionPicker"
+	add_child(_restriction_picker)
+	_restriction_picker.restrictions_changed.connect(_on_module_restrictions_changed)
+
+
+## 打开前结束地图笔画；菜单只处理模块选择，不向背后地图传递点击或快捷键。
+func _open_module_restrictions() -> void:
+	_map_view.finish_interaction()
+	_actions_menu.close_menu(false)
+	_guide_menu.close_menu(false)
+	_command_menu.close_menu(false)
+	_restriction_picker.show_modules(_restriction_choice, registry, editor_document.get_restricted_modules(registry))
+
+
+## 每次勾选写入一条可撤销事务，失败保留文档与原有效复选状态。
+func _on_module_restrictions_changed(ids: Array) -> void:
+	var result := editor_document.set_restricted_modules(ids, registry)
+	if not result.is_ok():
+		_restriction_picker.close_menu(false)
+		_show_errors("无法更新模块限制", result.errors)
+
+
+## 指令管理文字与圆形加号作为一组居中，沿用上下表单的紧凑字号与间隔。
+func _build_command_restrictions(parent: Control) -> void:
+	var row := HBoxContainer.new()
+	row.name = "MapEditorCommandManagement"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	parent.add_child(row)
+	_scene_label(row, "管理关卡中允许使用的指令集", "MapEditorCommandManagementLabel")
+	_command_button = Button.new()
+	_command_button.name = "MapEditorCommandManagementButton"
+	# 加号按SVG画布中心对齐，避免字体基线让符号墨迹偏离圆心。
+	_command_button.icon = load("res://assets/ui/assembly_add.svg")
+	_command_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_command_button.expand_icon = true
+	_command_button.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_command_button.add_theme_constant_override("icon_max_width", 18)
+	_command_button.add_theme_constant_override("h_separation", 0)
+	for state in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
+		_command_button.add_theme_color_override(state, Color.WHITE)
+	_command_button.custom_minimum_size = Vector2(32, 32)
+	_command_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_command_button.tooltip_text = "管理关卡中允许使用的指令集"
+	for state in ["normal", "hover", "pressed", "hover_pressed", "focus"]:
+		var fill := Color("D7E4F5") if state in ["pressed", "hover_pressed"] else Color("E2E8F1") if state == "hover" else Color("EAEDF2")
+		var surface := GameTheme.box(fill, Color("A7CDFF") if state == "focus" else Color.TRANSPARENT, 16)
+		surface.set_content_margin_all(0)
+		_command_button.add_theme_stylebox_override(state, surface)
+	row.add_child(_command_button)
+	_command_button.pressed.connect(_open_command_restrictions)
+	_command_menu = CommandRestrictionMenu.new()
+	_command_menu.name = "MapEditorCommandRestrictionMenu"
+	add_child(_command_menu)
+	_command_menu.command_toggled.connect(_on_command_toggled)
+
+
+## 指令面板打开前结束绘制与其他浮层，权限开关不向地图传递点击。
+func _open_command_restrictions() -> void:
+	_map_view.finish_interaction()
+	_actions_menu.close_menu(false)
+	_guide_menu.close_menu(false)
+	_restriction_picker.close_menu(false)
+	_enemy_panel._picker.close_menu(false)
+	_command_button.release_focus()
+	_command_menu.show_commands(_command_button, registry, editor_document.get_enabled_commands(registry))
+
+
+## 开启表示允许；文档一次事务处理依赖项，撤销与失败同步回原有效开关状态。
+func _on_command_toggled(command_id: String, enabled: bool) -> void:
+	var result := editor_document.set_command_enabled(command_id, enabled, registry)
+	_sync_command_restrictions()
+	if not result.is_ok():
+		_command_menu.close_menu(false)
+		_show_errors("无法更新指令集", result.errors)
+
+
+## 历史、载入与注册表重载只同步开关，不在打开旧地图时写入指令权限。
+func _sync_command_restrictions() -> void:
+	_command_menu.sync_enabled_commands(editor_document.get_enabled_commands(registry))
+
+
+## 敌人设置与场景玩法平级，只折叠自身表单，避免玩家设置牵连敌人配置。
+func _build_enemy_controls(parent: Control) -> void:
+	var section := VBoxContainer.new()
+	section.name = "MapEditorEnemyControls"
+	section.add_theme_constant_override("separation", 8)
+	parent.add_child(section)
+	var body := VBoxContainer.new()
+	body.name = "MapEditorEnemyControlsBody"
+	body.add_theme_constant_override("separation", 14)
+	_build_section_heading(section, "敌人攻击方式与行为控制", body, "MapEditorEnemyCollapse")
+	section.add_child(body)
 	_enemy_panel = MapEditorEnemyPanel.new()
 	body.add_child(_enemy_panel)
 	_enemy_panel.placement_requested.connect(_select_enemy_tool)
+	_enemy_panel.removal_requested.connect(_select_enemy_remove_tool)
 	_enemy_panel.enabled_changed.connect(_on_enemies_enabled_changed)
 	_enemy_panel.feedback.connect(_on_enemy_feedback)
 
@@ -506,6 +830,16 @@ func _build_section_heading(parent: Control, caption: String, content: Control, 
 
 ## 折叠不重建控件、不清空值，也不进入地图撤销历史；试玩返回保留展开状态。
 func _toggle_section(content: Control, button: Button) -> void:
+	if content.visible and _gate_timer_field != null and content.is_ancestor_of(_gate_timer_field):
+		_commit_gate_timer()
+		if _canvas.paint_mode in [MapEditorCanvas.PaintMode.GATE_ADD, MapEditorCanvas.PaintMode.GATE_REMOVE]:
+			_cancel_point_tool()
+	if content.visible and _enemy_panel != null and content.is_ancestor_of(_enemy_panel):
+		# 先提交正在输入的敌人数值，并收起浮层与放置预览；已有敌人和模板不受影响。
+		_enemy_panel.commit_fields()
+		_enemy_panel._picker.close_menu(false)
+		if _canvas.paint_mode in [MapEditorCanvas.PaintMode.ENEMY, MapEditorCanvas.PaintMode.ENEMY_SELECT]:
+			_cancel_point_tool()
 	content.visible = not content.visible
 	button.icon = load("res://assets/ui/map_editor_collapse.svg" if content.visible else "res://assets/ui/map_editor_expand.svg")
 	button.tooltip_text = "收起分类" if content.visible else "展开分类"
@@ -613,11 +947,19 @@ func _commit_time_limit() -> void:
 	_time_limit_field.text = _time_limit_text
 	var result := editor_document.set_time_limit_seconds(seconds)
 	if not result.is_ok():
+		_time_limit_text = String.num(editor_document.get_time_limit_seconds(), 1).trim_suffix(".0")
+		_time_limit_field.text = _time_limit_text
 		_show_errors("无法设置时间限制", result.errors)
 
 
 ## 地形工具与点位工具互斥；回到画笔或框选时恢复对应高亮及原有绘制手势。
 func _set_paint_mode(mode: MapEditorCanvas.PaintMode) -> void:
+	_commit_gate_timer()
+	_canvas.selected_gate_id = ""
+	_sync_gate_timer(true)
+	if _gate_add_button != null:
+		_gate_add_button.set_pressed_no_signal(false)
+		_gate_remove_button.set_pressed_no_signal(false)
 	_canvas.finish_stroke()
 	_canvas.clear_enemy_preview()
 	_point_tool = ""
@@ -631,8 +973,249 @@ func _set_paint_mode(mode: MapEditorCanvas.PaintMode) -> void:
 		_goal_button.set_pressed_no_signal(false)
 
 
+## 场景编辑中的两只圆形工具与秒表药丸；工具只改变交互，不提前修改地图。
+func _build_timed_gate_controls(parent: Control) -> void:
+	var row := HBoxContainer.new()
+	row.name = "MapEditorTimedGateRow"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 8)
+	parent.add_child(row)
+	_scene_label(row, "添改限时闸门", "MapEditorTimedGateLabel")
+	_gate_remove_button = _gate_tool_button(row, "MapEditorGateRemove", "assembly_delete", "删除限时闸门", MapEditorCanvas.PaintMode.GATE_REMOVE)
+	_gate_add_button = _gate_tool_button(row, "MapEditorGateAdd", "map_editor_new", "放置限时闸门", MapEditorCanvas.PaintMode.GATE_ADD)
+	var pill := PanelContainer.new()
+	pill.name = "MapEditorGateTimerPill"
+	pill.custom_minimum_size = Vector2(80, 30)
+	var surface := GameTheme.box(Color("EAEDF2"), Color.TRANSPARENT, 15)
+	surface.content_margin_left = 8
+	surface.content_margin_right = 8
+	surface.content_margin_top = 2
+	surface.content_margin_bottom = 2
+	pill.add_theme_stylebox_override("panel", surface)
+	row.add_child(pill)
+	var content := HBoxContainer.new()
+	content.add_theme_constant_override("separation", 4)
+	pill.add_child(content)
+	var icon := TextureRect.new()
+	icon.texture = load("res://assets/ui/map_editor_timer.svg")
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.custom_minimum_size = Vector2(18, 18)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(icon)
+	_gate_timer_field = LineEdit.new()
+	_gate_timer_field.name = "MapEditorGateTimerInput"
+	_gate_timer_field.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
+	_gate_timer_field.text = "6"
+	_gate_timer_field.custom_minimum_size.x = 42
+	_gate_timer_field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_gate_timer_field.add_theme_constant_override("minimum_character_width", 0)
+	_gate_timer_field.add_theme_font_size_override("font_size", 15)
+	_gate_timer_field.caret_blink = true
+	_gate_timer_field.caret_blink_interval = 0.5
+	for state in ["normal", "focus", "read_only"]:
+		_gate_timer_field.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	_gate_timer_field.focus_entered.connect(_begin_gate_timer_edit)
+	_gate_timer_field.text_changed.connect(_on_gate_timer_text_changed)
+	_gate_timer_field.focus_exited.connect(_commit_gate_timer)
+	_gate_timer_field.text_submitted.connect(_on_gate_timer_submitted)
+	content.add_child(_gate_timer_field)
+	_refresh_gate_timer_rules()
+	_gate_timer_field.theme_changed.connect(_fit_gate_timer_field)
+	_fit_gate_timer_field()
+	var unit := GameTheme.label(row, "秒", 10, true)
+	unit.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+
+## 按当前真实字号预留最宽合法秒数与光标空间，不拉伸字形或依赖文字横向滚动。
+func _fit_gate_timer_field() -> void:
+	var font := _gate_timer_field.get_theme_font("font")
+	var font_size := _gate_timer_field.get_theme_font_size("font_size")
+	var whole_width := font.get_string_size("100000", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var fraction_width := font.get_string_size("99999.9", HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	_gate_timer_field.custom_minimum_size.x = maxf(42, ceilf(maxf(whole_width, fraction_width)) + 8)
+
+
+## 圆形图标以 SVG 的中心绘制，沿用现有工具组的选择与键盘焦点样式。
+func _gate_tool_button(parent: Control, node_name: String, icon_name: String, tooltip: String, mode: MapEditorCanvas.PaintMode) -> Button:
+	var button := _view_button(parent, node_name, icon_name, _select_gate_tool.bind(mode), 0, 1)
+	button.custom_minimum_size = Vector2(32, 32)
+	button.add_theme_constant_override("icon_max_width", 24)
+	button.toggle_mode = true
+	button.button_group = _tool_group
+	button.tooltip_text = tooltip
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		var fill := Color("D7E4F5") if state in ["pressed", "hover_pressed"] else Color("E2E8F1") if state == "hover" else Color("EAEDF2")
+		var surface := GameTheme.box(fill, Color("A7CDFF") if state == "focus" else Color.TRANSPARENT, 16)
+		surface.set_content_margin_all(0)
+		button.add_theme_stylebox_override(state, surface)
+	return button
+
+
+## 秒数输入只接受十进制一位小数；空白可临时编辑，但不作为新倒计时提交。
+func _valid_gate_timer_text(text: String) -> bool:
+	var parts := text.split(".")
+	if parts.size() > 2 or parts[0].is_empty() or (parts.size() == 2 and parts[1].length() > 1):
+		return false
+	for part: String in parts:
+		for character in part:
+			if character < "0" or character > "9":
+				return false
+	return MapEditorTimedGate.ticks_from_seconds(text.to_float()).is_ok()
+
+
+## 记录本次编辑的文档与所选闸门，避免切换地图或撤销后提交到别的对象。
+func _begin_gate_timer_edit() -> void:
+	_gate_edit_source = editor_document.document
+	_gate_edit_target = _canvas.selected_gate_id
+	_gate_timer_baseline = _gate_timer_field.text
+	_gate_timer_edited = false
+
+
+## 允许空白和小数的中间输入，回车或失焦时再统一修正无效值。
+func _on_gate_timer_text_changed(text: String) -> void:
+	if _syncing_fields:
+		return
+	_gate_timer_edited = text != _gate_timer_baseline
+
+
+## 回车与失焦使用同一倒计时提交入口。
+func _on_gate_timer_submitted(_text: String) -> void:
+	_commit_gate_timer()
+
+
+## 未选择对象时设置下一扇门的秒数；选择对象后仅修改那扇门的一次编辑事务。
+func _commit_gate_timer() -> void:
+	if _syncing_fields or _gate_timer_field == null or not _gate_timer_edited:
+		return
+	_gate_timer_edited = false
+	var text := _gate_timer_field.text
+	if _gate_edit_source != editor_document.document or _gate_edit_target != _canvas.selected_gate_id:
+		_sync_gate_timer(true)
+		return
+	var maximum := _maximum_gate_ticks()
+	if maximum < 1:
+		_sync_gate_timer(true)
+		return
+	var seconds := text.to_float() if _valid_gate_timer_text(text) else float(maximum) * SimulationWorld.TICK_DURATION
+	if not MapEditorTimedGate.ticks_from_seconds(seconds, maximum + 1).is_ok():
+		seconds = float(maximum) * SimulationWorld.TICK_DURATION
+	if _gate_edit_target.is_empty():
+		_new_gate_seconds = seconds
+	else:
+		var result := editor_document.set_timed_gate_seconds(_gate_edit_target, seconds)
+		if not result.is_ok():
+			_show_errors("无法修改限时闸门", result.errors)
+	_sync_gate_timer(true)
+
+
+## 表单同步不修改旧对象；下一扇门的候选值随当前总限时自动收敛到合法范围。
+func _sync_gate_timer(force: bool = false) -> void:
+	_refresh_gate_timer_rules()
+	if _gate_timer_field == null or (_gate_timer_field.has_focus() and not force):
+		return
+	var old_sync := _syncing_fields
+	_syncing_fields = true
+	var maximum := _maximum_gate_ticks()
+	if maximum > 0 and (not MapEditorTimedGate.ticks_from_seconds(_new_gate_seconds).is_ok() or roundi(_new_gate_seconds / SimulationWorld.TICK_DURATION) > maximum):
+		_new_gate_seconds = float(maximum) * SimulationWorld.TICK_DURATION
+	var selected := MapEditorTimedGate.find(editor_document.document, _canvas.selected_gate_id)
+	var seconds := _new_gate_seconds if selected.is_empty() else MapEditorTimedGate.seconds(selected)
+	_gate_timer_text = "" if maximum == 0 and selected.is_empty() else String.num(seconds, 1).trim_suffix(".0")
+	_gate_timer_field.text = _gate_timer_text
+	_gate_timer_baseline = _gate_timer_text
+	_gate_timer_edited = false
+	_gate_edit_source = editor_document.document
+	_gate_edit_target = _canvas.selected_gate_id
+	_syncing_fields = old_sync
+
+
+## 旧不限时地图也按表单显示的默认限时计算，最大值总比关卡时间少一个tick。
+func _maximum_gate_ticks() -> int:
+	return MapEditorTimedGate.maximum_ticks(roundi(editor_document.get_time_limit_seconds() / SimulationWorld.TICK_DURATION))
+
+
+## 悬浮说明跟随关卡时间与语言刷新；0.1秒关卡无法放置正倒计时闸门。
+func _refresh_gate_timer_rules() -> void:
+	if _gate_timer_field == null:
+		return
+	var maximum := _maximum_gate_ticks()
+	var available := maximum > 0
+	_gate_timer_field.editable = available
+	_gate_timer_field.context_menu_enabled = available
+	_gate_add_button.disabled = not available
+	var tooltip := tr("关卡总时间至少需要 0.2 秒才能设置闸门倒计时。")
+	if available:
+		tooltip = tr("闸门倒计时：0.1 至 %s 秒，最多一位小数，且须小于关卡总时间。\n回车或离开输入框时，无效输入自动设为最大值；点击已有闸门可修改。") % String.num(float(maximum) * SimulationWorld.TICK_DURATION, 1).trim_suffix(".0")
+	_gate_timer_field.tooltip_text = tooltip
+	_gate_timer_field.get_parent().tooltip_text = tooltip
+	_gate_add_button.tooltip_text = tr("放置限时闸门") if available else tooltip
+
+
+## 限时闸门工具与地形、起终点、敌人互斥，取消后恢复之前的地形工具。
+func _select_gate_tool(mode: MapEditorCanvas.PaintMode) -> void:
+	_commit_gate_timer()
+	_canvas.finish_stroke()
+	_point_tool = ""
+	_canvas.paint_mode = mode
+	_canvas.selected_gate_id = ""
+	_canvas.mouse_default_cursor_shape = Control.CURSOR_CROSS
+	for button in [_paint_button, _rectangle_button, _spawn_button, _goal_button]:
+		button.set_pressed_no_signal(false)
+	_gate_add_button.set_pressed_no_signal(mode == MapEditorCanvas.PaintMode.GATE_ADD)
+	_gate_remove_button.set_pressed_no_signal(mode == MapEditorCanvas.PaintMode.GATE_REMOVE)
+	_sync_gate_timer(true)
+	_status.text = "单击可通行地块放置闸门；点击已有闸门可修改倒计时，右键或 Esc 取消。" if mode == MapEditorCanvas.PaintMode.GATE_ADD else "单击限时闸门删除；地板和其他对象保持不变，右键或 Esc 取消。"
+
+
+## 切换所选闸门前提交原对象的输入，随后读出新对象原有倒计时。
+func _select_timed_gate(identity: String) -> void:
+	_commit_gate_timer()
+	_canvas.selected_gate_id = identity
+	_sync_gate_timer(true)
+	if not identity.is_empty():
+		_status.text = "已选择限时闸门，可在秒表药丸中修改倒计时。"
+
+
+## 放置使用本次工具的秒数；已有选择的倒计时可作为连续放置的模板。
+func _place_timed_gate(cell: Vector2i) -> void:
+	_commit_gate_timer()
+	if _message_dialog.visible:
+		return
+	var selected := MapEditorTimedGate.find(editor_document.document, _canvas.selected_gate_id)
+	var seconds := _new_gate_seconds if selected.is_empty() else MapEditorTimedGate.seconds(selected)
+	# 旧不限时地图的表单显示默认60秒，新门也须遵守玩家当前看见的限时。
+	var maximum := _maximum_gate_ticks()
+	if maximum < 1:
+		return
+	if not MapEditorTimedGate.ticks_from_seconds(seconds, maximum + 1).is_ok():
+		seconds = float(maximum) * SimulationWorld.TICK_DURATION
+	var result := editor_document.place_timed_gate(cell, seconds, registry)
+	if not result.is_ok():
+		_status.text = "；".join(result.errors)
+		return
+	_select_timed_gate(result.value.id)
+
+
+## 删除命中的限时闸门；模型更改后同步清除旧选择与倒计时目标。
+func _remove_timed_gate(identity: String) -> void:
+	_commit_gate_timer()
+	var result := editor_document.remove_timed_gate(identity)
+	if not result.is_ok():
+		_status.text = "；".join(result.errors)
+	else:
+		_status.text = "限时闸门已删除，可撤销恢复。"
+
+
 ## 起点与终点使用单击工具，保留之前的地形手势以便取消后继续绘制。
 func _select_point_tool(kind: String) -> void:
+	_commit_gate_timer()
+	_canvas.selected_gate_id = ""
+	_sync_gate_timer(true)
+	if _gate_add_button != null:
+		_gate_add_button.set_pressed_no_signal(false)
+		_gate_remove_button.set_pressed_no_signal(false)
 	_canvas.finish_stroke()
 	_canvas.clear_enemy_preview()
 	_point_tool = kind
@@ -652,6 +1235,12 @@ func _cancel_point_tool() -> void:
 
 ## 模块组合进入单击放置工具，虚影与实际落点共用同一份已校验模板。
 func _select_enemy_tool() -> void:
+	_commit_gate_timer()
+	_canvas.selected_gate_id = ""
+	_sync_gate_timer(true)
+	if _gate_add_button != null:
+		_gate_add_button.set_pressed_no_signal(false)
+		_gate_remove_button.set_pressed_no_signal(false)
 	if not editor_document.get_enemies_enabled():
 		return
 	_canvas.finish_stroke()
@@ -662,6 +1251,36 @@ func _select_enemy_tool() -> void:
 	for button in [_paint_button, _rectangle_button, _spawn_button, _goal_button]:
 		button.set_pressed_no_signal(false)
 	_status.text = "单击放置敌人；红色预览表示位置不可用，右键或 Esc 取消。"
+
+
+## 首次点击进入敌人框选；松手只选择，再次点击垃圾桶才一次删除全部命中组合体。
+func _select_enemy_remove_tool() -> void:
+	if not editor_document.get_enemies_enabled():
+		return
+	if _canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY_SELECT and _canvas.enemy_selection_area.has_area():
+		var removed := editor_document.remove_enemies_in_rectangle(_canvas.enemy_selection_area, registry)
+		_canvas.finish_stroke()
+		_status.text = tr("已删除 %d 组敌人，可撤销恢复。") % removed
+	else:
+		_set_paint_mode(_terrain_mode)
+		_canvas.paint_mode = MapEditorCanvas.PaintMode.ENEMY_SELECT
+		_canvas.mouse_default_cursor_shape = Control.CURSOR_CROSS
+		_paint_button.set_pressed_no_signal(false)
+		_rectangle_button.set_pressed_no_signal(false)
+		_status.text = "框选要删除的敌人，再次点击删除按钮确认；右键或 Esc 取消。"
+	_sync_enemy_remove_button()
+
+
+## 框选结果仅更新工具说明与绘制，未点击确认时不改保存状态或撤销历史。
+func _on_enemy_selection_requested(area: Rect2i) -> void:
+	var count := MapEditorEnemyTemplate.in_rectangle(editor_document.document, area, registry).size()
+	_status.text = tr("已选中 %d 组敌人，点击删除按钮确认。") % count
+
+
+## 工具高亮始终来自当前画布模式；点击空白或切换其它工具后不会遗留按钮选中态。
+func _sync_enemy_remove_button() -> void:
+	if _enemy_panel != null and is_instance_valid(_enemy_panel.remove_button):
+		_enemy_panel.remove_button.set_pressed_no_signal(_canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY_SELECT)
 
 
 ## 每次点击只提交一个完整敌人，失败不改文档，连续拖动不会批量放置。
@@ -678,7 +1297,7 @@ func _place_enemy(position: Vector2) -> void:
 
 ## 关闭只取消放置工具，已有敌人由文档保留，运行时按开关决定是否生成。
 func _on_enemies_enabled_changed(enabled: bool) -> void:
-	if not enabled and _canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY:
+	if not enabled and _canvas.paint_mode in [MapEditorCanvas.PaintMode.ENEMY, MapEditorCanvas.PaintMode.ENEMY_SELECT]:
 		_cancel_point_tool()
 	_canvas.queue_redraw()
 
@@ -742,31 +1361,14 @@ func _compact_field_style(original: StyleBox) -> StyleBox:
 	return style
 
 
-## 视图工具固定在地图卡片右上角，浮在裁剪区上方，不挤偏地图观察中心。
-func _build_map_controls(parent: Control) -> void:
-	var tools := HBoxContainer.new()
-	tools.name = "MapEditorViewTools"
-	tools.add_theme_constant_override("separation", 8)
-	parent.add_child(tools)
-	tools.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	tools.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	var pill := Panel.new()
-	pill.name = "MapEditorZoomPill"
-	pill.custom_minimum_size = Vector2(56, 28)
-	var surface := GameTheme.box(Color("EAEDF2"), Color.TRANSPARENT, 14)
-	surface.set_content_margin_all(0)
-	pill.add_theme_stylebox_override("panel", surface)
-	tools.add_child(pill)
-	_zoom_out_button = _view_button(pill, "MapEditorZoomOutButton", "map_editor_zoom_out", _map_view.zoom_out, 0, 2)
-	_zoom_in_button = _view_button(pill, "MapEditorZoomInButton", "map_editor_zoom_in", _map_view.zoom_in, 1, 2)
-	var separator := ColorRect.new()
-	separator.color = Color("DCE1E8")
-	separator.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	separator.position = Vector2(27.5, 8)
-	separator.size = Vector2(1, 12)
-	pill.add_child(separator)
-	_guide_button = _view_button(tools, "MapEditorGuideButton", "workbench_guide", _show_guide, 0, 1)
-	_guide_button.add_theme_stylebox_override("normal", surface.duplicate())
+## 视图入口并入页头，地图区域不再为工具和白色卡片预留内部空间。
+func _build_map_controls() -> void:
+	_zoom_out_button = _header.zoom_out_button
+	_zoom_in_button = _header.zoom_in_button
+	_guide_button = _header.guide_button
+	_header.zoom_out_requested.connect(_map_view.zoom_out)
+	_header.zoom_in_requested.connect(_map_view.zoom_in)
+	_header.guide_requested.connect(_show_guide)
 	_guide_menu = WorkbenchGuideMenu.new()
 	_guide_menu.name = "MapEditorGuideMenu"
 	add_child(_guide_menu)
@@ -812,6 +1414,7 @@ func _view_button(parent: Node, node_name: String, icon_name: String, action: Ca
 func _show_guide() -> void:
 	_map_view.finish_interaction()
 	_actions_menu.close_menu(false)
+	_command_menu.close_menu(false)
 	_guide_menu.popup_at(_guide_button)
 
 
@@ -828,6 +1431,7 @@ func _update_zoom_buttons(_value: float) -> void:
 func _show_actions_menu() -> void:
 	_map_view.finish_interaction()
 	_guide_menu.close_menu(false)
+	_command_menu.close_menu(false)
 	_actions_menu.popup_at(_header.more_button)
 
 
@@ -836,26 +1440,33 @@ func _on_editor_visibility_changed() -> void:
 	if not is_visible_in_tree() and _actions_menu != null:
 		_actions_menu.close_menu(false)
 		_guide_menu.close_menu(false)
+		_level_guide_editor.close_dialog()
+		_restriction_picker.close_menu(false)
+		_command_menu.close_menu(false)
 
 
 ## 语言切换只更新界面名称和提示，不重填输入框、绘制选择或地图数据。
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_TRANSLATION_CHANGED and is_node_ready():
-		var display_path := editor_document.path if not editor_document.path.is_empty() else tr("未保存的地图")
-		_file_label.text = ("* " if editor_document.is_dirty() else "") + display_path
-		_file_label.tooltip_text = tr("打开地图") + "\n" + display_path
+		_update_document_title()
 		_update_zoom_buttons(_map_view.zoom)
 		_refresh_drawing_item_labels()
+		_level_guide_button.tooltip_text = tr("编辑关卡引导")
+		_command_button.tooltip_text = tr("管理关卡中允许使用的指令集")
+		_refresh_gate_timer_rules()
 
 
 # 用途：创建文件选择、未保存确认、错误提示和元数据输入对话框。
 func _build_dialogs() -> void:
+	_level_guide_editor = MapGuideEditor.new()
+	_level_guide_editor.name = "MapGuideEditor"
+	add_child(_level_guide_editor)
 	_file_dialog = FileDialog.new()
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	# macOS/Windows 优先使用系统文件窗口；不支持原生窗口的平台自动使用圆角后备界面。
 	_file_dialog.use_native_dialog = true
 	_file_dialog.filters = PackedStringArray(["*.json ; JSON ; application/json"])
-	_file_dialog.current_dir = ProjectSettings.globalize_path("res://data/maps")
+	_file_dialog.current_dir = OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
 	_file_dialog.file_selected.connect(_on_file_selected)
 	_file_dialog.canceled.connect(_on_file_canceled)
 	add_child(_file_dialog)
@@ -911,9 +1522,10 @@ func _build_dialogs() -> void:
 ## 元数据窗口按固定紧凑尺寸显示，标题栏和四周留白也计入可见范围。
 func _fit_metadata_dialog() -> void:
 	var frame := _metadata_dialog.get_theme_stylebox("embedded_border", "Window") as StyleBoxFlat
-	var title_height := roundi(frame.expand_margin_top) if _metadata_dialog.is_embedded() else 0
-	var available := Vector2i(get_viewport_rect().size) - Vector2i(32, 32 + title_height)
-	_metadata_dialog.size = METADATA_DIALOG_SIZE.min(available)
+	var title_height := roundi(frame.expand_margin_top * _presentation_scale) if _metadata_dialog.is_embedded() else 0
+	var margin := roundi(32 * _presentation_scale)
+	var available := Vector2i(get_viewport_rect().size) - Vector2i(margin, margin + title_height)
+	_metadata_dialog.size = Vector2i(Vector2(METADATA_DIALOG_SIZE) * _presentation_scale).min(available)
 	_metadata_dialog.position = (Vector2i(get_viewport_rect().size) - _metadata_dialog.size - Vector2i(0, title_height)) / 2 + Vector2i(0, title_height)
 
 
@@ -925,7 +1537,7 @@ func _on_metadata_viewport_resized() -> void:
 
 ## 元数据共用全局代码配色，保留原生文本状态；高亮仅识别 JSON，不套用游戏指令。
 func _sync_metadata_color() -> void:
-	var mode := settings.code_color_mode if settings != null else "light"
+	var mode := settings.code_color_mode if settings != null else GameSettings.DEFAULT_CODE_COLOR_MODE
 	if mode == _metadata_color_mode:
 		return
 	_metadata_color_mode = mode
@@ -1005,6 +1617,10 @@ func _populate_catalog() -> void:
 			_default_module_id = module_id
 			break
 	_refresh_drawing_item_labels()
+	_restriction_picker.close_menu(false)
+	_sync_module_restrictions()
+	_command_menu.close_menu(false)
+	_sync_command_restrictions()
 	_enemy_panel.configure(editor_document, registry)
 	_set_paint_mode(_terrain_mode)
 
@@ -1077,18 +1693,36 @@ func _paint_rectangle(area: Rect2i, erase: bool) -> void:
 
 # 用途：同步模型变化到地图、表单、文件标签和历史按钮。
 func _on_document_changed() -> void:
+	if not _test_validation_active:
+		_clear_test_feedback()
+	var gate_source_changed := _gate_document != editor_document.document
+	_gate_document = editor_document.document
+	if gate_source_changed or MapEditorTimedGate.find(_gate_document, _canvas.selected_gate_id).is_empty():
+		_canvas.selected_gate_id = ""
+		_sync_gate_timer(true)
+	else:
+		_sync_gate_timer()
 	_canvas.document = editor_document.document
 	_map_view.refresh_map()
+	if _identity_source != editor_document.document:
+		_identity_source = editor_document.document
+		_identity_uncommitted = false
 	_syncing_fields = true
-	if not _id_field.has_focus():
-		_id_field.text = editor_document.document.id
-	if not _name_field.has_focus():
+	# ID 只用于展示与复制，始终来自模型，不受其它身份字段待提交或控件焦点影响。
+	_id_field.text = editor_document.document.id
+	if not _identity_uncommitted and not _name_field.has_focus():
 		_name_field.text = editor_document.document.display_name
+	if not _identity_uncommitted and not _creator_field.has_focus():
+		_creator_field.text = editor_document.get_creator()
+	if not _identity_uncommitted and not _subtitle_field.has_focus():
+		_subtitle_field.text = editor_document.get_subtitle()
 	_width_field.value = editor_document.document.width
 	_height_field.value = editor_document.document.height
 	_dimension_texts[_width_field] = str(editor_document.document.width)
 	_dimension_texts[_height_field] = str(editor_document.document.height)
 	_module_limit_field.value = editor_document.get_module_limit()
+	_sync_module_restrictions()
+	_sync_command_restrictions()
 	if not _player_health_field.has_focus():
 		_player_health_text = JSON.stringify(editor_document.get_player_max_health()).trim_suffix(".0")
 		_player_health_field.text = _player_health_text
@@ -1104,22 +1738,50 @@ func _on_document_changed() -> void:
 			_canvas.set_enemy_template(editor_document.get_enemy_template(registry))
 		else:
 			_cancel_point_tool()
-	var display_path := editor_document.path if not editor_document.path.is_empty() else tr("未保存的地图")
-	_file_label.text = ("* " if editor_document.is_dirty() else "") + display_path
-	_file_label.tooltip_text = tr("打开地图") + "\n" + display_path
+	if _canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY_SELECT and not editor_document.get_enemies_enabled():
+		_cancel_point_tool()
+	_sync_enemy_remove_button()
+	_update_document_title()
 	_update_history_buttons()
 
 
-# 用途：把当前 ID 与名称输入提交为一个可撤销操作。
-func _commit_identity() -> void:
+## 目录加载、历史和地图切换共用纯显示同步，不产生额外元数据或编辑历史。
+func _sync_module_restrictions() -> void:
+	var restricted := editor_document.get_restricted_modules(registry)
+	_restriction_choice.configure(registry, restricted)
+	_restriction_picker.sync_selection(restricted)
+
+
+## 用标题星号保留未保存反馈，文件路径不再作为可见按钮或额外布局行。
+func _update_document_title() -> void:
+	_header.title_label.text = tr("地图编辑器") + (" *" if editor_document.is_dirty() else "")
+
+
+# 用途：一次采集身份、副标题与署名，事务结束前不回填控件，避免未失焦内容相互覆盖。
+func _commit_identity() -> bool:
 	if _syncing_fields:
-		return
-	if editor_document.document.id == _id_field.text and editor_document.document.display_name == _name_field.text:
-		return
-	editor_document.set_identity(_id_field.text, _name_field.text)
+		return true
+	var map_id := editor_document.document.id
+	_id_field.text = map_id
+	var map_name := _name_field.text
+	var creator := _creator_field.text
+	var subtitle := _subtitle_field.text
+	_identity_uncommitted = false
+	var result := editor_document.set_identity_with_subtitle(map_id, map_name, creator, subtitle)
+	if not result.is_ok():
+		_identity_uncommitted = true
+		_show_errors("无法更新地图属性", result.errors)
+		return false
+	return true
 
 
-# 用途：在名称或标识输入框按回车时提交身份信息。
+## 待提交的身份输入不能被其它属性变化回填覆盖，便于修正超长粘贴的完整原文。
+func _on_identity_text_changed(_text: String) -> void:
+	if not _syncing_fields:
+		_identity_uncommitted = true
+
+
+# 用途：在名称或创作者输入框按回车时提交身份信息，ID 由创建或载入流程决定。
 func _on_identity_submitted(_text: String) -> void:
 	_commit_identity()
 
@@ -1248,6 +1910,7 @@ func _set_zoom(value: float) -> void:
 
 # 用途：撤销一次地图修改。
 func _undo() -> void:
+	_commit_gate_timer()
 	_canvas.finish_stroke()
 	if editor_document.undo():
 		_status.text = "已撤销。"
@@ -1255,6 +1918,7 @@ func _undo() -> void:
 
 # 用途：重做一次地图修改。
 func _redo() -> void:
+	_commit_gate_timer()
 	_canvas.finish_stroke()
 	if editor_document.redo():
 		_status.text = "已重做。"
@@ -1262,15 +1926,19 @@ func _redo() -> void:
 
 # 用途：在替换文档或关闭窗口前统一保护未保存的修改。
 func _request_action(action: String) -> void:
+	_commit_gate_timer()
+	if not _level_guide_editor.close_dialog():
+		return
 	_canvas.finish_stroke()
 	if _time_limit_field.has_focus():
 		_commit_time_limit()
 	_commit_module_limit()
-	_commit_identity()
+	if not _commit_identity():
+		return
 	_pending_action = action
 	if editor_document.is_dirty():
 		_dirty_dialog.dialog_text = "当前地图尚未保存。继续将放弃这些修改；取消后可以先保存。"
-		_dirty_dialog.popup_centered(Vector2i(480, 180))
+		_dirty_dialog.popup_centered(Vector2i(Vector2(480, 180) * _presentation_scale))
 	else:
 		_run_pending_action()
 
@@ -1293,42 +1961,91 @@ func _run_pending_action() -> void:
 
 # 用途：创建仅包含 void 的空白草稿，地图可在尚未放置出生点时保存。
 func _new_document() -> void:
+	var used := {editor_document.document.id: true}
+	var allocated := _player_level_store().create_map_id(used)
+	if not allocated.is_ok():
+		_show_errors("无法创建地图", allocated.errors)
+		return
 	var document := MapDocument.new()
-	document.id = "untitled"
+	document.id = allocated.value
 	document.display_name = "新地图"
 	document.width = 16
 	document.height = 12
-	document.properties = {"level": {"max_ticks": 600, "completion_mode": "reach_or_clear", "player_max_health": 1.0}}
+	document.properties = {"level": {"max_ticks": 600, "completion_mode": "reach_or_clear", "player_max_health": 1.0, "restricted_modules": []}}
+	if not default_creator.is_empty() and DataValidation.is_creator(default_creator) and default_creator.length() <= DataValidation.MAX_EDITOR_CREATOR_LENGTH:
+		document.properties.level["creator"] = default_creator
+	_managed_save_path = ""
+	_assigned_new_id = document.id
 	editor_document.replace_document(document)
 	_map_view.reset_view()
 	_status.text = "空白地图已创建。绘制地板后，用场景玩法与行为控制放置起点；终点可按需添加。"
 
 
-# 用途：校验并载入地图草稿；任何读取错误都不会替换当前文档。
-func _load_document(path: String) -> void:
+# 用途：校验并载入地图草稿；初始指定图失败交回外壳，普通打开失败保留原文档并提示。
+func _load_document(path: String, report_errors: bool = true) -> bool:
 	var result: DataResult = MapCodec.load_file(path, registry, false)
 	if not result.is_ok():
-		_show_errors("无法打开地图", result.errors)
-		return
+		if report_errors:
+			_show_errors("无法打开地图", result.errors)
+		else:
+			initial_map_error = result.errors.duplicate()
+		return false
+	_managed_save_path = _player_level_store().managed_path(path)
+	_assigned_new_id = ""
 	editor_document.replace_document(result.value as MapDocument, path)
 	_map_view.reset_view()
 	_status.text = "已打开地图。所有未指定地块均为 void。"
+	return true
 
 
-# 用途：保存当前草稿，首次保存或另存为时先选择目标文件。
+# 用途：普通保存写入玩家关卡目录，只有另存为才允许选择外部文件。
 func _save_document(save_as: bool) -> void:
+	_commit_gate_timer()
+	if not _level_guide_editor.close_dialog():
+		save_finished.emit(false)
+		return
 	_canvas.finish_stroke()
 	_commit_time_limit()
 	_commit_module_limit()
-	_commit_identity()
-	if save_as or editor_document.path.is_empty():
+	if not _commit_identity():
+		save_finished.emit(false)
+		return
+	if save_as:
 		_file_operation = "save"
 		_file_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
 		_file_dialog.title = "保存地图"
 		_file_dialog.current_file = editor_document.document.id.validate_filename() + ".json"
 		_file_dialog.popup_centered_ratio(0.75)
 	else:
-		_write_document(editor_document.path)
+		_save_player_level()
+
+
+## 每次使用当前注入目录，独立编辑器与游戏外壳共用同一托管规则。
+func _player_level_store() -> PlayerLevelStore:
+	var store := PlayerLevelStore.new()
+	store.directory = player_levels_directory
+	return store
+
+
+## 写盘成功后才更新身份与保存点，不替换编辑模型或清空撤销历史。
+func _save_player_level() -> void:
+	var store := _player_level_store()
+	var preferred := _managed_save_path
+	if preferred.is_empty():
+		preferred = store.managed_path(editor_document.path)
+	var preserve_id := not _assigned_new_id.is_empty() and _assigned_new_id == editor_document.document.id
+	var result := store.save(editor_document.document, registry, preferred, preserve_id)
+	if not result.is_ok():
+		_show_errors("无法保存地图", result.errors)
+		save_finished.emit(false)
+		return
+	var saved: MapDocument = result.value.document
+	if saved.id != editor_document.document.id:
+		editor_document.set_identity(saved.id, saved.display_name)
+	_managed_save_path = result.value.path
+	editor_document.mark_saved(_managed_save_path)
+	_status.text = tr("地图已保存：") + _managed_save_path
+	save_finished.emit(true)
 
 
 # 用途：将文件选择结果分派给载入或写盘流程。
@@ -1341,7 +2058,7 @@ func _on_file_selected(path: String) -> void:
 		_write_document(path)
 
 
-## 取消保存位置选择也结束本次保存请求，不能让后续普通保存误触退出。
+## 取消另存为结束本次导出请求，不改变已经绑定的玩家关卡文件。
 func _on_file_canceled() -> void:
 	var operation := _file_operation
 	_file_operation = ""
@@ -1349,8 +2066,9 @@ func _on_file_canceled() -> void:
 		save_finished.emit(false)
 
 
-# 用途：通过统一编解码器写盘，只有保存成功才清除未保存标记。
+# 用途：另存为使用统一原子写盘；外部导出不改变普通保存已经绑定的玩家关卡。
 func _write_document(path: String) -> void:
+	_commit_gate_timer()
 	_commit_time_limit()
 	_commit_module_limit()
 	var result: DataResult = MapCodec.save_file(editor_document.document, path, registry, false)
@@ -1358,6 +2076,8 @@ func _write_document(path: String) -> void:
 		_show_errors("无法保存地图", result.errors)
 		save_finished.emit(false)
 		return
+	if _managed_save_path.is_empty():
+		_managed_save_path = _player_level_store().managed_path(path)
 	editor_document.mark_saved(path)
 	_status.text = tr("地图已保存：") + path
 	save_finished.emit(true)
@@ -1365,24 +2085,27 @@ func _write_document(path: String) -> void:
 
 # 用途：与游戏关卡入口共用数据规则；玩家实际装配的占地留到确认装配时检查。
 func _validate_document() -> void:
-	_canvas.finish_stroke()
-	if _time_limit_field.has_focus():
-		_commit_time_limit()
-	_commit_module_limit()
-	_commit_identity()
+	if not _prepare_test_validation():
+		return
 	var result := _test_level_definition()
 	if not result.is_ok():
-		_show_errors("地图暂不可运行", result.errors)
+		_show_test_feedback(result.errors)
 		return
+	if not result.value.has_goal:
+		_show_test_feedback(PackedStringArray(["此关卡缺乏终点"]))
 	_status.text = "校验通过：地图与关卡规则有效；最终模块占地将在确认装配时检查。"
 
 
 # 用途：将地图扩展数据呈现为可编辑 JSON，不依赖尚未制作的专门 UI。
 func _open_metadata() -> void:
+	_commit_gate_timer()
 	_canvas.finish_stroke()
+	_command_menu.close_menu(false)
 	if _time_limit_field.has_focus():
 		_commit_time_limit()
 	_commit_module_limit()
+	if not _commit_identity():
+		return
 	_fit_metadata_dialog()
 	_metadata_dialog.popup()
 	# 原生滚动条可见后才能同步首行缓存；同帧复位再换文本，避免旧长文档的行号越界。
@@ -1444,17 +2167,60 @@ func _test_level_definition() -> DataResult:
 
 # 用途：构建关卡快照并请求外层进入正常游戏流程，不在编辑器内创建模拟世界。
 func _start_playtest() -> void:
+	if not _prepare_test_validation():
+		return
+	var result := _test_level_definition()
+	if not result.is_ok():
+		_show_test_feedback(result.errors)
+		return
+	# 无终点只提醒，继续保留自由测试；真正无法运行的地图由上面的共享校验拒绝。
+	if not result.value.has_goal:
+		_show_test_feedback(PackedStringArray(["此关卡缺乏终点"]))
+	_status.text = "测试将进入组装和编程；返回编辑器后可继续修改地图。"
+	playtest_requested.emit(result.value as LevelDefinition, registry)
+
+
+## 测试和校验提交同一份待编辑输入，期间的字段错误统一交给底部红字而非弹出窗口。
+func _prepare_test_validation() -> bool:
+	_clear_test_feedback()
+	_test_validation_active = true
+	_commit_gate_timer()
+	var guide_valid := _level_guide_editor.close_dialog()
 	_canvas.finish_stroke()
 	if _time_limit_field.has_focus():
 		_commit_time_limit()
 	_commit_module_limit()
-	_commit_identity()
-	var result := _test_level_definition()
-	if not result.is_ok():
-		_show_errors("无法开始测试", result.errors)
+	var identity_valid := _commit_identity()
+	_test_validation_active = false
+	return guide_valid and identity_valid and _test_feedback_errors.is_empty()
+
+
+## 默认不显示说明，地图改动后清除上次检测结果，避免把旧原因当作新地图状态。
+func _clear_test_feedback() -> void:
+	_test_feedback_errors.clear()
+	if _test_feedback != null:
+		_test_feedback.text = ""
+		_test_feedback.hide()
+
+
+## 仅在主动测试或校验时显示原因，沿实际卡宽自动换行，固定在操作按钮上方。
+func _show_test_feedback(errors: PackedStringArray) -> void:
+	for error in errors.slice(0, 20):
+		var caption := "此关卡缺乏出生点" if error == "运行地图需要玩家出生点" else error
+		if not _test_feedback_errors.has(caption):
+			_test_feedback_errors.append(caption)
+	_refresh_test_feedback()
+	_test_feedback.show()
+
+
+## 切换语言重新翻译检测提示，玩家名称及地图数据不进入翻译流程。
+func _refresh_test_feedback() -> void:
+	if _test_feedback == null:
 		return
-	_status.text = "测试将进入组装和编程；返回编辑器后可继续修改地图。"
-	playtest_requested.emit(result.value as LevelDefinition, registry)
+	var translated := PackedStringArray()
+	for error in _test_feedback_errors:
+		translated.append(tr(error))
+	_test_feedback.text = "\n".join(translated)
 
 
 # 用途：仅按文档历史决定撤销与重做按钮状态，编辑器不持有局部试玩模式。
@@ -1465,7 +2231,10 @@ func _update_history_buttons() -> void:
 
 # 用途：同时显示简要状态和详细错误列表，便于修正数据问题。
 func _show_errors(title: String, errors: PackedStringArray) -> void:
+	if _test_validation_active:
+		_show_test_feedback(errors)
+		return
 	_status.text = title + "：" + (errors[0] if not errors.is_empty() else "未知错误")
 	_message_dialog.title = title
 	_message_dialog.dialog_text = "\n".join(errors.slice(0, 20))
-	_message_dialog.popup_centered(Vector2i(660, 260))
+	_message_dialog.popup_centered(Vector2i(Vector2(660, 260) * _presentation_scale))

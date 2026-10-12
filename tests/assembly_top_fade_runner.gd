@@ -153,7 +153,10 @@ func _test_assembly(context: String, reference: Array[float]) -> void:
 	await _settle()
 	_click(_game._back_button.get_global_rect().get_center())
 	await _settle()
-	_check(_game.page == GameShell.Page.LEVELS and root.transparent_bg == _original_transparent, "从自由装配页实际返回后恢复原视口状态 " + context)
+	_check(_game.page == GameShell.Page.LEVELS and root.transparent_bg, "从自由装配实际返回选关后继续支持列表渐隐 " + context)
+	_game._show_main_page()
+	await _settle()
+	_check(root.transparent_bg == _original_transparent, "离开选关页后释放渐隐并恢复原视口状态 " + context)
 
 
 ## 用改变父底色后的像素差反推透明度；同一行所有不透明图层必须只经过同一次渐隐。

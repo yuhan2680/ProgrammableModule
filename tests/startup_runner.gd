@@ -72,7 +72,7 @@ func _test_success(mode: String) -> void:
 		_check(String(background.get("_selected_path")).ends_with(CUSTOM_ID + ".png"), "自定义图使用隔离目录中的托管副本")
 	else:
 		_check(background.get("_selected_path") == "res://assets/backgrounds/main_menu.png", "默认图使用随项目打包的图片")
-	_check_completed_click()
+	await _check_completed_click()
 	await _dispose()
 
 
@@ -103,7 +103,7 @@ func _test_failure_retry(path: String, context: String) -> void:
 	if await _wait_for_completion():
 		_validate_success("重试 " + context)
 		_check(_failed_count == 0, "恢复有效资源后不再次报错 " + context)
-		_check_completed_click()
+		await _check_completed_click()
 	await _dispose()
 
 
@@ -197,7 +197,11 @@ func _check_completed_click() -> void:
 	var start := _game.find_child("StartGameButton", true, false) as Button
 	if start != null:
 		_click(start)
-		_check(_game.find_child("MainMenuCard", true, false) == null, "完成后开始游戏的鼠标点击可离开菜单")
+		_check(_game._menu_transitioning, "启动交接后开始游戏点击能发起卡片转场")
+		var deadline := Time.get_ticks_msec() + 3000
+		while _game._menu_transitioning and Time.get_ticks_msec() < deadline:
+			await process_frame
+		_check(not _game._menu_transitioning and _game.page == GameShell.Page.LEVELS, "完成后开始游戏的鼠标点击可离开菜单")
 
 
 ## 隐藏和过渡中的按钮保持禁用并屏蔽焦点，真实输入不能绕过覆盖层。

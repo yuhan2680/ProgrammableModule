@@ -4,6 +4,12 @@ extends RefCounted
 
 const MAX_FILE_BYTES: int = 8 * 1024 * 1024
 const MAX_TEXT_LENGTH: int = 65536
+const MAX_CREATOR_LENGTH: int = 128
+# 玩家新编辑的关卡名称与署名分别限长；读取旧地图仍保留上方格式兼容上限。
+const MAX_PLAYER_NAME_LENGTH: int = 30
+const MAX_EDITOR_CREATOR_LENGTH: int = 11
+const MAX_LEVEL_SUBTITLE_LENGTH: int = 70
+static var _subtitle_character_pattern: RegEx
 
 
 ## 判断值是否为有限实数；布尔值和字符串均不作为数字接受。
@@ -34,6 +40,80 @@ static func is_id(value: Variant) -> bool:
 ## 检查带长度上限的字符串字段。
 static func is_text(value: Variant, allow_empty: bool = true) -> bool:
 	return value is String and value.length() <= MAX_TEXT_LENGTH and (allow_empty or not value.is_empty())
+
+
+## Unicode 私用区由平台或字体自行约定；普通 emoji、变体选择符和组合表情不属于此范围。
+static func is_private_use_character(code: int) -> bool:
+	return (code >= 0xE000 and code <= 0xF8FF) or (code >= 0xF0000 and code <= 0xFFFFD) or (code >= 0x100000 and code <= 0x10FFFD)
+
+
+## 新编写的引导不能包含平台专用字形，其余正文仍沿用原有文本长度和格式约束。
+static func is_portable_guide_text(value: Variant) -> bool:
+	if not is_text(value):
+		return false
+	for index in range(value.length()):
+		if is_private_use_character(value.unicode_at(index)):
+			return false
+	return true
+
+
+## 只过滤私用字符及其紧邻的变体标记，保留普通 emoji、肤色、ZWJ、旗帜和 Markdown 原文。
+static func filter_guide_text(value: String) -> String:
+	var filtered := ""
+	var index := 0
+	while index < value.length():
+		if is_private_use_character(value.unicode_at(index)):
+			index += 1
+			while index < value.length() and ((value.unicode_at(index) >= 0xFE00 and value.unicode_at(index) <= 0xFE0F) or (value.unicode_at(index) >= 0xE0100 and value.unicode_at(index) <= 0xE01EF)):
+				index += 1
+			continue
+		filtered += value.substr(index, 1)
+		index += 1
+	return filtered
+
+
+## 创作者署名保留中文、表情与标点原文，只限制单行长度和不可见控制字符。
+static func is_creator(value: Variant) -> bool:
+	if not value is String or value.length() > MAX_CREATOR_LENGTH:
+		return false
+	for index in range(value.length()):
+		var code: int = value.unicode_at(index)
+		if code < 32 or (code >= 127 and code <= 159) or code == 0x2028 or code == 0x2029:
+			return false
+	return true
+
+
+## 副标题只接受单行普通文字、数字、空格与标点，不允许表情、控制码或不可见格式字符。
+static func is_level_subtitle(value: Variant) -> bool:
+	if not value is String or value.length() > MAX_LEVEL_SUBTITLE_LENGTH:
+		return false
+	for character: String in value:
+		if not _is_subtitle_character(character):
+			return false
+	return true
+
+
+## 输入过滤先移除非法字符再按 Unicode 字符限长，避免表情占用合法粘贴内容的额度。
+static func filter_level_subtitle(value: String) -> String:
+	var filtered := ""
+	for character: String in value:
+		if _is_subtitle_character(character):
+			filtered += character
+			if filtered.length() == MAX_LEVEL_SUBTITLE_LENGTH:
+				break
+	return filtered
+
+
+## Unicode 分类保留各语言和常用标点，排除图形表情属性、变体选择符及键帽标记。
+static func _is_subtitle_character(character: String) -> bool:
+	var code := character.unicode_at(0)
+	if code == 0x20E3 or (code >= 0xFE00 and code <= 0xFE0F) or (code >= 0xE0100 and code <= 0xE01EF):
+		return false
+	if code >= 32 and code <= 126:
+		return true
+	if _subtitle_character_pattern == null:
+		_subtitle_character_pattern = RegEx.create_from_string("^(?!\\p{Extended_Pictographic})[\\p{L}\\p{M}\\p{N}\\p{P}\\p{Zs}\\p{Sm}\\p{Sc}]$")
+	return _subtitle_character_pattern.search(character) != null
 
 
 ## 校验二维坐标对象，未知字段保留给未来版本使用。

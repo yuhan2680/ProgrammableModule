@@ -21,6 +21,9 @@ def main() -> int:
     project = Path(__file__).resolve().parents[1]
     stages = [('import', ['--editor', '--import'], None)]
     for filename, marker in [
+        ('editor_native_exit_runner', r'EDITOR_NATIVE_EXIT_TESTS .+ checks, 0 failures'),
+        ('editor_footer_runner', r'EDITOR_FOOTER_TESTS .+ checks, 0 failures'),
+        ('editor_timed_gate_runner', r'EDITOR_TIMED_GATE_TESTS .+ checks, 0 failures'),
         ('startup_runner', r'启动加载回归完成：.+0 项失败。'),
         ('radar_event_parser_runner', r'雷达事件语法回归完成：.+0 项失败。'),
         ('radar_event_runtime_runner', r'雷达事件运行时回归完成：.+0 项失败。'),
@@ -48,6 +51,8 @@ def main() -> int:
         ('editor_smoke', r'编辑器冒烟完成：.+0 项失败。'),
         ('language_runner', r'语言回归完成：.+0 项失败。'),
         ('gameplay_runner', r'游戏回归完成：.+0 项失败。'),
+        ('shark_cave_runner', r'鲨鱼洞穴模型回归完成：.+0 项失败。'),
+        ('shark_easter_egg_runner', r'鲨鱼彩蛋集成回归完成：.+0 项失败。'),
         ('settings_runner', r'设置回归完成：.+0 项失败。'),
         ('progress_reset_runner', r'进度清除回归完成：.+0 项失败。'),
         ('user_level_reset_runner', r'用户关卡清除回归完成：.+0 项失败。'),
@@ -66,10 +71,11 @@ def main() -> int:
         ('radar_lunge_world_runner', r'雷达突袭底层回归完成：.+0 项失败。'),
         ('functions_ui_runner', r'函数教学界面回归完成：.+0 项失败。'),
         ('level_search_runner', r'关卡搜索回归完成：.+0 项失败。'),
+        ('scroll_content_fade_runner', r'滚动内容渐隐回归完成：.+0 项失败。'),
         ('layout_runner', r'布局回归完成：.+0 项失败。'),
     ]:
         # 交互回归等待真实动画与弹窗时长，限制帧率并留足帧预算，避免 headless 提前退出。
-        if filename in ('startup_runner', 'code_color_ui_runner', 'code_color_editor_runner', 'code_hint_ui_runner', 'level_search_runner', 'game_ui_smoke', 'functions_ui_runner'):
+        if filename in ('editor_native_exit_runner', 'editor_timed_gate_runner', 'editor_footer_runner', 'shark_easter_egg_runner', 'startup_runner', 'code_color_ui_runner', 'code_color_editor_runner', 'code_hint_ui_runner', 'level_search_runner', 'scroll_content_fade_runner', 'game_ui_smoke', 'functions_ui_runner'):
             timing = ['--max-fps', '120', '--quit-after', '2400' if filename == 'level_search_runner' else '7200']
         else:
             timing = ['--quit-after', '600']

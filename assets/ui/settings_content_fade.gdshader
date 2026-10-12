@@ -4,6 +4,7 @@ render_mode unshaded;
 // CanvasGroup 的局部合成缓冲仅包含设置内容；固定零级、最近邻采样保持文字原像素。
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_nearest;
 uniform float fade_top_y = -1.0;
+uniform float fade_bottom_y = -1.0;
 uniform float fade_width = 1.0;
 uniform float viewport_height = 1.0;
 
@@ -15,5 +16,8 @@ void fragment() {
 	}
 	float viewport_y = SCREEN_UV.y * max(viewport_height, 1.0);
 	float opacity = smoothstep(fade_top_y, fade_top_y + max(fade_width, 1.0), viewport_y);
+	if (fade_bottom_y >= 0.0) {
+		opacity *= 1.0 - smoothstep(fade_bottom_y - max(fade_width, 1.0), fade_bottom_y, viewport_y);
+	}
 	COLOR *= vec4(composed.rgb, composed.a * opacity);
 }

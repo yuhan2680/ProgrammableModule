@@ -5,12 +5,16 @@ extends RefCounted
 var levels: Array[LevelDefinition] = []
 var errors: PackedStringArray = PackedStringArray()
 var user_directory: String = "user://levels"
+# 删除授权绑定本次实际扫描的对象及文件字节，不能只凭可伪造的地图 ID 推导路径。
+var _user_level_sources: Dictionary = {}
+static var _player_level_name_pattern: RegEx
 
 
 ## 重新扫描关卡目录，收集逐文件错误并保留本次成功读取的全部关卡。
 func refresh(content: ContentRegistry) -> DataResult:
 	levels.clear()
 	errors.clear()
+	_user_level_sources.clear()
 	if content == null:
 		errors.append("关卡目录需要已加载的内容注册表。")
 		return DataResult.failure(errors[0])
@@ -34,6 +38,141 @@ func ensure_import_directory() -> DataResult:
 	if error != OK:
 		return DataResult.failure("无法创建导入目录：%s。" % error_string(error))
 	return DataResult.success(absolute)
+
+
+## 只为本次目录实际拥有的玩家关卡提供删除入口；磁盘状态在执行时重新检查。
+func can_delete_user_level(definition: LevelDefinition) -> bool:
+	if definition == null or not levels.has(definition):
+		return false
+	var snapshot: Dictionary = _user_level_sources.get(definition.get_instance_id(), {})
+	if snapshot.is_empty() or snapshot.directory != user_directory:
+		return false
+	var path := definition.source_path
+	return snapshot.path == path and snapshot.id == definition.id and DataValidation.is_resource_path(path) and path.get_base_dir() == user_directory and path.get_extension().to_lower() == "json"
+
+
+## 仅返回当前玩家卡片实际所属的安全目录；读取入口不创建目录，也不打开外部来源。
+func get_user_level_directory(definition: LevelDefinition) -> DataResult:
+	if not can_delete_user_level(definition):
+		return DataResult.failure("只能访问当前列表中的玩家关卡。")
+	var folder_result := _user_clear_folder()
+	if not folder_result.is_ok():
+		return folder_result
+	var folder: DirAccess = folder_result.value
+	if folder == null:
+		return DataResult.failure("玩家关卡文件已不存在，请刷新关卡列表。")
+	var filename := definition.source_path.get_file()
+	if folder.is_link(filename) or folder.dir_exists(filename):
+		return DataResult.failure("玩家关卡路径不安全，未访问任何文件：%s。" % definition.source_path)
+	if not folder.file_exists(filename):
+		return DataResult.failure("玩家关卡文件已不存在，请刷新关卡列表。")
+	return DataResult.success(ProjectSettings.globalize_path(definition.source_path.get_base_dir()))
+
+
+## 重命名入口统一校验原始文字，不修剪空白，也不改变已有地图读取时允许的旧名称。
+static func validate_player_level_name(value: String) -> DataResult:
+	if value.is_empty() or value.length() > DataValidation.MAX_PLAYER_NAME_LENGTH:
+		return DataResult.failure("关卡名称必须为 1 到 30 个字符。")
+	if _player_level_name_pattern == null:
+		# 仅允许 Unicode 字母和十进制数字；排除分类为字母的不可见韩文字母填充符与表情信息符。
+		_player_level_name_pattern = RegEx.create_from_string("\\A(?!.*[\\x{115F}\\x{1160}\\x{2139}\\x{3164}\\x{FFA0}])[\\p{L}\\p{Nd}_-]+\\z")
+	if _player_level_name_pattern.search(value) == null:
+		return DataResult.failure("关卡名称仅可包含文字、数字、下划线和连字符，不能包含空格、其他符号或表情。")
+	return DataResult.success(value)
+
+
+## 只修改已授权玩家文件的显示名称；原子写盘成功后才更新卡片及后续操作的文件快照。
+func rename_user_level(definition: LevelDefinition, new_name: String, content: ContentRegistry) -> DataResult:
+	var name_result := validate_player_level_name(new_name)
+	if not name_result.is_ok():
+		return name_result
+	var directory_result := get_user_level_directory(definition)
+	if not directory_result.is_ok():
+		return directory_result
+	var name := new_name
+	var snapshot: Dictionary = _user_level_sources[definition.get_instance_id()]
+	var path: String = snapshot.path
+	var fingerprint := _user_file_fingerprint(path)
+	if fingerprint.is_empty() or fingerprint != snapshot.fingerprint:
+		return DataResult.failure("玩家关卡文件已改变，请刷新后再重命名。")
+	# 从磁盘快照读取，不能把调用方对卡片文档的临时修改一并写回正式地图。
+	var loaded := MapCodec.load_file(path, content, true)
+	if not loaded.is_ok():
+		return loaded
+	var checked := LevelDefinition.from_document(loaded.value, content, path)
+	if not checked.is_ok():
+		return checked
+	if loaded.value.id != snapshot.id or _user_file_fingerprint(path) != fingerprint:
+		return DataResult.failure("玩家关卡文件已改变，请刷新后再重命名。")
+	if loaded.value.display_name == name:
+		return DataResult.success({"path": path, "level_id": snapshot.id, "name": name})
+	var document: MapDocument = loaded.value.duplicate_document()
+	document.display_name = name
+	# 重新检查目录链与直接文件类型，外部替换成链接或目录时绝不进入写盘。
+	directory_result = get_user_level_directory(definition)
+	if not directory_result.is_ok():
+		return directory_result
+	if _user_file_fingerprint(path) != fingerprint:
+		return DataResult.failure("玩家关卡文件已改变，请刷新后再重命名。")
+	var saved := _write_user_level(document, path, content)
+	if not saved.is_ok():
+		return saved
+	definition.display_name = name
+	definition.document = document
+	snapshot.fingerprint = _user_file_fingerprint(path)
+	_user_level_sources[definition.get_instance_id()] = snapshot
+	return DataResult.success({"path": path, "level_id": snapshot.id, "name": name})
+
+
+## 删除一张已确认归属且未被外部替换的玩家地图；不读取或清除程序、装配和通关记录。
+func delete_user_level(definition: LevelDefinition) -> DataResult:
+	if not can_delete_user_level(definition):
+		return DataResult.failure("只能删除当前列表中的玩家关卡。")
+	var folder_result := _user_clear_folder()
+	if not folder_result.is_ok():
+		return folder_result
+	var folder: DirAccess = folder_result.value
+	if folder == null:
+		return DataResult.failure("玩家关卡文件已不存在，请刷新关卡列表。")
+	var snapshot: Dictionary = _user_level_sources[definition.get_instance_id()]
+	var path: String = snapshot.path
+	var filename := path.get_file()
+	if folder.is_link(filename) or folder.dir_exists(filename):
+		return DataResult.failure("玩家关卡路径不安全，未删除任何文件：%s。" % path)
+	if not folder.file_exists(filename):
+		return DataResult.failure("玩家关卡文件已不存在，请刷新关卡列表。")
+	var fingerprint := _user_file_fingerprint(path)
+	if fingerprint.is_empty() or fingerprint != snapshot.fingerprint:
+		return DataResult.failure("玩家关卡文件已改变，请刷新后再删除。")
+	# 所有检查与删除均同步完成；再次验证路径类型，避免错误地删除换成目录或链接的条目。
+	if folder.is_link(filename) or folder.dir_exists(filename):
+		return DataResult.failure("玩家关卡路径不安全，未删除任何文件：%s。" % path)
+	var remove_error := _remove_user_level(ProjectSettings.globalize_path(path))
+	if remove_error != OK:
+		return DataResult.failure("无法删除玩家关卡：%s（%s）。" % [path, error_string(remove_error)])
+	levels.erase(definition)
+	_user_level_sources.erase(definition.get_instance_id())
+	return DataResult.success({"path": path, "level_id": snapshot.id})
+
+
+## 对有大小上限的原始文件计算指纹，拒绝不可读取或读取不完整的文件而不猜测其身份。
+func _user_file_fingerprint(path: String) -> String:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		return ""
+	var length := file.get_length()
+	if length <= 0 or length > DataValidation.MAX_FILE_BYTES:
+		file.close()
+		return ""
+	var bytes := file.get_buffer(length)
+	var read_error := file.get_error()
+	file.close()
+	if bytes.size() != length or (read_error != OK and read_error != ERR_FILE_EOF):
+		return ""
+	var hashing := HashingContext.new()
+	if hashing.start(HashingContext.HASH_SHA256) != OK or hashing.update(bytes) != OK:
+		return ""
+	return hashing.finish().hex_encode()
 
 
 ## 清除导入目录中的直接 JSON 文件；传入草稿存储时同时清除可确认归属的用户关卡记录。
@@ -232,6 +371,11 @@ func _remove_user_level(path: String) -> Error:
 	return DirAccess.remove_absolute(path)
 
 
+## 重命名复用地图原子写盘，独立入口用于验证系统拒绝写入时的状态保护。
+func _write_user_level(document: MapDocument, path: String, content: ContentRegistry) -> DataResult:
+	return MapCodec.save_file(document, path, content, true)
+
+
 ## 每个目录单独排序后追加，保证用户 order 不会改变内置关卡的优先位置。
 func _load_directory(directory: String, content: ContentRegistry, used_ids: Dictionary) -> void:
 	if not DataValidation.is_resource_path(directory):
@@ -252,6 +396,8 @@ func _load_directory(directory: String, content: ContentRegistry, used_ids: Dict
 		if filename.get_extension().to_lower() != "json":
 			continue
 		var path := directory.path_join(filename)
+		var is_user_file := directory == user_directory
+		var fingerprint := _user_file_fingerprint(path) if is_user_file else ""
 		var parsed := MapCodec.load_file(path, content, true)
 		if not parsed.is_ok():
 			errors.append_array(parsed.errors)
@@ -265,6 +411,11 @@ func _load_directory(directory: String, content: ContentRegistry, used_ids: Dict
 		if used_ids.has(level.id):
 			errors.append("%s：关卡 ID 重复，不能覆盖已加载关卡 '%s'。" % [path, level.id])
 			continue
+		if is_user_file:
+			if fingerprint.is_empty() or fingerprint != _user_file_fingerprint(path):
+				errors.append("玩家关卡读取期间文件发生变化，请刷新关卡列表：%s。" % path)
+				continue
+			_user_level_sources[level.get_instance_id()] = {"path": path, "directory": directory, "id": level.id, "fingerprint": fingerprint}
 		used_ids[level.id] = true
 		loaded.append(level)
 	loaded.sort_custom(_level_before)

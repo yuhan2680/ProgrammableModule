@@ -28,7 +28,7 @@ float gaussian_weight(int tap) {
 void fragment() {
 	vec2 half_size = max(panel_size, vec2(1.0)) * 0.5;
 	vec2 point = (UV - vec2(0.5)) * panel_size;
-	float radius = min(16.0, min(half_size.x, half_size.y));
+	float radius = min(half_size.x, half_size.y);
 	vec2 corner = abs(point) - half_size + vec2(radius);
 	float edge = length(max(corner, vec2(0.0))) + min(max(corner.x, corner.y), 0.0) - radius;
 	float antialias = max(fwidth(edge) * 0.75, 0.001);
@@ -104,12 +104,13 @@ func _ready() -> void:
 	_bold_font = GameTheme.body_font().duplicate() as FontVariation
 	_bold_font.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 700.0}
 	status_label.add_theme_font_override("bold_font", _bold_font)
-	status_label.add_theme_font_size_override("normal_font_size", FONT_SIZE)
-	status_label.add_theme_font_size_override("bold_font_size", FONT_SIZE)
+	GameTheme.font_size(status_label, "normal_font_size", FONT_SIZE)
+	GameTheme.font_size(status_label, "bold_font_size", FONT_SIZE)
 	status_label.add_theme_color_override("default_color", GameTheme.TEXT)
 	_text_clip.add_child(status_label)
 	_time_pattern = RegEx.new()
 	_time_pattern.compile("(?<![0-9.])[0-9]+(?:\\.[0-9]+)?(?=\\s*(?:秒|s\\b))")
+	status_label.theme_changed.connect(_on_font_changed)
 	resized.connect(_on_resized)
 	var parent := get_parent() as Control
 	if parent != null:
@@ -133,7 +134,7 @@ func show_status(text: String, visible_now: bool) -> void:
 	if not preserve_final and _text != normalized:
 		_text = normalized
 		if is_node_ready():
-			_refresh_text()
+			_layout_frame()
 	if not is_node_ready() or was_requested == visible_now:
 		return
 	if visible_now:
@@ -198,13 +199,38 @@ func _layout_frame() -> void:
 	var parent := get_parent() as Control
 	if parent == null:
 		return
-	var frame_width := minf(MAX_WIDTH, maxf(0.0, parent.size.x - right_inset))
+	# 宽度上限随真实字号扩展；长错误仍省略，不能把整条地图顶栏撑满。
+	var font_scale := float(status_label.get_theme_font_size("normal_font_size")) / FONT_SIZE
+	var frame_width := minf(MAX_WIDTH * maxf(1.0, font_scale), maxf(0.0, parent.size.x - right_inset))
+	var frame_height := maxf(HEIGHT, ceilf(_line_height()) + 8.0)
 	set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	offset_left = -frame_width - right_inset
 	offset_right = -right_inset
-	offset_top = TOP_OFFSET
-	offset_bottom = TOP_OFFSET + HEIGHT
+	# 字号增大时仍与 24 像素按钮的中心对齐，正文所需高度另由地图安全区避让。
+	offset_top = TOP_OFFSET - (frame_height - HEIGHT) * 0.5
+	offset_bottom = offset_top + frame_height
 	_on_resized()
+
+
+## 百分比缩放或字体变化完成后重新测量，不沿用固定 14 号的旧布局。
+func _on_font_changed() -> void:
+	_layout_frame.call_deferred()
+
+
+## 用实际字号的粗体度量作为宽度上界，确保标红时间与普通文字均可见。
+func _measure_text(value: String) -> float:
+	if status_label == null or _bold_font == null:
+		return 0.0
+	var font_size := maxi(status_label.get_theme_font_size("normal_font_size"), status_label.get_theme_font_size("bold_font_size"))
+	return _bold_font.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+
+
+## 实际行高同时考虑正文与加粗时间，高字号不被固定药丸高度裁切。
+func _line_height() -> float:
+	if status_label == null or _bold_font == null:
+		return HEIGHT - 8.0
+	var normal_height := status_label.get_theme_font("normal_font").get_height(status_label.get_theme_font_size("normal_font_size"))
+	return maxf(normal_height, _bold_font.get_height(status_label.get_theme_font_size("bold_font_size")))
 
 
 ## 尺寸变化重新计算文字省略和当前动画帧，不重启动画或终态计时。
@@ -222,15 +248,15 @@ func _set_reveal_progress(progress: float) -> void:
 		return
 	var width := lerpf(minf(COLLAPSED_WIDTH, size.x), size.x, _reveal_progress)
 	_surface.position = Vector2(size.x - width, 0.0)
-	_surface.size = Vector2(width, HEIGHT)
+	_surface.size = Vector2(width, size.y)
 	_surface.modulate.a = _reveal_progress
 	_surface_material.set_shader_parameter("panel_size", _surface.size)
 	# 完整展开后玻璃浓度均匀，临近展开或收回端点时保留原来的左右渐变。
 	_surface_material.set_shader_parameter("gradient_strength", 1.0 - smoothstep(0.75, 1.0, _reveal_progress))
 	_text_clip.position = Vector2(size.x - width + TEXT_INSET, 0.0)
-	_text_clip.size = Vector2(maxf(0.0, width - TEXT_INSET * 2.0), HEIGHT)
-	var line_height := GameTheme.body_font().get_height(FONT_SIZE)
-	status_label.position = Vector2(width - size.x, maxf(0.0, (HEIGHT - line_height) * 0.5))
+	_text_clip.size = Vector2(maxf(0.0, width - TEXT_INSET * 2.0), size.y)
+	var line_height := _line_height()
+	status_label.position = Vector2(width - size.x, maxf(0.0, (size.y - line_height) * 0.5))
 	status_label.size = Vector2(maxf(0.0, size.x - TEXT_INSET * 2.0), line_height)
 	var text_alpha := clampf((_reveal_progress - 0.35) / 0.65, 0.0, 1.0)
 	status_label.modulate.a = text_alpha * text_alpha * (3.0 - 2.0 * text_alpha)
@@ -261,16 +287,16 @@ func _refresh_text() -> void:
 
 ## 使用粗体度量作为安全上界，在一行内保留尽量多的字符并追加省略号。
 func _elided_text(text: String, available_width: float) -> String:
-	if _bold_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x <= available_width:
+	if _measure_text(text) <= available_width:
 		return text
-	if _bold_font.get_string_size("…", HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x > available_width:
+	if _measure_text("…") > available_width:
 		return ""
 	var low := 0
 	var high := text.length()
 	while low < high:
 		var middle := (low + high + 1) >> 1
 		var candidate := text.left(middle) + "…"
-		if _bold_font.get_string_size(candidate, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x <= available_width:
+		if _measure_text(candidate) <= available_width:
 			low = middle
 		else:
 			high = middle - 1

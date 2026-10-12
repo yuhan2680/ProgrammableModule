@@ -195,7 +195,7 @@ func _rebuild_directory() -> void:
 		item.expand_icon = true
 		item.add_theme_constant_override("icon_max_width", 28)
 		item.add_theme_constant_override("h_separation", 10)
-		item.add_theme_font_size_override("font_size", 15)
+		GameTheme.font_size(item, "font_size", 15)
 		item.custom_minimum_size.y = 50
 		item.toggle_mode = true
 		item.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
@@ -319,8 +319,10 @@ func _update_placement() -> void:
 	if not is_instance_valid(_anchor) or not _anchor.is_visible_in_tree():
 		close_menu(false)
 		return
-	var viewport_size := get_viewport().get_visible_rect().size
+	var factor := GameTheme.sync_popup_scale(_overlay, _anchor)
+	var viewport_size := get_viewport().get_visible_rect().size / factor
 	var anchor_rect := _anchor.get_global_rect()
+	anchor_rect = Rect2(anchor_rect.position / factor, anchor_rect.size / factor)
 	var margin := 24.0
 	var top := anchor_rect.end.y + 8
 	var width := viewport_size.x - margin * 2

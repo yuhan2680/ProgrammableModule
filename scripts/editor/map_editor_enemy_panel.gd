@@ -3,6 +3,7 @@ extends VBoxContainer
 ## 敌人表单只编辑可撤销模板，地图落点与试玩行为仍交给文档及运行层。
 
 signal placement_requested
+signal removal_requested
 signal enabled_changed(enabled: bool)
 signal feedback(message: String)
 
@@ -12,6 +13,7 @@ var enable_switch: SettingsSwitch
 var limit_field: LineEdit
 var health_field: LineEdit
 var place_button: Button
+var remove_button: Button
 var _settings_body: VBoxContainer
 var _slots: GridContainer
 var _choices: Array[EnemyModuleChoice] = []
@@ -23,14 +25,13 @@ var _feedback_label: Label
 var _syncing := false
 
 
-## 构建开关卡片、并排数值输入和带 SVG 模块图标的组合药丸。
+## 构建开关卡片、并排数值输入及上下分排的操作按钮和组合药丸。
 func _ready() -> void:
 	name = "MapEditorEnemyPanel"
 	_picker = EnemyModulePicker.new()
 	add_child(_picker)
 	_picker.item_selected.connect(_on_picker_selected)
 	add_theme_constant_override("separation", 14)
-	GameTheme.label(self, "敌人攻击方式与行为控制", 14)
 	var card := PanelContainer.new()
 	var surface := GameTheme.box(Color("F5F6F8"), Color.TRANSPARENT, 14)
 	surface.set_content_margin_all(10)
@@ -51,7 +52,7 @@ func _ready() -> void:
 	toggle_row.add_child(enable_switch)
 	enable_switch.toggled.connect(_on_enabled_toggled)
 	card_body.add_child(HSeparator.new())
-	var help := GameTheme.label(card_body, "开启后，选择敌人的模块组合与耐久，再点击左侧＋并在地图中放置。", 11)
+	var help := GameTheme.label(card_body, "开启后，选择敌人的模块组合与耐久，再点击＋并在地图中放置。", 11)
 	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_settings_body = VBoxContainer.new()
 	_settings_body.add_theme_constant_override("separation", 14)
@@ -65,35 +66,57 @@ func _ready() -> void:
 	health_field = _number_field(limits, "敌人耐久度上限", "MapEditorEnemyHealth")
 	health_field.tooltip_text = "每个敌人模块的耐久，支持 0.01～1000000 的数值。"
 	GameTheme.label(_settings_body, "自定义敌人的模块组合：", 11)
-	var combinations := HBoxContainer.new()
+	var combinations := VBoxContainer.new()
 	combinations.name = "MapEditorEnemyCombination"
 	combinations.add_theme_constant_override("separation", 6)
 	_settings_body.add_child(combinations)
+	var tools := HBoxContainer.new()
+	tools.name = "MapEditorEnemyTools"
+	tools.alignment = BoxContainer.ALIGNMENT_CENTER
+	tools.add_theme_constant_override("separation", 10)
+	combinations.add_child(tools)
 	place_button = Button.new()
 	place_button.name = "MapEditorPlaceEnemy"
 	place_button.icon = load("res://assets/ui/assembly_add.svg")
 	place_button.expand_icon = true
 	place_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	place_button.add_theme_constant_override("h_separation", 0)
-	place_button.add_theme_constant_override("icon_max_width", 12)
-	place_button.custom_minimum_size = Vector2(26, 26)
-	place_button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	place_button.add_theme_constant_override("icon_max_width", 16)
+	place_button.custom_minimum_size = Vector2(36, 36)
+	place_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	place_button.tooltip_text = "放置这组敌人"
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
-		var style := GameTheme.box(Color.TRANSPARENT if state == "focus" else Color("EAEDF2"), GameTheme.ACCENT if state == "focus" else Color.TRANSPARENT, 16)
+		var style := GameTheme.box(Color.TRANSPARENT if state == "focus" else Color("EAEDF2"), GameTheme.ACCENT if state == "focus" else Color.TRANSPARENT, 18)
 		style.set_content_margin_all(0)
 		place_button.add_theme_stylebox_override(state, style)
-	combinations.add_child(place_button)
+	tools.add_child(place_button)
 	place_button.pressed.connect(_request_placement)
+	remove_button = Button.new()
+	remove_button.name = "MapEditorRemoveEnemies"
+	remove_button.icon = load("res://assets/ui/assembly_delete.svg")
+	remove_button.expand_icon = true
+	remove_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	remove_button.add_theme_constant_override("h_separation", 0)
+	remove_button.add_theme_constant_override("icon_max_width", 22)
+	remove_button.custom_minimum_size = Vector2(36, 36)
+	remove_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	remove_button.toggle_mode = true
+	remove_button.tooltip_text = "框选敌人后再次点击删除；右键、Esc 或点击卡片空白处取消。"
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		var fill := Color("D7E4F5") if state in ["pressed", "hover_pressed"] else Color("EAEDF2")
+		var style := GameTheme.box(Color.TRANSPARENT if state == "focus" else fill, GameTheme.ACCENT if state == "focus" else Color.TRANSPARENT, 18)
+		style.set_content_margin_all(0)
+		remove_button.add_theme_stylebox_override(state, style)
+	tools.add_child(remove_button)
+	remove_button.pressed.connect(_request_removal)
 	_slots = GridContainer.new()
 	_slots.name = "MapEditorEnemyModuleSlots"
 	_slots.columns = 4
 	_slots.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_slots.add_theme_constant_override("h_separation", 2)
+	_slots.add_theme_constant_override("h_separation", 4)
 	_slots.add_theme_constant_override("v_separation", 6)
 	combinations.add_child(_slots)
-	var behavior_help := GameTheme.label(_settings_body, "移动模块负责靠近玩家；近战或射击模块负责攻击。", 11, true)
-	behavior_help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_slots.tooltip_text = "移动模块负责靠近玩家；近战或射击模块负责攻击。"
 	_feedback_label = GameTheme.label(_settings_body, "", 11)
 	_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_feedback_label.add_theme_color_override("font_color", Color("dd1d1d"))
@@ -232,27 +255,27 @@ func _rebuild_slots() -> void:
 	for index in count:
 		var slot := HBoxContainer.new()
 		slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		slot.add_theme_constant_override("separation", 2)
+		slot.add_theme_constant_override("separation", 3)
 		_slots.add_child(slot)
 		if index % 4 != 0:
-			GameTheme.label(slot, "+", 11).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			GameTheme.label(slot, "+", 12).size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var choice := EnemyModuleChoice.new()
 		choice.name = "EnemyModuleSlot%d" % index
 		choice.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 		choice.clip_text = true
 		choice.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		choice.expand_icon = true
-		choice.add_theme_constant_override("icon_max_width", 14)
-		choice.add_theme_constant_override("h_separation", 2)
-		choice.add_theme_font_size_override("font_size", 11)
+		choice.add_theme_constant_override("icon_max_width", 16)
+		choice.add_theme_constant_override("h_separation", 3)
+		GameTheme.font_size(choice, "font_size", 12)
 		choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		choice.custom_minimum_size = Vector2(44, 28)
+		choice.custom_minimum_size = Vector2(44, 36)
 		for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
 			var style := GameTheme.box(Color.TRANSPARENT if state == "focus" else Color("EAEDF2"), GameTheme.ACCENT if state == "focus" else Color.TRANSPARENT, 18)
-			style.content_margin_left = 5
-			style.content_margin_right = 14
-			style.content_margin_top = 3
-			style.content_margin_bottom = 3
+			style.content_margin_left = 7
+			style.content_margin_right = 17
+			style.content_margin_top = 5
+			style.content_margin_bottom = 5
 			choice.add_theme_stylebox_override(state, style)
 		slot.add_child(choice)
 		choice.add_item(tr("空"))
@@ -323,8 +346,11 @@ func _set_controls_enabled(enabled: bool) -> void:
 		_active_choice = null
 	_settings_body.modulate = Color.WHITE if enabled else Color(1, 1, 1, 0.42)
 	limit_field.editable = enabled
+	limit_field.context_menu_enabled = enabled
 	health_field.editable = enabled
+	health_field.context_menu_enabled = enabled
 	place_button.disabled = not enabled
+	remove_button.disabled = not enabled
 	for choice in _choices:
 		choice.disabled = not enabled
 
@@ -334,6 +360,13 @@ func _request_placement() -> void:
 	commit_fields()
 	if editor_document != null and editor_document.get_enemies_enabled():
 		placement_requested.emit()
+
+
+## 删除入口只报告操作意图，框选、确认和撤销由主编辑器协调。
+func _request_removal() -> void:
+	commit_fields()
+	if editor_document != null and editor_document.get_enemies_enabled():
+		removal_requested.emit()
 
 
 ## 切换语言只刷新显示名称，不翻译模块 ID 或重写作者数据。

@@ -6,14 +6,31 @@ signal rectangle_requested(area: Rect2i, erase: bool)
 signal point_placement_cancelled
 signal enemy_placement_requested(position: Vector2)
 signal enemy_placement_cancelled
+signal enemy_selection_requested(area: Rect2i)
+signal paint_mode_changed
 
-enum PaintMode { BRUSH, RECTANGLE, POINT, ENEMY }
+signal timed_gate_selected(identity: String)
+signal timed_gate_placement_requested(cell: Vector2i)
+signal timed_gate_removal_requested(identity: String)
+signal timed_gate_tool_cancelled
+
+enum PaintMode { BRUSH, RECTANGLE, POINT, ENEMY, GATE_ADD, GATE_REMOVE, ENEMY_SELECT }
+
+var selected_gate_id := "":
+	set(value):
+		selected_gate_id = value
+		queue_redraw()
+var _gate_preview_cell := Vector2i(-1, -1)
+var _gate_preview_valid := false
+
+var enemy_selection_area := Rect2i()
 
 var paint_mode := PaintMode.BRUSH:
 	set(value):
 		if paint_mode != value:
 			finish_stroke()
 		paint_mode = value
+		paint_mode_changed.emit()
 var visible_editing_rect := Rect2()
 var _selection_button := MOUSE_BUTTON_NONE
 var _selection_start := Vector2i.ZERO
@@ -31,6 +48,7 @@ var _enemy_preview_document: MapDocument
 func _ready() -> void:
 	super._ready()
 	mouse_exited.connect(clear_enemy_preview)
+	mouse_exited.connect(_clear_gate_preview)
 
 
 ## 模板只保留本地副本；更换模块或耐久后必须在新指针位置重新检查真实占地。
@@ -49,6 +67,8 @@ func clear_enemy_preview() -> void:
 
 ## 文档、地图尺寸或缩放刷新后不沿用旧占地结论，移动鼠标才重新建立预览。
 func refresh() -> void:
+	_clear_gate_preview()
+	enemy_selection_area = Rect2i()
 	clear_enemy_preview()
 	super.refresh()
 
@@ -69,7 +89,9 @@ func selection_cells() -> Rect2i:
 
 ## 切换工具、缩放、滚动或离开页面时取消未提交的框选，普通笔画仍按原逻辑结束。
 func finish_stroke() -> void:
+	_clear_gate_preview()
 	_selection_button = MOUSE_BUTTON_NONE
+	enemy_selection_area = Rect2i()
 	_selection_document = null
 	clear_enemy_preview()
 	queue_redraw()
@@ -78,8 +100,24 @@ func finish_stroke() -> void:
 
 ## 普通画笔复用已有连续绘制；框选按下时仅建立预览，不修改地图和历史。
 func _on_gui_input(event: InputEvent) -> void:
+	if paint_mode in [PaintMode.GATE_ADD, PaintMode.GATE_REMOVE]:
+		_on_gate_gui_input(event)
+		return
+	# 只在新笔画的首个点击命中闸门；拖动绘制仍沿用原连续地形手势。
+	if editing_enabled and paint_mode in [PaintMode.BRUSH, PaintMode.RECTANGLE] and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var identity := MapEditorTimedGate.at_position(document, event.position / cell_size)
+		timed_gate_selected.emit(identity)
+		if not identity.is_empty():
+			finish_stroke()
+			accept_event()
+			return
 	if paint_mode == PaintMode.ENEMY:
 		_on_enemy_gui_input(event)
+		return
+	if paint_mode == PaintMode.ENEMY_SELECT and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		finish_stroke()
+		enemy_placement_cancelled.emit()
+		accept_event()
 		return
 	if paint_mode == PaintMode.POINT:
 		if editing_enabled and document != null and event is InputEventMouseButton and event.pressed:
@@ -117,8 +155,13 @@ func _on_gui_input(event: InputEvent) -> void:
 
 ## Esc 取消点位工具并返回原绘制手势；优先让文本框和弹窗处理自身快捷键。
 func _unhandled_key_input(event: InputEvent) -> void:
-	if is_visible_in_tree() and editing_enabled and paint_mode == PaintMode.ENEMY and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
-		clear_enemy_preview()
+	if is_visible_in_tree() and editing_enabled and paint_mode in [PaintMode.GATE_ADD, PaintMode.GATE_REMOVE] and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		_clear_gate_preview()
+		timed_gate_tool_cancelled.emit()
+		get_viewport().set_input_as_handled()
+		return
+	if is_visible_in_tree() and editing_enabled and paint_mode in [PaintMode.ENEMY, PaintMode.ENEMY_SELECT] and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+		finish_stroke()
 		enemy_placement_cancelled.emit()
 		get_viewport().set_input_as_handled()
 		return
@@ -129,6 +172,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 ## 捕获画布外的拖动与松开，并支持 Esc；坐标始终转换到当前缩放和滚动后的画布。
 func _input(event: InputEvent) -> void:
+	if paint_mode == PaintMode.GATE_ADD and event is InputEventMouseMotion:
+		if not _enemy_editing_bounds().has_point(get_global_transform_with_canvas().affine_inverse() * event.position):
+			_clear_gate_preview()
 	if paint_mode == PaintMode.ENEMY and event is InputEventMouseMotion:
 		var local_pointer: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
 		if not editing_enabled or not is_visible_in_tree() or not _enemy_editing_bounds().has_point(local_pointer):
@@ -141,6 +187,8 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		finish_stroke()
+		if paint_mode == PaintMode.ENEMY_SELECT:
+			enemy_placement_cancelled.emit()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion:
 		_selection_end = _cell_at(get_global_transform_with_canvas().affine_inverse() * event.position)
@@ -173,18 +221,28 @@ func _commit_selection(point: Vector2) -> void:
 	_selection_end = _cell_at(point)
 	var area := selection_cells()
 	var erase := _selection_button == MOUSE_BUTTON_RIGHT
+	var selecting_enemies := paint_mode == PaintMode.ENEMY_SELECT
 	finish_stroke()
-	rectangle_requested.emit(area, erase)
+	if selecting_enemies:
+		enemy_selection_area = area
+		queue_redraw()
+		enemy_selection_requested.emit(area)
+	else:
+		rectangle_requested.emit(area, erase)
 
 
 ## 使用淡蓝透明填充和像素级虚线边框；范围随格子缩放，边线保持清晰可辨。
 func _draw() -> void:
 	super._draw()
 	_draw_goal_marker()
+	_draw_gate_editing()
 	_draw_enemy_placement_preview()
-	if not is_selecting() or not editing_enabled:
+	_draw_selected_enemies()
+	if not editing_enabled:
 		return
-	var area := selection_cells()
+	var area := selection_cells() if is_selecting() else enemy_selection_area
+	if not area.has_area():
+		return
 	var rect := Rect2(Vector2(area.position) * cell_size, Vector2(area.size) * cell_size)
 	draw_rect(rect, Color(0.20, 0.55, 0.95, 0.16))
 	var inset := minf(0.75, cell_size * 0.15)
@@ -193,6 +251,20 @@ func _draw() -> void:
 	var corners := [outline.position, Vector2(outline.end.x, outline.position.y), outline.end, Vector2(outline.position.x, outline.end.y)]
 	for index in 4:
 		draw_dashed_line(corners[index], corners[(index + 1) % 4], color, 1.5, 5.0)
+
+
+## 选区外的同组模块也描边，让玩家明确删除的是完整组合体，浏览不改敌人数据。
+func _draw_selected_enemies() -> void:
+	if paint_mode != PaintMode.ENEMY_SELECT or not editing_enabled or document == null or registry == null:
+		return
+	var area := selection_cells() if is_selecting() else enemy_selection_area
+	var identities := MapEditorEnemyTemplate.in_rectangle(document, area, registry)
+	for enemy: Dictionary in document.enemies:
+		if enemy.get("id") not in identities:
+			continue
+		var checked := MapEditorEnemyTemplate._machine_rects(enemy, registry)
+		for rect: Rect2 in checked.value:
+			draw_rect(Rect2(rect.position * cell_size, rect.size * cell_size).grow(1), Color("007AFF"), false, 2, true)
 
 
 ## 敌人按下左键只提交一次位置，按住移动仅更新预览；右键只取消，不擦除地形。
@@ -280,3 +352,52 @@ func _draw_goal_marker() -> void:
 	var unit := cell_size * 0.1
 	draw_line(center + Vector2(-1.5, 0) * unit, center + Vector2(-0.3, 1.2) * unit, GameTheme.SUCCESS, 2.0, true)
 	draw_line(center + Vector2(-0.3, 1.2) * unit, center + Vector2(1.8, -1.5) * unit, GameTheme.SUCCESS, 2.0, true)
+
+
+## 放置与删除均为单击操作；在已有闸门处读取倒计时，不叠放第二扇门。
+func _on_gate_gui_input(event: InputEvent) -> void:
+	if not editing_enabled or document == null or registry == null:
+		return
+	if event is InputEventMouseMotion and paint_mode == PaintMode.GATE_ADD:
+		_gate_preview_cell = Vector2i((event.position / cell_size).floor())
+		_gate_preview_valid = MapEditorTimedGate.check_placement(document, _gate_preview_cell, registry).is_ok()
+		queue_redraw()
+	elif event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_clear_gate_preview()
+			timed_gate_tool_cancelled.emit()
+			accept_event()
+		elif event.button_index == MOUSE_BUTTON_LEFT:
+			var identity := MapEditorTimedGate.at_position(document, event.position / cell_size)
+			if paint_mode == PaintMode.GATE_REMOVE:
+				if not identity.is_empty():
+					timed_gate_removal_requested.emit(identity)
+			elif not identity.is_empty():
+				timed_gate_selected.emit(identity)
+			else:
+				timed_gate_placement_requested.emit(Vector2i((event.position / cell_size).floor()))
+			_clear_gate_preview()
+			accept_event()
+
+
+## 清除放置虚影，避免缩放、滚动或切换工具后显示过期格子。
+func _clear_gate_preview() -> void:
+	_gate_preview_cell = Vector2i(-1, -1)
+	_gate_preview_valid = false
+	queue_redraw()
+
+
+## 所选闸门按真实尺寸描边；放置虚影使用既有闸门 SVG 与即时地块校验。
+func _draw_gate_editing() -> void:
+	if document == null or not editing_enabled:
+		return
+	var selected := MapEditorTimedGate.find(document, selected_gate_id)
+	if not selected.is_empty() and MapObjectDefinition.validate(selected, Vector2i(document.width, document.height)).is_ok():
+		var gate := MapObjectDefinition.from_entry(selected)
+		draw_rect(Rect2(gate.rect.position * cell_size, gate.rect.size * cell_size).grow(1), Color("007AFF"), false, 2, true)
+	if paint_mode != PaintMode.GATE_ADD or not document.in_bounds(_gate_preview_cell):
+		return
+	var area := Rect2(Vector2(_gate_preview_cell) * cell_size, Vector2.ONE * cell_size)
+	var tint := Color(0.1, 0.55, 1, 0.55) if _gate_preview_valid else Color(0.9, 0.15, 0.15, 0.6)
+	draw_texture_rect(_get_texture("res://assets/objects/gate_open.svg"), area, false, tint)
+	draw_rect(area, tint, false, 2, true)

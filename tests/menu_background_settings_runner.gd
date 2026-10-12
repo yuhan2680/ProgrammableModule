@@ -59,7 +59,9 @@ func _test_legacy_and_unknown_fields() -> void:
 	_check(settings.set_menu_background("solid").is_ok() and settings.get_menu_background_path().is_empty(), "纯色模式不提供图片路径")
 	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 	var loaded_legacy: Dictionary = JSON.parse_string(JSON.stringify(legacy))
-	_check(saved["future_root"] == loaded_legacy["future_root"] and saved["audio"] == loaded_legacy["audio"] and saved["interface"]["future_interface"] == loaded_legacy["interface"]["future_interface"], "背景修改保留顶层、音频及界面扩展字段")
+	var expected_audio: Dictionary = loaded_legacy["audio"].duplicate(true)
+	expected_audio["system_sound_volume"] = GameSettings.DEFAULT_SYSTEM_SOUND_VOLUME
+	_check(saved["future_root"] == loaded_legacy["future_root"] and saved["audio"] == expected_audio and saved["interface"]["future_interface"] == loaded_legacy["interface"]["future_interface"], "背景修改保留顶层、音频及界面扩展字段")
 	var reloaded := GameSettings.new(path)
 	_check(reloaded.load_settings().is_ok() and reloaded.menu_background_mode == "solid" and reloaded.menu_background_id.is_empty(), "纯色选择跨实例恢复")
 	_check(settings.set_menu_background("default").is_ok() and settings.set_code_color_mode("light").is_ok(), "默认背景与独立代码配色可分别修改")

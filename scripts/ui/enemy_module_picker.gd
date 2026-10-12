@@ -121,7 +121,7 @@ func _add_item(entry: Dictionary, index: int) -> void:
 	item.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	item.add_theme_constant_override("icon_max_width", ICON_SIZE)
 	item.add_theme_constant_override("h_separation", 8)
-	item.add_theme_font_size_override("font_size", FONT_SIZE)
+	GameTheme.font_size(item, "font_size", FONT_SIZE)
 	item.disabled = bool(entry.get("disabled", false))
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
 		var fill := Color(0.57, 0.73, 0.97, 0.20) if index == _selected and state == "normal" else Color.TRANSPARENT
@@ -189,24 +189,27 @@ func _update_placement() -> void:
 	if not _anchor_available():
 		close_menu(false)
 		return
-	var viewport_size := get_viewport().get_visible_rect().size
+	var factor := GameTheme.sync_popup_scale(_overlay, _anchor)
+	var viewport_size := get_viewport().get_visible_rect().size / factor
 	var width := BASE_WIDTH
 	for item in _items:
-		var caption_width := item.get_theme_font("font").get_string_size(item.text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
+		var caption_width := item.get_theme_font("font").get_string_size(item.text, HORIZONTAL_ALIGNMENT_LEFT, -1, item.get_theme_font_size("font_size")).x
 		var icon_width := float(ICON_SIZE + 8) if item.icon != null else 0.0
 		width = maxf(width, ceilf(caption_width + icon_width + 10.0 + PADDING * 2.0))
 	width = minf(width, minf(MAX_WIDTH, maxf(1.0, viewport_size.x - EDGE_MARGIN * 2.0)))
 	_last_anchor_rect = _anchor.get_global_rect()
+	# 跟踪仍保存真实全局矩形；只有布局换算为浮层的逻辑坐标。
+	var anchor_rect := Rect2(_last_anchor_rect.position / factor, _last_anchor_rect.size / factor)
 	var desired_height := _items.size() * ROW_HEIGHT + PADDING * 2.0
-	var below := viewport_size.y - EDGE_MARGIN - _last_anchor_rect.end.y - ANCHOR_GAP
-	var above := _last_anchor_rect.position.y - ANCHOR_GAP - EDGE_MARGIN
+	var below := viewport_size.y - EDGE_MARGIN - anchor_rect.end.y - ANCHOR_GAP
+	var above := anchor_rect.position.y - ANCHOR_GAP - EDGE_MARGIN
 	var open_above := below < desired_height and above > below
 	var available_height := above if open_above else below
 	var height := minf(desired_height, maxf(ROW_HEIGHT + PADDING * 2.0, available_height))
 	height = minf(height, maxf(1.0, viewport_size.y - EDGE_MARGIN * 2.0))
 	if desired_height > height:
 		width = minf(width + _scroll.get_v_scroll_bar().get_combined_minimum_size().x, minf(MAX_WIDTH, viewport_size.x - EDGE_MARGIN * 2.0))
-	var origin := Vector2(_last_anchor_rect.position.x, _last_anchor_rect.position.y - ANCHOR_GAP - height if open_above else _last_anchor_rect.end.y + ANCHOR_GAP)
+	var origin := Vector2(anchor_rect.position.x, anchor_rect.position.y - ANCHOR_GAP - height if open_above else anchor_rect.end.y + ANCHOR_GAP)
 	origin.x = clampf(origin.x, EDGE_MARGIN, maxf(EDGE_MARGIN, viewport_size.x - width - EDGE_MARGIN))
 	origin.y = clampf(origin.y, EDGE_MARGIN, maxf(EDGE_MARGIN, viewport_size.y - height - EDGE_MARGIN))
 	_panel.position = origin

@@ -39,7 +39,7 @@ func _run() -> void:
 	if bench != null:
 		bench.set_process(false)
 		bench.draft_changed.connect(_on_draft)
-		_check(game.settings.code_color_mode == "light" and _background(bench._code) == Color("F5F7FB"), "默认浅色保持原代码背景")
+		_check(game.settings.code_color_mode == "dark" and _background(bench._code) == Color("121314"), "默认深色使用指定代码背景")
 		await _test_editing_state(game, bench)
 		await _test_completion(game, bench)
 		await _test_hint_margin_and_undo(game, bench)
@@ -64,21 +64,25 @@ func _test_readonly_preview() -> void:
 	GameTheme.style_code(edit)
 	var source := edit.text
 	var initial_version := edit.get_version()
+	_check_dark_palette(edit)
+	GameTheme.style_code(edit, "light")
 	var light_syntax := edit.syntax_highlighter as CodeHighlighter
-	_check(light_syntax.number_color == Color("B46428") and light_syntax.get_keyword_color("move") == Color("176A94"), "缺省语法色保持原有数值和移动指令颜色")
+	_check(light_syntax.number_color == Color("B46428") and light_syntax.get_keyword_color("move") == Color("176A94"), "主动浅色仍保持原有数值和移动指令颜色")
 	GameTheme.style_code(edit, "dark")
 	await _settle()
 	_check_dark_palette(edit)
 	_check((edit.get_theme_stylebox("read_only") as StyleBoxFlat).bg_color == Color("121314"), "只读预览与运行锁使用同一深色背景")
 	_check(edit.text == source and edit.get_version() == initial_version and not edit.editable and edit.get_theme_font_size("font_size") == 16, "预览换色保留示例原文、版本、只读状态和自定义字号")
 	GameTheme.style_code(edit, "light")
-	_check(_background(edit) == Color("F5F7FB") and edit.get_theme_color("font_color") == GameTheme.TEXT, "预览切回浅色恢复原背景及正文颜色")
+	_check(_background(edit) == Color.WHITE and edit.get_theme_color("font_color") == GameTheme.TEXT, "预览切回浅色使用纯白背景及原正文颜色")
 	edit.queue_free()
 	await _settle()
 
 
 ## 有真实撤销记录、选区及双向滚动时，设置通知只能改变编辑区的颜色。
 func _test_editing_state(game: GameShell, bench: GameWorkbench) -> void:
+	game.settings.set_code_color_mode("light")
+	await _settle()
 	var original := "main() {\n" + "    // 保留玩家的注释和代码\n".repeat(90) + "    // " + "wide_source_".repeat(90) + "\n}\n"
 	await _set_source(bench, original, 1, 4)
 	bench._code.begin_complex_operation()
@@ -99,11 +103,11 @@ func _test_editing_state(game: GameShell, bench: GameWorkbench) -> void:
 	await _settle()
 	_check_preserved(bench, snapshot, "浅色切深色")
 	_check_dark_palette(bench._code)
-	_check((bench._edit_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color == Color.WHITE and (bench._world_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color == Color.WHITE, "代码与地图外层卡片保持原白色")
+	_check((bench._edit_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color == Color("121314") and (bench._world_panel.get_theme_stylebox("panel") as StyleBoxFlat).bg_color == Color.WHITE, "代码外框跟随深色，地图卡片保持白色")
 	game.settings.set_code_color_mode("light")
 	await _settle()
 	_check_preserved(bench, snapshot, "深色切浅色")
-	_check(_background(bench._code) == Color("F5F7FB"), "已有工作台可以恢复浅色")
+	_check(_background(bench._code) == Color.WHITE, "已有工作台可以恢复浅色")
 	bench._code.undo()
 	await _settle()
 	_check(bench._code.text == original and bench.session.source == original, "换色没有插入撤销事务，单次撤销仍仅撤回玩家修改")
@@ -146,7 +150,7 @@ func _test_hint_margin_and_undo(game: GameShell, bench: GameWorkbench) -> void:
 	game.settings.set_code_color_mode("dark")
 	await _settle()
 	_check_preserved(bench, snapshot, "提示与撤销可见时换色")
-	_check(bench._hint_undo_button.visible and right_margin >= 88 and bench._code.get_theme_stylebox("normal").get_content_margin(SIDE_RIGHT) == right_margin, "换色保留提示按钮位置所需边距及撤销可用性")
+	_check(bench._hint_undo_button.visible and right_margin < 88 and bench._code.get_theme_stylebox("normal").get_content_margin(SIDE_RIGHT) == right_margin, "独立工具栏不占代码行宽，换色保留代码边距及撤销可用性")
 	_check_assist_appearance(bench, true, "提示插入后切深色")
 	game.settings.set_code_color_mode("light")
 	await _settle()
@@ -225,7 +229,7 @@ func _check_assist_appearance(bench: GameWorkbench, dark: bool, context: String)
 
 ## 只在可见深色代码卡片中采样，浅色、关闭提示与预览过渡都应停用屏幕读取。
 func _check_assist_backdrop(bench: GameWorkbench, active: bool, context: String) -> void:
-	var backdrop := bench._code.get_node_or_null("CodeAssistBackdrop") as BackBufferCopy
+	var backdrop := bench._code_toolbar.get_node_or_null("CodeAssistBackdrop") as BackBufferCopy
 	_check(backdrop != null and backdrop.copy_mode == (BackBufferCopy.COPY_MODE_RECT if active else BackBufferCopy.COPY_MODE_DISABLED), "按当前可见状态启停玻璃背景采样：" + context)
 	for button: Button in [bench._hint_button, bench._hint_undo_button]:
 		var glass := button.get_node_or_null("CodeAssistGlass") as ColorRect

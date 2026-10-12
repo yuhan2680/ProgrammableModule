@@ -32,24 +32,26 @@ func _run() -> void:
 	quit(1 if _failures > 0 else 0)
 
 
-## 默认浅色不会创建文件；两种合法模式均按真实字符串写盘并跨实例恢复。
+## 默认深色不会创建文件；两种合法模式均按真实字符串写盘并跨实例恢复。
 func _test_defaults_and_round_trip() -> void:
 	var path := _test_root.path_join("round_trip/settings.json")
 	var settings := GameSettings.new(path)
 	settings.changed.connect(_on_changed)
 	var before_changes := _changed_count
 	_check(settings.load_settings().is_ok(), "缺失配色配置可以使用默认值")
-	_check(settings.code_color_mode == "light", "代码颜色默认浅色")
+	_check(settings.code_color_mode == "dark", "代码颜色默认深色")
 	_check(_changed_count == before_changes + 1, "载入默认设置只通知一次")
 	_check(not FileAccess.file_exists(path), "缺失配置读取时不创建磁盘文件")
 	_check(settings.set_volume(0.4).is_ok() and settings.set_language("en").is_ok(), "建立独立的音量和语言偏好")
 	_check(settings.set_tab_completion(false).is_ok() and settings.set_code_hints("more").is_ok(), "建立独立的补全和提示偏好")
-	for mode in ["dark", "light"]:
+	for mode in ["light", "dark"]:
 		before_changes = _changed_count
 		_check(settings.set_code_color_mode(mode).is_ok(), "合法配色可以保存：" + mode)
 		_check(_changed_count == before_changes + 1, "每次合法配色选择只通知一次")
+		var before_reload := FileAccess.get_file_as_bytes(path)
 		var reloaded := GameSettings.new(path)
 		_check(reloaded.load_settings().is_ok() and reloaded.code_color_mode == mode, "重新实例化后保留配色：" + mode)
+		_check(FileAccess.get_file_as_bytes(path) == before_reload, "载入已有显式配色不迁移或改写配置：" + mode)
 		_check(reloaded.volume == 0.4 and reloaded.language == "en" and not reloaded.tab_completion and reloaded.code_hints == "more", "切换配色保留其他设置")
 		var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 		_check(saved["format_version"] == 1 and saved["interface"]["code_color_mode"] is String and saved["interface"]["code_color_mode"] == mode, "配色使用版本1的interface字符串字段")
@@ -69,16 +71,16 @@ func _test_legacy_and_unknown_fields() -> void:
 	# JSON 数字读回为浮点值；扩展字段应与同样解析后的原文件比较，而非整数字面量。
 	var original: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 	var settings := GameSettings.new(path)
-	_check(settings.load_settings().is_ok() and settings.code_color_mode == "light", "旧配置没有颜色字段时使用浅色")
+	_check(settings.load_settings().is_ok() and settings.code_color_mode == "dark", "旧配置没有颜色字段时使用深色")
 	_check(settings.volume == 0.6 and settings.language == "en" and not settings.tab_completion and settings.code_hints == "none", "旧配置的已有设置照常载入")
 	_check(FileAccess.get_file_as_bytes(path) == before, "载入旧配置不自动改写原文件")
-	_check(settings.set_code_color_mode("dark").is_ok(), "旧配置可以保存新的深色偏好")
+	_check(settings.set_code_color_mode("light").is_ok(), "旧配置可以主动保存浅色偏好")
 	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 	_check(saved["future_root"] == original["future_root"], "配色保存保留顶层未知字段")
 	_check(saved["audio"]["future_audio"] == original["audio"]["future_audio"] and saved["interface"]["future_interface"] == original["interface"]["future_interface"], "配色保存保留设置分组内未知字段")
 	_check(settings.set_volume(0.2).is_ok() and settings.set_language("zh_CN").is_ok() and settings.set_tab_completion(true).is_ok() and settings.set_code_hints("normal").is_ok(), "既有设置入口可以继续修改")
 	var reloaded := GameSettings.new(path)
-	_check(reloaded.load_settings().is_ok() and reloaded.code_color_mode == "dark", "修改其他偏好不覆盖已保存的代码颜色")
+	_check(reloaded.load_settings().is_ok() and reloaded.code_color_mode == "light", "默认深色与其他偏好修改不覆盖已保存的浅色选择")
 
 
 ## 非字符串和未知模式不能改内存或文件，所有公开入口均检查完整设置状态。
@@ -118,11 +120,11 @@ func _test_invalid_files() -> void:
 		_write_text(path, JSON.stringify(config))
 		var before := FileAccess.get_file_as_bytes(path)
 		var settings := GameSettings.new(path)
-		settings.code_color_mode = "dark"
+		settings.code_color_mode = "light"
 		settings.changed.connect(_on_changed)
 		var before_changes := _changed_count
 		_check(not settings.load_settings().is_ok() and not settings.last_error.is_empty(), "坏颜色配置返回读取失败")
-		_check(settings.code_color_mode == "light" and settings.volume == 1.0 and settings.language == "zh_CN" and settings.tab_completion and settings.code_hints == "normal", "坏颜色配置使用完整默认值而不部分载入")
+		_check(settings.code_color_mode == "dark" and settings.volume == 1.0 and settings.language == "zh_CN" and settings.tab_completion and settings.code_hints == "normal", "坏颜色配置使用完整默认值而不部分载入")
 		_check(_changed_count == before_changes + 1, "坏配置回退仍只通知一次当前默认设置")
 		_check(FileAccess.get_file_as_bytes(path) == before, "坏颜色字段不会导致原文件被改写")
 
@@ -134,8 +136,8 @@ func _test_save_failure() -> void:
 	var blocked := GameSettings.new(blocker.path_join("settings.json"))
 	blocked.changed.connect(_on_changed)
 	var before_changes := _changed_count
-	_check(not blocked.set_code_color_mode("dark").is_ok() and not blocked.last_error.is_empty(), "目录无法创建时反馈颜色保存失败")
-	_check(blocked.code_color_mode == "dark" and _changed_count == before_changes + 1, "保存失败仍保留即时选择并通知一次")
+	_check(not blocked.set_code_color_mode("light").is_ok() and not blocked.last_error.is_empty(), "目录无法创建时反馈颜色保存失败")
+	_check(blocked.code_color_mode == "light" and _changed_count == before_changes + 1, "保存失败仍保留即时选择并通知一次")
 	_check(FileAccess.get_file_as_string(blocker) == "保留路径占位文件", "失败不会覆盖阻挡路径中的已有文件")
 	# 接近上限的紧凑旧文件可正常读取；加入字段与保存缩进后超过上限。
 	var path := _test_root.path_join("size_limit.json")
@@ -145,14 +147,14 @@ func _test_save_failure() -> void:
 	_write_text(path, JSON.stringify(compact))
 	var before := FileAccess.get_file_as_bytes(path)
 	var settings := GameSettings.new(path)
-	_check(settings.load_settings().is_ok() and settings.code_color_mode == "light", "接近大小上限的旧配置仍可正常载入")
+	_check(settings.load_settings().is_ok() and settings.code_color_mode == "dark", "接近大小上限的旧配置仍可正常载入")
 	settings.changed.connect(_on_changed)
 	before_changes = _changed_count
-	_check(not settings.set_code_color_mode("dark").is_ok() and not settings.last_error.is_empty(), "新增设置导致超限时明确报告保存失败")
-	_check(settings.code_color_mode == "dark" and _changed_count == before_changes + 1, "超限保存失败也保留并通知本次配色选择")
+	_check(not settings.set_code_color_mode("light").is_ok() and not settings.last_error.is_empty(), "新增设置导致超限时明确报告保存失败")
+	_check(settings.code_color_mode == "light" and _changed_count == before_changes + 1, "超限保存失败也保留并通知本次配色选择")
 	_check(FileAccess.get_file_as_bytes(path) == before, "超限保存失败逐字节保留原有效配置")
 	var reloaded := GameSettings.new(path)
-	_check(reloaded.load_settings().is_ok() and reloaded.code_color_mode == "light" and reloaded.volume == 0.5 and reloaded.language == "en", "失败后磁盘仍可载入原有配置")
+	_check(reloaded.load_settings().is_ok() and reloaded.code_color_mode == "dark" and reloaded.volume == 0.5 and reloaded.language == "en", "失败后磁盘仍可载入原有配置")
 
 
 ## 统计变更信号以验证一次选择或完整载入只通知一次。

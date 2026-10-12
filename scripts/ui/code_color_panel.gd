@@ -6,10 +6,13 @@ const TOP_FADE_WIDTH := SettingsContentFade.TOP_FADE_WIDTH
 const CONTENT_TOP_GAP := SettingsContentFade.CONTENT_TOP_GAP
 
 var settings: GameSettings
+var card_boundary: Control
 var top_boundary: Control
+var navigation_title: Label
 var _card: Control
 var _content_fade: SettingsContentFade
 var _scroll: ScrollContainer
+var _scroll_content: MarginContainer
 var _column: VBoxContainer
 var _options: HBoxContainer
 var _status: Label
@@ -46,19 +49,21 @@ func _build_ui() -> void:
 	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	_scroll.follow_focus = true
 	_card.add_child(_scroll)
+	_scroll.scale = Vector2.ONE * SettingsContentFade.CONTENT_SCALE
+	SettingsContentFade.style_scrollbar(_scroll.get_v_scroll_bar())
 	SettingsScrollFade.attach(_scroll)
 	_column = VBoxContainer.new()
 	_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_column.add_theme_constant_override("separation", 16)
 	# 让滚动条比灰色卡片向右留出 24 像素，内容宽度仍按原来的居中列计算。
-	var scroll_content := MarginContainer.new()
-	scroll_content.name = "SettingsScrollbarGutter"
-	scroll_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll_content.add_theme_constant_override("margin_right", 24)
-	scroll_content.add_theme_constant_override("margin_top", int(TOP_FADE_WIDTH) + CONTENT_TOP_GAP)
-	scroll_content.add_theme_constant_override("margin_bottom", CONTENT_TOP_GAP)
-	_scroll.add_child(scroll_content)
-	scroll_content.add_child(_column)
+	_scroll_content = MarginContainer.new()
+	_scroll_content.name = "SettingsScrollbarGutter"
+	_scroll_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll_content.add_theme_constant_override("margin_right", 24)
+	_scroll_content.add_theme_constant_override("margin_top", int(TOP_FADE_WIDTH) + CONTENT_TOP_GAP)
+	_scroll_content.add_theme_constant_override("margin_bottom", int(TOP_FADE_WIDTH) + CONTENT_TOP_GAP)
+	_scroll.add_child(_scroll_content)
+	_scroll_content.add_child(_column)
 	var title := GameTheme.label(_column, "颜色与显示", 20)
 	title.name = "CodeColorTitle"
 	var group := PanelContainer.new()
@@ -132,7 +137,7 @@ func _add_choice(mode: String, caption: String) -> void:
 	preview.highlight_current_line = false
 	preview.scroll_past_end_of_file = false
 	preview.text = "main()\n{\n\n\n}\n"
-	preview.add_theme_font_size_override("font_size", 8)
+	GameTheme.font_size(preview, "font_size", 8)
 	preview.add_theme_constant_override("line_spacing", 0)
 	GameTheme.style_code(preview, mode)
 	for state in ["normal", "read_only", "focus"]:
@@ -177,21 +182,32 @@ func _sync_controls() -> void:
 	_status.visible = not _status.text.is_empty()
 
 
-## 与主设置页共享导航底边和淡出宽度，宽列承载代码预览与背景图库。
+## 与主设置页共享白卡上下边界，独立面板仍接受导航下缘，宽列承载预览和图库。
 func _layout_card() -> void:
 	if not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(_card) or size.x <= 0 or size.y <= 0:
 		return
-	var top_y := top_boundary.get_global_rect().end.y if is_instance_valid(top_boundary) else global_position.y
-	var offset_y := minf(0.0, top_y - global_position.y)
-	_card.position = Vector2(0, offset_y)
-	_card.size = Vector2(size.x, maxf(0, size.y - offset_y))
-	var width := minf(740, maxf(0, size.x - 64))
-	_scroll.position = Vector2((size.x - width) * 0.5, 0)
-	_scroll.size = Vector2(width + 24, maxf(0, _card.size.y - CONTENT_TOP_GAP))
-	_content_fade.set_fade(_scroll.global_position.y, TOP_FADE_WIDTH, get_viewport().get_visible_rect().size.y)
+	var inside_card := is_instance_valid(card_boundary)
+	if inside_card:
+		var bounds := get_global_transform().affine_inverse() * card_boundary.get_global_rect()
+		_card.position = bounds.position
+		_card.size = bounds.size
+	else:
+		var top_y := top_boundary.get_global_rect().end.y if is_instance_valid(top_boundary) else global_position.y
+		var offset_y := minf(0.0, top_y - global_position.y)
+		_card.position = Vector2(0, offset_y)
+		_card.size = Vector2(size.x, maxf(0, size.y - offset_y))
+	var content_scale := SettingsContentFade.CONTENT_SCALE
+	var top_padding := SettingsContentFade.CARD_CONTENT_TOP_PADDING if inside_card else int(TOP_FADE_WIDTH) + CONTENT_TOP_GAP
+	_scroll_content.add_theme_constant_override("margin_top", ceili(top_padding / content_scale))
+	_scroll_content.add_theme_constant_override("margin_bottom", ceili((TOP_FADE_WIDTH + CONTENT_TOP_GAP) / content_scale))
+	var scroll_rect := SettingsContentFade.content_rect(_card, 740.0, _column.get_combined_minimum_size().x, navigation_title)
+	_scroll.position = scroll_rect.position
+	_scroll.size = Vector2(scroll_rect.size.x, maxf(0, scroll_rect.size.y - (0 if inside_card else CONTENT_TOP_GAP))) / content_scale
+	var visible_rect := _scroll.get_global_rect()
+	_content_fade.set_fade(visible_rect.position.y, TOP_FADE_WIDTH * absf(get_global_transform().get_scale().y), get_viewport().get_visible_rect().size.y, visible_rect.end.y)
 
 
-## 键盘导航额外避开顶部渐隐带，鼠标按下时不移动当前按钮。
+## 键盘导航额外避开上下渐隐带，鼠标按下时不移动当前按钮。
 func _on_content_focus_changed(control: Control) -> void:
 	if _keyboard_focus and is_instance_valid(control) and _column.is_ancestor_of(control):
 		_reveal_focused_control.call_deferred(control)
@@ -201,9 +217,17 @@ func _on_content_focus_changed(control: Control) -> void:
 func _reveal_focused_control(control: Control) -> void:
 	if not _keyboard_focus or not is_instance_valid(control) or not control.has_focus() or not is_visible_in_tree():
 		return
-	var top := _scroll.global_position.y + TOP_FADE_WIDTH + 8
-	if control.global_position.y < top:
-		_scroll.scroll_vertical -= ceili(top - control.global_position.y)
+	var visible_rect := _scroll.get_global_rect()
+	var top_inset := SettingsContentFade.CARD_FOCUS_TOP_INSET if is_instance_valid(card_boundary) else TOP_FADE_WIDTH + 8
+	var layout_scale := absf(get_global_transform().get_scale().y)
+	var top := visible_rect.position.y + top_inset * layout_scale
+	var bottom := visible_rect.end.y - (TOP_FADE_WIDTH + 8) * layout_scale
+	var focused_rect := control.get_global_rect()
+	var scroll_scale := absf(_scroll.get_global_transform().get_scale().y)
+	if focused_rect.position.y < top:
+		_scroll.scroll_vertical -= ceili((top - focused_rect.position.y) / scroll_scale)
+	elif focused_rect.end.y > bottom:
+		_scroll.scroll_vertical += ceili((focused_rect.end.y - bottom) / scroll_scale)
 
 
 ## 本土化更新只重排文本和错误反馈，保留当前已选颜色。

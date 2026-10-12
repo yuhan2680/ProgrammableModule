@@ -33,6 +33,7 @@ func _run() -> void:
 		_test_editor_save_reload,
 		_test_editor_module_limit,
 		_test_move_speed_and_exact_distance,
+		_test_narrow_corridor_precision,
 		_test_stacked_modules,
 		_test_angle_direction,
 		_test_void_and_map_boundary,
@@ -357,6 +358,58 @@ func _test_move_speed_and_exact_distance() -> void:
 	_expect(command.state == MovementCommand.State.COMPLETED, "可通行路径完成移动")
 	_expect_position(world.player.position, start + Vector2(2.37, 0.0), "终点精确匹配非整 tick 距离")
 	_expect(absf(command.traveled_distance - 2.37) < 0.0001, "命令报告实际移动距离")
+
+
+## 两个半格模块沿单格走廊反复转弯，长动作和逐格动作都不能积累横向漂移。
+func _test_narrow_corridor_precision() -> void:
+	var document := _filled_document(34, 24, Vector2(1.25, 1.5))
+	for y in document.height:
+		for x in document.width:
+			document.set_tile(Vector2i(x, y), "wall")
+	for x in range(1, 32):
+		document.set_tile(Vector2i(x, 1), "floor")
+		document.set_tile(Vector2i(x, 21), "floor")
+	for y in range(1, 22):
+		document.set_tile(Vector2i(1, y), "floor")
+		document.set_tile(Vector2i(31, y), "floor")
+	document.player_spawn.modules.append({"id": "sensor", "module_id": "rangefinder", "offset": {"x": .5, "y": 0}})
+	var legs := [
+		{"angle": 0, "distance": 30, "target": Vector2(31.25, 1.5)},
+		{"angle": 270, "distance": 20, "target": Vector2(31.25, 21.5)},
+		{"angle": 180, "distance": 30, "target": Vector2(1.25, 21.5)},
+		{"angle": 90, "distance": 20, "target": Vector2(1.25, 1.5)},
+	]
+	for segmented in [false, true]:
+		var world := _world(document)
+		if world == null:
+			return
+		for lap in 2:
+			for leg: Dictionary in legs:
+				var count := int(leg.distance) if segmented else 1
+				for unused in count:
+					var command := _move(world, leg.angle, 1 if segmented else leg.distance)
+					if command == null:
+						return
+					_finish(world, command)
+					if not _expect(command.state == MovementCommand.State.COMPLETED, "第%d圈%s移动沿单格通道正常结束" % [lap + 1, "逐格" if segmented else "长距离"]):
+						return
+				# 整数、四分之一与二分之一可精确表示，不能用宽容差掩盖累计误差。
+				_expect(world.player.position == leg.target, "正交转角保持精确坐标：实际%s，预期%s" % [world.player.position, leg.target])
+		var blocked := _move(world, 180, 1)
+		if blocked == null:
+			return
+		_finish(world, blocked)
+		_expect(blocked.state == MovementCommand.State.BLOCKED and world.player.position == Vector2(1.25, 1.5), "保持精度并不放宽撞墙，贴外墙时向左仍立即阻挡")
+		var fractional := _move(world, 0, 1.375)
+		if fractional == null:
+			return
+		_finish(world, fractional)
+		_expect(fractional.state == MovementCommand.State.COMPLETED and world.player.position == Vector2(2.625, 1.5), "非网格请求仍停在自己的精确终点，不能靠吸附网格修复漂移")
+		blocked = _move(world, 270, 1)
+		if blocked == null:
+			return
+		_finish(world, blocked)
+		_expect(blocked.state == MovementCommand.State.BLOCKED and world.player.position == Vector2(2.625, 1.75), "转向实墙仍停在完整模块首次接触面，不能提交未扫掠终点")
 
 
 ## 两个相邻移动模块的能力贡献相加，被禁用模块不再贡献速度。

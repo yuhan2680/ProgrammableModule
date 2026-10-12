@@ -126,7 +126,7 @@ func _test_complete_clear() -> void:
 		_check(filename.get_extension().to_lower() != "json", "成功后不留直接 JSON 恢复副本")
 	_check(_directories(catalog.user_directory).size() == 2, "成功后仅保留原有子目录，无隐藏暂存目录")
 	_ok(catalog.refresh(_content), "清除后关卡目录可正常刷新")
-	_check(catalog.levels.size() == 15 and catalog.levels[14].id == "level_015", "刷新后仅保留第一至第十五关共十五个内置关卡")
+	_check(catalog.levels.size() == 16 and catalog.levels[14].id == "level_015" and catalog.levels[15].id == "level_016", "刷新后仅保留第一至第十六关共十六个内置关卡")
 	_ok(catalog.clear_user_levels(drafts), "重复清除是无副作用的成功空操作")
 
 

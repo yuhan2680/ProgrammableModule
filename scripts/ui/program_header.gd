@@ -31,6 +31,7 @@ var _segments: Array[Button] = []
 var _separators: Array[ColorRect] = []
 var _description := ""
 var _goal := ""
+var _custom_subtitle := false
 var _has_level_heading := false
 var _playtest := false
 var _run_disabled := false
@@ -46,7 +47,7 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(400, HEIGHT)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	navigation = GameTheme.navigation_pill(self, back_requested.emit, "返回关卡", "Program")
+	navigation = GameTheme.navigation_pill(self, back_requested.emit, "编辑模块", "Program")
 	back_button = navigation.get_node("ProgramBackButton")
 	title_label = GameTheme.label(self, "", 22)
 	title_label.name = "ProgramHeaderTitle"
@@ -108,6 +109,7 @@ func _ready() -> void:
 func configure(description: String, playtest: bool = false) -> void:
 	_description = description
 	_goal = ""
+	_custom_subtitle = false
 	_has_level_heading = false
 	_playtest = playtest
 	if run_button == null:
@@ -117,9 +119,10 @@ func configure(description: String, playtest: bool = false) -> void:
 
 
 ## 将关卡源名称与简短目标分成两行显示，不修改作者保存的标题和规则文本。
-func configure_level(title: String, goal: String, playtest: bool = false) -> void:
+func configure_level(title: String, goal: String, playtest: bool = false, custom_subtitle: bool = false) -> void:
 	_description = title
 	_goal = goal
+	_custom_subtitle = custom_subtitle
 	_has_level_heading = true
 	_playtest = playtest
 	if run_button == null:
@@ -161,10 +164,12 @@ func _apply_button_states() -> void:
 
 ## 每个纯图标入口都提供本土化名称，运行失败原因附在名称之后。
 func _update_tooltips() -> void:
-	back_button.tooltip_text = tr("返回地图编辑器") if _playtest else tr("返回关卡")
+	back_button.tooltip_text = tr("编辑模块") + "\n" + tr("返回组装页面并保留当前程序；正在进行的试运行会停止。")
 	title_label.text = _description
-	title_label.add_theme_font_size_override("font_size", 22 if _has_level_heading else 14)
+	GameTheme.font_size(title_label, "font_size", 22 if _has_level_heading else 14)
 	title_label.add_theme_color_override("font_color", GameTheme.TEXT if _has_level_heading else GameTheme.MUTED)
+	# 作者输入与系统目标说明分别处理，切换语言不能把副标题当作词典键改写。
+	goal_label.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED if _custom_subtitle else Node.AUTO_TRANSLATE_MODE_INHERIT
 	goal_label.text = _goal
 	goal_label.visible = _has_level_heading and not _goal.is_empty()
 	run_button.tooltip_text = tr("运行程序")

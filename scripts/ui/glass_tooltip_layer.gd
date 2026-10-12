@@ -1,15 +1,20 @@
 class_name GlassTooltipLayer
 extends CanvasLayer
-## 接管原生悬停提示的绘制与定位；出现时机、翻译、文字布局和关闭仍交给 Godot。
+## 接管原生悬停提示的绘制、限宽和定位；出现时机、翻译、文字换行和关闭仍交给 Godot。
 
 const SHADOW_PADDING := 14.0
 const TOOLTIP_SCALE := 0.7
 const POINTER_OFFSET := Vector2(10.0, 14.0)
+const MAX_TEXT_WIDTH := 560.0
 var _popup: PopupPanel
 var _source_label: Label
 var _source_panel: Panel
 var _original_style: StyleBox
 var _original_label_modulate := Color.WHITE
+var _original_autowrap := TextServer.AUTOWRAP_OFF
+var _original_minimum_size := Vector2.ZERO
+var _original_anchors := PackedFloat32Array()
+var _wrap_signature := ""
 var _surface_root: Control
 var _glass: ColorRect
 var _label: Label
@@ -56,7 +61,7 @@ func _on_node_added(node: Node) -> void:
 		_attach_tooltip.call_deferred(node)
 
 
-## 保留原生窗口和标签的尺寸，仅隐藏原绘制；独立系统窗口使用浅色主题后备外观。
+## 隐藏原绘制并约束原生标签宽度；独立系统窗口使用浅色主题后备外观。
 func _attach_tooltip(popup: PopupPanel) -> void:
 	if not is_instance_valid(popup) or popup.is_queued_for_deletion() or not popup.is_visible() or not popup.is_embedded():
 		return
@@ -75,6 +80,13 @@ func _attach_tooltip(popup: PopupPanel) -> void:
 	_source_panel = source_panel
 	_original_style = popup.get_theme_stylebox("panel")
 	_original_label_modulate = source_label.self_modulate
+	_original_autowrap = source_label.autowrap_mode
+	_original_minimum_size = source_label.custom_minimum_size
+	_original_anchors = PackedFloat32Array()
+	for side in range(4):
+		_original_anchors.append(source_label.get_anchor(side))
+	# PopupPanel 自己排布标签；解除满幅锚点后才能在首次 ready 前明确测量新行宽。
+	source_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	var clear_style := _original_style.duplicate() as StyleBoxFlat
 	if clear_style == null:
 		_release_tooltip()
@@ -84,13 +96,16 @@ func _attach_tooltip(popup: PopupPanel) -> void:
 	clear_style.border_color = Color.TRANSPARENT
 	clear_style.shadow_color = Color.TRANSPARENT
 	popup.add_theme_stylebox_override("panel", clear_style)
+	# 原生提示也先按字号重新排版，玻璃层才能沿用足够容纳文字的实际矩形。
+	source_label.set_meta("ui_font_scale_percent", roundi(GameTheme.font_scale(_label) * 100))
+	GameTheme.font_size(source_label, "font_size", GameTheme.base_font_size(source_label, "font_size"))
 	source_label.self_modulate.a = 0.0
 	_label.add_theme_font_override("font", source_label.get_theme_font("font"))
-	_label.add_theme_font_size_override("font_size", source_label.get_theme_font_size("font_size"))
+	GameTheme.font_size(_label, "font_size", GameTheme.base_font_size(source_label, "font_size"))
 	_label.add_theme_color_override("font_color", GameTheme.TEXT)
 	_label.add_theme_color_override("font_shadow_color", Color.TRANSPARENT)
 	_label.add_theme_color_override("font_outline_color", Color.TRANSPARENT)
-	_label.autowrap_mode = source_label.autowrap_mode
+	_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_label.horizontal_alignment = source_label.horizontal_alignment
 	_label.vertical_alignment = source_label.vertical_alignment
 	_label.text_direction = source_label.text_direction
@@ -113,6 +128,7 @@ func _sync_tooltip() -> void:
 	var popup_to_root := get_viewport().get_screen_transform().affine_inverse() * _popup.get_screen_transform()
 	# 只缩放原生 hover 提示的绘制；保留原生换行和出现/关闭逻辑，普通二级菜单不变。
 	_surface_root.scale = popup_to_root.get_scale() * TOOLTIP_SCALE
+	_wrap_tooltip()
 	var panel_rect := _source_panel.get_rect()
 	_position_near_pointer(panel_rect)
 	_glass.position = panel_rect.position - Vector2.ONE * SHADOW_PADDING
@@ -122,6 +138,34 @@ func _sync_tooltip() -> void:
 	_label.size = _source_label.size
 	# atr 尊重原控件的翻译模式，玩家自定义文字不会被额外翻译。
 	_label.text = _source_label.atr(_source_label.text)
+
+
+## 按最终显示比例限制阅读行宽，左右空间不足时进一步换行，不缩小字号或丢弃原文。
+func _wrap_tooltip() -> void:
+	var bounds := get_viewport().get_visible_rect()
+	var factor := maxf(0.001, absf(_surface_root.scale.x))
+	var padding := SHADOW_PADDING * factor
+	var left_space := _pointer_position.x - bounds.position.x - POINTER_OFFSET.x - padding
+	var right_space := bounds.end.x - _pointer_position.x - POINTER_OFFSET.x - padding
+	var available := minf(bounds.size.x - padding * 2, maxf(left_space, right_space))
+	var content_width := maxf(1, floorf(minf(MAX_TEXT_WIDTH, available / factor - _original_style.get_minimum_size().x)))
+	var text := _source_label.atr(_source_label.text)
+	var font := _source_label.get_theme_font("font")
+	var font_size := _source_label.get_theme_font_size("font_size")
+	var natural_width := 1.0
+	for line: String in text.split("\n"):
+		natural_width = maxf(natural_width, ceilf(font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x))
+	content_width = minf(content_width, natural_width)
+	var signature := "%s|%d|%.0f" % [text, font_size, content_width]
+	if signature == _wrap_signature:
+		return
+	_wrap_signature = signature
+	_source_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_source_label.custom_minimum_size.x = content_width
+	_source_label.size.x = content_width
+	# 先让原生标签按新宽度排版，再重算窗口高度；不保留单行提示的旧宽度和旧高度。
+	_source_label.get_line_count()
+	_popup.reset_size()
 
 
 ## 按实际显示尺寸在指针旁避让边界，防止七成卡片沿用原尺寸原点后远离鼠标。
@@ -149,12 +193,18 @@ func _release_tooltip() -> void:
 	set_process(false)
 	if is_instance_valid(_source_label):
 		_source_label.self_modulate = _original_label_modulate
+		_source_label.autowrap_mode = _original_autowrap
+		_source_label.custom_minimum_size = _original_minimum_size
+		for side in range(_original_anchors.size()):
+			_source_label.set_anchor(side, _original_anchors[side])
 	if is_instance_valid(_popup) and _original_style != null:
 		_popup.add_theme_stylebox_override("panel", _original_style)
 	_popup = null
 	_source_label = null
 	_source_panel = null
 	_original_style = null
+	_wrap_signature = ""
+	_original_anchors.clear()
 
 
 ## 游戏页面树销毁时还原借用的绘制状态，信号连接随节点自动释放。

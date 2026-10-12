@@ -48,7 +48,7 @@ static func suggest(source: String, line: int, column: int, level: LevelDefiniti
 	context["functions"] = _function_declarations(source) if level.allow_functions else {}
 	context["bindings"] = _visible_bindings(source, tokens, str(context.get("function", "")), level.allow_variables, level.allow_for) if level.allow_variables or level.allow_for else {}
 	context["radar_bindings"] = _visible_radar_bindings(source, tokens, str(context.get("function", "")), level, assembly) if level.allow_variables and level.allow_radar else {}
-	var candidates := _candidates(context, receiver, level, assembly)
+	var candidates := _filter_command_candidates(_candidates(context, receiver, level, assembly), context, receiver, level, assembly)
 	# 完整单词保持原样；固定顺序保证同样的输入不会随机改变候选。
 	if prefix in candidates:
 		return ""
@@ -81,9 +81,9 @@ static func _read_receiver(tokens: Array[ProgramLexer.Token], level: LevelDefini
 		if not level.allow_radar:
 			return DataResult.failure("雷达查询尚未开放。")
 		if module_name.is_empty():
-			if _radar_count(level, assembly) != 1:
+			if _radar_count(level, assembly) != 1 or not _command_allowed(level, "scan"):
 				return DataResult.failure("扫描需要唯一的雷达来源。")
-		elif not level.allow_named_calls or _receiver_behavior(module_name, level, assembly) != "RadarModule":
+		elif not level.allow_named_calls or _receiver_behavior(module_name, level, assembly) != "RadarModule" or not _command_allowed(level, "named_scan"):
 			return DataResult.failure("扫描模块不可用。")
 		# @ 不属于 DSL 标识符，内部标记不会与玩家绑定名混淆。
 		parts.insert(0, "@scan" if module_name.is_empty() else "@scan:" + module_name)
@@ -164,6 +164,9 @@ static func _read_context(tokens: Array[ProgramLexer.Token], level: LevelDefinit
 
 ## 阻止回调中的等待块、并行嵌套和手工输入的未解锁代码块产生误导候选。
 static func _block_allowed(owner: String, stack: Array[Dictionary], level: LevelDefinition) -> bool:
+	var permission: String = {"main": "main", "tick": "tick", "if": "if_else", "else": "if_else", "loop": "loop", "for": "for_range", "simultaneously": "simultaneously"}.get(owner, "functions" if owner.begins_with("@function:") else "radar_event" if owner.begins_with("@radar:") else "")
+	if not str(permission).is_empty() and not _command_allowed(level, permission):
+		return false
 	if stack.is_empty():
 		return owner == "main" or (owner == "tick" and level.allow_tick) or (owner.begins_with("@function:") and level.allow_functions) or (owner.begins_with("@radar:") and _radar_events_allowed(level))
 	var in_tick := false
@@ -190,9 +193,11 @@ static func _expression_context(tokens: Array[ProgramLexer.Token], parentheses: 
 	var outer: Dictionary = parentheses.front()
 	var owner: String = outer.owner
 	if owner == "if":
-		if not level.allow_conditionals:
+		if not level.allow_conditionals or not _command_allowed(level, "if_else"):
 			return {}
 	elif owner not in level.allowed_calls or not ProgramParser.CALL_ARITIES.has(owner) or (function_name == "tick" and owner == "move"):
+		return {}
+	elif not _command_allowed(level, ("named_" if outer.index >= 2 and tokens[outer.index - 2].kind == ProgramLexer.Kind.DOT else "") + owner):
 		return {}
 	for index in range(1, parentheses.size()):
 		var frame: Dictionary = parentheses[index]
@@ -211,7 +216,7 @@ static func _expression_context(tokens: Array[ProgramLexer.Token], parentheses: 
 
 ## for 头按范围边界区分 in、step 与数值输入，不向回调或并行块泄露新语法。
 static func _for_header_context(tokens: Array[ProgramLexer.Token], parentheses: Array[Dictionary], function_name: String, parallel: bool, level: LevelDefinition) -> Dictionary:
-	if not level.allow_for or function_name.is_empty() or function_name == "tick" or parallel:
+	if not level.allow_for or not _command_allowed(level, "for_range") or function_name.is_empty() or function_name == "tick" or parallel:
 		return {}
 	var start: int = parentheses.front().index + 1
 	var header: Array[ProgramLexer.Token] = []
@@ -388,6 +393,50 @@ static func _candidates(context: Dictionary, receiver: String, level: LevelDefin
 	return candidates
 
 
+## 显式指令集按语法形式过滤候选；成员调用与广播分别开关，不影响旧地图补全。
+static func _filter_command_candidates(candidates: PackedStringArray, context: Dictionary, receiver: String, level: LevelDefinition, assembly: AssemblyModel) -> PackedStringArray:
+	if not level.has_command_policy:
+		return candidates
+	var result := PackedStringArray()
+	var keyword_ids := {"main": "main", "tick": "tick", "function": "functions", "constant": "constants", "value": "constants", "variable": "variables", "if": "if_else", "else": "if_else", "loop": "loop", "for": "for_range", "in": "for_range", "step": "for_range", "simultaneously": "simultaneously", "random": "random", "randomInt": "random_int", "ready": "ready", "onDetected": "radar_event", "EnemyPosition": "radar_event", "Angle": "radar_angle", "Position": "radar_position", "x": "radar_position", "y": "radar_position", "Distance": "radar_distance"}
+	for candidate in candidates:
+		var command_id: String = keyword_ids.get(candidate, "")
+		if receiver.is_empty() and candidate in ["Angle", "Position", "Distance", "x", "y"]:
+			command_id = ""
+		# 已有函数和绑定的来源优先于同名模块或上下文关键字，不能误删合法用户名称。
+		if receiver.is_empty() and context.get("bindings", {}).has(candidate):
+			command_id = "variables" if context.kind == "statement" and bool(context.bindings[candidate]) else ""
+		elif receiver.is_empty() and context.get("functions", {}).has(candidate):
+			command_id = "functions"
+		elif candidate in ["move", "attack", "shoot", "distance", "scan"]:
+			command_id = ("named_" if not receiver.is_empty() else "") + candidate
+		elif receiver.is_empty() and _receiver_behavior(candidate, level, assembly) != "":
+			if not _receiver_has_permitted_command(candidate, context, level, assembly):
+				continue
+			command_id = ""
+		if command_id.is_empty() or _command_allowed(level, command_id):
+			result.append(candidate)
+	return result
+
+
+## 只为仍有可用成员指令的模块补出名称，避免引导玩家输入已禁止的调用。
+static func _receiver_has_permitted_command(receiver: String, context: Dictionary, level: LevelDefinition, assembly: AssemblyModel) -> bool:
+	var behavior := _receiver_behavior(receiver, level, assembly)
+	if context.kind == "entry":
+		return behavior == "RadarModule" and _command_allowed(level, "radar_event")
+	var methods := ["distance", "scan", "ready"] if context.kind == "expression" else ["move", "attack", "shoot"]
+	for method: String in methods:
+		var command_id := "ready" if method == "ready" else "named_" + method
+		if _supports_method(behavior, method) and _command_allowed(level, command_id):
+			return true
+	return false
+
+
+## 缺省地图只读取原有能力旗标；可选白名单不会由补全反写到文档。
+static func _command_allowed(level: LevelDefinition, command_id: String) -> bool:
+	return not level.has_command_policy or command_id in level.enabled_commands
+
+
 ## 查询当前关卡允许的真实实例类型；坏草稿、未知名称或未注册类型均不作猜测。
 static func _receiver_behavior(receiver: String, level: LevelDefinition, assembly: AssemblyModel) -> String:
 	if assembly == null or assembly.content == null or not ProgramParser.is_receiver_name(receiver):
@@ -497,6 +546,9 @@ static func _binding_expression_context(tokens: Array[ProgramLexer.Token], funct
 	if statement.size() < 2:
 		return {}
 	var declaration := statement[0].lexeme in ["constant", "variable", "value"]
+	var command_id := "constants" if declaration and statement[0].lexeme in ["constant", "value"] else "variables"
+	if not _command_allowed(level, command_id):
+		return {}
 	var target_index := 1 if declaration else 0
 	var equals_index := target_index + 1
 	if equals_index >= statement.size() or statement[equals_index].kind != ProgramLexer.Kind.ASSIGN:
@@ -527,8 +579,12 @@ static func _numeric_operand_allowed(tokens: Array[ProgramLexer.Token], left_ind
 		return true
 	var arity := 0
 	if owner == "distance" and level.allow_distance:
+		if not _command_allowed(level, ("named_" if left_index >= 2 and tokens[left_index - 2].kind == ProgramLexer.Kind.DOT else "") + "distance"):
+			return false
 		arity = 1
 	elif owner == "randomInt" and level.allow_random:
+		if not _command_allowed(level, "random_int"):
+			return false
 		if left_index >= 2 and tokens[left_index - 2].kind == ProgramLexer.Kind.DOT:
 			return false
 		arity = 2
@@ -762,15 +818,15 @@ static func _radar_source_type(expression: Array[ProgramLexer.Token], visible: D
 			return "null"
 		return str(visible.get(expression[0].lexeme, ""))
 	if expression.size() == 3 and expression[0].lexeme == "scan" and expression[1].kind == ProgramLexer.Kind.LEFT_PAREN and expression[2].kind == ProgramLexer.Kind.RIGHT_PAREN:
-		return "snapshot" if level.allow_radar and _radar_count(level, assembly) == 1 else ""
+		return "snapshot" if level.allow_radar and _command_allowed(level, "scan") and _radar_count(level, assembly) == 1 else ""
 	if expression.size() == 5 and expression[1].kind == ProgramLexer.Kind.DOT and expression[2].lexeme == "scan" and expression[3].kind == ProgramLexer.Kind.LEFT_PAREN and expression[4].kind == ProgramLexer.Kind.RIGHT_PAREN:
-		return "snapshot" if level.allow_radar and level.allow_named_calls and _receiver_behavior(expression[0].lexeme, level, assembly) == "RadarModule" else ""
+		return "snapshot" if level.allow_radar and level.allow_named_calls and _command_allowed(level, "named_scan") and _receiver_behavior(expression[0].lexeme, level, assembly) == "RadarModule" else ""
 	return ""
 
 
 ## 事件需要独立权限、雷达查询、具名来源和全局变量能力，不能由单一开关隐式解锁。
 static func _radar_events_allowed(level: LevelDefinition) -> bool:
-	return level.allow_radar_events and level.allow_radar and level.allow_named_calls and level.allow_variables
+	return level.allow_radar_events and level.allow_radar and level.allow_named_calls and level.allow_variables and _command_allowed(level, "radar_event")
 
 
 ## 顶层事件头只接受真实雷达实例名加固定成员，不允许空来源或普通函数返回值。

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="48" viewBox="0 0 96 48" shape-rendering="crispEdges">
+  <!-- 原创像素大白鲨；尾鳍由游戏画布逐帧绘制，保持轮廓与细节的像素硬边。 -->
+  <path fill="#10364e" d="M30 20h10v-4h8V4h6v4h4v4h4v4h12v4h10v4h6v10h-8v4H68v4h-8v4h-6v-8H42v-4H30z"/>
+  <path fill="#2997ab" d="M32 22h10v-4h8V6h3v5h5v5h4v3h12v3h10v4h4v6h-8v4H62v-2H42v-3H32z"/>
+  <path fill="#72ccd3" d="M35 21h8v-4h8V7h2v6h5v5h5v2h12v3H62v-1H45v2H35z"/>
+  <path fill="#1c7b94" d="M34 25h13v-2h16v2h10v4h-7v5H43v-3h-9z"/>
+  <path fill="#d4e9e8" d="M36 29h11v-2h13v2h26v4h-6v3H62v2H45v-3H36z"/>
+  <path fill="#f0f8ef" d="M51 28h10v2h26v2H74v2H55v-2h-4z"/>
+  <path fill="#2d879b" d="M59 32h8v4h-5v4h-5v4h-3v-6h3v-3h2z"/>
+  <path fill="#74c0ca" d="M60 33h4v3h-4v4h-3v2h-2v-4h3v-3h2z"/>
+  <path fill="#153f56" d="M57 23h2v7h-2zm5 1h2v6h-2zm5 1h2v5h-2z"/>
+  <path fill="#10364e" d="M77 23h4v4h-4zM78 30h10v2H78z"/>
+  <path fill="#f5ffef" d="M79 23h2v2h-2zM79 30h2v2h-2zm4 0h2v2h-2z"/>
+</svg>

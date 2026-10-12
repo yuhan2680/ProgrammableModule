@@ -5,6 +5,8 @@ render_mode unshaded;
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear;
 uniform vec2 panel_size = vec2(220.0, 108.0);
 uniform float corner_radius = 18.0;
+uniform vec3 frost_tint = vec3(0.985, 0.99, 1.0);
+uniform float frost_mix = 0.80;
 
 void fragment() {
 	float opacity = COLOR.a;
@@ -22,5 +24,5 @@ void fragment() {
 	vec2 corner = abs(local_position) - panel_size * 0.5 + vec2(corner_radius);
 	float distance_to_edge = length(max(corner, vec2(0.0))) + min(max(corner.x, corner.y), 0.0) - corner_radius;
 	float mask = 1.0 - smoothstep(-0.8, 0.0, distance_to_edge);
-	COLOR = vec4(mix(blurred, vec3(0.985, 0.99, 1.0), 0.80), mask * opacity);
+	COLOR = vec4(mix(blurred, frost_tint, frost_mix), mask * opacity);
 }

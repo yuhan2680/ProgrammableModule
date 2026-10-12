@@ -73,6 +73,8 @@ func _open_colors() -> bool:
 	if not _check(settings_button != null, "主菜单有设置入口"):
 		return false
 	await _click(settings_button)
+	if not await _wait_settings_transition():
+		return false
 	if not _check(_game.settings_panel != null, "设置按钮打开设置页"):
 		return false
 	var colors := _game.settings_panel.find_child("CodeColorsButton", true, false) as Button
@@ -94,7 +96,7 @@ func _test_builtin_choices() -> void:
 	await _click(picker._buttons["default"], MOUSE_BUTTON_RIGHT)
 	_check(not picker._delete_popup.visible, "内置背景不提供右键删除")
 	await _click(picker._buttons["solid"])
-	_check(_game.settings.menu_background_mode == "solid" and _game.settings.code_color_mode == "light", "纯色选择立即保存且不改变代码区模式")
+	_check(_game.settings.menu_background_mode == "solid" and _game.settings.code_color_mode == "dark", "纯色选择立即保存且不改变代码区模式")
 	await _return_main()
 	_check(not _game._main_background.visible and _game._main_background._source_texture == null, "纯色主菜单恢复底层原浅色背景")
 	if not await _open_colors():
@@ -135,6 +137,10 @@ func _test_import_and_delete() -> void:
 		_check_single_row(picker, "导入背景 %d" % index)
 	var bar := picker._custom_scroll.get_h_scroll_bar()
 	_check(bar.is_visible_in_tree() and bar.max_value > bar.page, "内置与自定义选项整排溢出时提供横向滚动条")
+	var thumb := bar.get_theme_stylebox("grabber") as StyleBoxFlat
+	var track := bar.get_theme_stylebox("scroll") as StyleBoxFlat
+	_check(thumb != null and track != null and thumb.bg_color.a > 0.0 and thumb.bg_color.a <= 0.3 and is_zero_approx(track.bg_color.a), "横条使用低对比度滑块与透明轨道，保持可发现的原生操作")
+	_check(bar.global_position.y - picker._buttons["default"].get_global_rect().end.y >= 6.3, "横条八逻辑像素间距随内容缩至80%，实际至少保留6.4像素")
 	_check(picker.size.y <= initial_height + bar.size.y + 1.0, "新增背景仅增加横条高度，不另起第二排")
 	picker._custom_scroll.scroll_horizontal = 0
 	await _settle()
@@ -216,11 +222,37 @@ func _test_delete_menu_layout(picker: MenuBackgroundPicker, context: String) -> 
 	await _settle()
 	await _click(target, MOUSE_BUTTON_RIGHT)
 	var popup := picker._delete_popup
-	_check(popup.visible and popup.atr(popup.get_item_text(0)) == _game.tr("删除"), "右键菜单显示当前语言的删除操作 " + context)
+	var expected_delete: String = {"zh_CN": "删除", "zh_HK": "刪除", "en": "Delete"}[_game.settings.language]
+	_check(popup.visible and popup.atr(popup.get_item_text(0)) == expected_delete, "右键菜单显示当前语言的删除操作 " + context)
 	var preview: Control = picker._previews[target_id]
-	_check(popup.size.x <= preview.size.x * 0.5 + 1 and popup.size.y <= preview.size.y * 0.5 + 1 and root.get_visible_rect().grow(1).encloses(Rect2(Vector2(popup.position), Vector2(popup.size))), "删除菜单含阴影仍在半预览尺寸和窗口边界内 %s：菜单%s，预览%s" % [context, popup.size, preview.size])
+	var preview_size := preview.get_global_rect().size
+	_check(popup.size.x <= preview_size.x * 0.5 + 1 and popup.size.y <= preview_size.y * 0.5 + 1 and root.get_visible_rect().grow(1).encloses(Rect2(Vector2(popup.position), Vector2(popup.size))), "删除菜单含阴影仍在半预览尺寸和窗口边界内 %s：菜单%s，预览%s" % [context, popup.size, preview_size])
+	var panel_style := popup.get_theme_stylebox("panel") as StyleBoxFlat
+	var font_size := popup.get_theme_font_size("font_size")
+	var text_size := popup.get_theme_font("font").get_string_size(popup.atr(popup.get_item_text(0)), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+	var text_room := popup.get_visible_rect().size - panel_style.get_minimum_size() - Vector2.ONE * panel_style.shadow_size * 2.0
+	text_room -= Vector2(popup.get_theme_constant("item_start_padding") + popup.get_theme_constant("item_end_padding"), popup.get_theme_constant("v_separation"))
+	_check(font_size >= 12 and text_size.x <= text_room.x and text_size.y <= text_room.y, "三语言删除文本保持至少12号且完整容纳 %s：文字%s，净空间%s" % [context, text_size, text_room])
+	_check(popup.size.x <= preview_size.x * 0.5 and popup.size.y <= preview_size.y * 0.5, "实际菜单与阴影严格处于半预览尺寸内 " + context)
+	print("删除菜单布局 %s：窗口%s，逻辑视口%s，文字%s，净空间%s。" % [context, popup.size, popup.get_visible_rect().size, text_size, text_room])
 	popup.hide()
+	# 单独覆盖四角布局，不依赖窗口边缘刚好存在图片；传入的坐标与真实右键入口共用同一定位函数。
+	var bounds := root.get_visible_rect()
+	for point: Vector2 in [bounds.position, Vector2(bounds.end.x - 1, bounds.position.y), Vector2(bounds.position.x, bounds.end.y - 1), bounds.end - Vector2.ONE]:
+		picker._show_delete_menu(target_id, point)
+		await _settle()
+		_check(bounds.encloses(Rect2(Vector2(popup.position), Vector2(popup.size))), "窗口角落的删除菜单含阴影完整留在视口内 %s %s（实际%s）" % [context, point, Rect2(Vector2(popup.position), Vector2(popup.size))])
+		popup.hide()
+	picker._show_delete_menu(target_id, target.get_global_rect().get_center())
 	await _settle()
+	for pressed in [true, false]:
+		var escape := InputEventKey.new()
+		escape.keycode = KEY_ESCAPE
+		escape.physical_keycode = KEY_ESCAPE
+		escape.pressed = pressed
+		root.push_input(escape, true)
+	await _settle()
+	_check(not popup.visible, "Esc 关闭删除菜单而不提交删除 " + context)
 	_check(_game.settings.menu_background_id == selected_id and _game.settings.custom_backgrounds.size() == 4, "仅查看删除菜单保留当前选择和全部图片 " + context)
 
 
@@ -273,6 +305,15 @@ func _move_mouse(point: Vector2) -> void:
 	event.position = point
 	event.global_position = point
 	root.push_input(event, true)
+
+
+## 只在真实主菜单设置入口等待有限时长，动画完成后再验证页面和可操作面板。
+func _wait_settings_transition() -> bool:
+	var deadline := Time.get_ticks_msec() + 3000
+	while _game._menu_transitioning and Time.get_ticks_msec() < deadline:
+		await process_frame
+	await _settle()
+	return _check(not _game._menu_transitioning and _game.page == GameShell.Page.SETTINGS and _game.settings_panel != null, "真实设置转场按时完成并进入可操作设置面板")
 
 
 ## 有界等待排版、翻译和节点释放完成，避免依赖某一渲染速度。

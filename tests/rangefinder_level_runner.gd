@@ -54,7 +54,7 @@ func _test_design_and_unlocks() -> void:
 	_check(session.assembly.build_document().is_ok(), "推荐上下相连布局通过完整出生占地校验")
 	var catalog := LevelCatalog.new()
 	catalog.user_directory = "user://tests/rangefinder_level_missing_imports"
-	_check(catalog.refresh(_content).is_ok() and catalog.levels.size() == 15 and catalog.levels[14].id == "level_015", "隔离导入目录时可加载第一至第十五关共十五个教学关卡")
+	_check(catalog.refresh(_content).is_ok() and catalog.levels.size() == 16 and catalog.levels[14].id == "level_015" and catalog.levels[15].id == "level_016", "隔离导入目录时保留前十五关并加载第十六关逃脱")
 	for number in range(1, 9):
 		var loaded := MapCodec.load_file("res://data/levels/level_%03d.json" % number, _content, true)
 		if not _check(loaded.is_ok(), "旧关卡 %d 地图仍合法" % number):

@@ -135,7 +135,7 @@ func _test_level_availability() -> void:
 	var levels := LevelCatalog.new()
 	levels.user_directory = _test_root.path_join("no_imports")
 	_ok(levels.refresh(registry), "解锁测试加载全部真实关卡")
-	_check(levels.levels.size() == 15, "解锁依据来自全部真实关卡")
+	_check(levels.levels.size() == 16 and levels.levels[14].id == "level_015" and levels.levels[15].id == "level_016", "解锁依据来自前十五关与新增逃脱关的真实定义")
 	var first_available := {"main": 1, "move": 1, "attack": 3, "shoot": 4, "tick": 4, "named_calls": 5, "named_move": 5, "named_attack": 5, "named_shoot": 5, "loop": 6, "if_else": 7, "ready": 7, "simultaneously": 8, "distance": 9, "named_distance": 9, "functions": 11, "constants": 10, "variables": 10, "scan": 10, "named_scan": 10, "radar_angle": 10, "radar_position": 10, "radar_distance": 10, "radar_event": 15, "random": 10, "random_int": 10, "for_range": 12}
 	for index in levels.levels.size():
 		for entry in commands.entries:

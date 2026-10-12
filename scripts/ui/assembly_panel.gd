@@ -328,7 +328,7 @@ func _build_module_properties(parent: Node) -> void:
 	for button in [_remove_button, _apply_button]:
 		button.custom_minimum_size.y = 28
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.add_theme_font_size_override("font_size", 11)
+		GameTheme.font_size(button, "font_size", 11)
 	_assembly_message = GameTheme.label(inspector, "点击左侧 + 选择模块，然后在图纸中放置。", 11, true)
 	_assembly_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_assembly_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -571,8 +571,11 @@ func _refresh_selection() -> void:
 	var selected := model != null and index >= 0 and index < model.modules.size()
 	var editable := selected and interaction_enabled
 	_module_name.editable = editable
+	_module_name.context_menu_enabled = editable
 	_offset_x.editable = editable
+	_offset_x.get_line_edit().context_menu_enabled = editable
 	_offset_y.editable = editable
+	_offset_y.get_line_edit().context_menu_enabled = editable
 	_apply_button.disabled = not editable
 	_remove_button.disabled = not editable
 	_delete_button.disabled = not editable

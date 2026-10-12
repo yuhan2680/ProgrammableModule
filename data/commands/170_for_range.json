@@ -6,17 +6,20 @@
   "category_title": {
     "zh_CN": "程序结构",
     "zh_HK": "程式結構",
-    "en": "Program Structure"
+    "en": "Program Structure",
+    "es": "Estructura del programa"
   },
   "title": {
     "zh_CN": "范围遍历",
     "zh_HK": "範圍遍歷",
-    "en": "Range Loop"
+    "en": "Range Loop",
+    "es": "Bucle por intervalo"
   },
   "description": {
     "zh_CN": "从第十二关开始解锁。for (angle in 0..315 step 45) 按顺序让 angle 取 0、45、90、135、180、225、270、315，每次执行花括号中的动作并等待完成。范围包含能按步长到达的两端；省略 step 时步长为 1，负步长可用于倒序，步长不能为 0。上下界与步长在进入时求值一次。angle 是块内只读迭代变量，不需另开常变量权限，离开 for 后失效；可以直接交给 distance(angle) 或 shoot(angle)。for 可放在 main、已解锁的函数及 loop 内，但不能放入 tick() 或 simultaneously。一次遍历结束会继续下一条指令，持续检查可用外层 loop；循环体不能留空。",
     "zh_HK": "從第十二關開始解鎖。for (angle in 0..315 step 45) 會依次讓 angle 取 0、45、90、135、180、225、270、315，每次執行大括號中的動作並等待完成。範圍包含能按步長到達的兩端；省略 step 時步長為 1，負步長可用於倒序，步長不能為 0。上下界與步長會在進入時求值一次。angle 是區塊內的唯讀迭代變數，不須另行開放常數與變數權限，離開 for 後便會失效；可以直接交給 distance(angle) 或 shoot(angle)。for 可放在 main、已解鎖的函數及 loop 內，但不能放入 tick() 或 simultaneously。一次遍歷結束後會繼續下一條指令，如要持續檢查可用外層 loop；循環內容不能留空。",
-    "en": "Unlocked from level 12. for (angle in 0..315 step 45) gives angle the values 0, 45, 90, 135, 180, 225, 270, and 315 in order, running and awaiting the braced actions each time. The range includes endpoints reachable by the step. The default step is 1; use a negative step to descend, and never use zero. Bounds and step are evaluated once on entry. angle is read-only and scoped to the block, without requiring the separate variables permission; pass it directly to distance(angle) or shoot(angle). A for loop can appear in main, unlocked functions, and loop blocks, but not in tick() or simultaneously. Execution continues after a finished traversal; wrap it in loop to keep checking. The body cannot be empty."
+    "en": "Unlocked from level 12. for (angle in 0..315 step 45) gives angle the values 0, 45, 90, 135, 180, 225, 270, and 315 in order, running and awaiting the braced actions each time. The range includes endpoints reachable by the step. The default step is 1; use a negative step to descend, and never use zero. Bounds and step are evaluated once on entry. angle is read-only and scoped to the block, without requiring the separate variables permission; pass it directly to distance(angle) or shoot(angle). A for loop can appear in main, unlocked functions, and loop blocks, but not in tick() or simultaneously. Execution continues after a finished traversal; wrap it in loop to keep checking. The body cannot be empty.",
+    "es": "Se desbloquea a partir del nivel 12. for (angle in 0..315 step 45) asigna a angle los valores 0, 45, 90, 135, 180, 225, 270 y 315 en orden, ejecutando las acciones entre llaves y esperando a que terminen cada vez. El intervalo incluye los extremos alcanzables con el paso. El paso predeterminado es 1; usa un paso negativo para descender y nunca uses 0. Los límites y el paso se evalúan una sola vez al entrar. angle es una variable de iteración de solo lectura, válida solo dentro del bloque, y no requiere el permiso separado de variables; puedes pasarla directamente a distance(angle) o shoot(angle). for puede aparecer en main, en funciones desbloqueadas y dentro de loop, pero no en tick() ni en simultaneously. Al terminar el recorrido se continúa con la siguiente instrucción; rodéalo con loop para comprobar continuamente. El cuerpo no puede estar vacío."
   },
   "syntax": "for (angle in 0..315 step 45) {\n    ...\n}",
   "requirements": {

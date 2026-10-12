@@ -256,7 +256,7 @@ func _test_completion_switch() -> void:
 		for frame in range(4):
 			await process_frame
 		var scroll := panel.find_child("SettingsScroll", true, false) as ScrollContainer
-		var clear_user := panel.find_child("ClearUserLevelsButton", true, false) as Control
+		var clear_user := panel.find_child("ClearProgressButton", true, false) as Control
 		_check(scroll != null and scroll.get_v_scroll_bar().visible, "小窗口为额外设置提供纵向滚动")
 		if scroll != null and clear_user != null:
 			scroll.ensure_control_visible(clear_user)
@@ -514,7 +514,9 @@ func _test_assembly_free_zoom_setting() -> void:
 	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
 	_check(saved["interface"]["assembly_free_zoom"] is bool and saved["interface"]["assembly_free_zoom"], "自由缩放保存为真实JSON布尔值")
 	_check(_changed_count == previous_changes + 3, "每次有效缩放设置仅通知一次changed")
-	_check(saved["future"] == legacy_loaded["future"] and saved["audio"] == legacy_loaded["audio"] and saved["interface"]["future_display"] == legacy_loaded["interface"]["future_display"], "修改自由缩放保留未知字段与其他分组")
+	var expected_audio: Dictionary = legacy_loaded["audio"].duplicate(true)
+	expected_audio["system_sound_volume"] = GameSettings.DEFAULT_SYSTEM_SOUND_VOLUME
+	_check(saved["future"] == legacy_loaded["future"] and saved["audio"] == expected_audio and saved["interface"]["future_display"] == legacy_loaded["interface"]["future_display"], "修改自由缩放保留未知字段与其他分组")
 	_check(settings.volume == 0.3 and settings.language == "en" and not settings.tab_completion and settings.code_hints == "more" and settings.code_color_mode == "dark", "自由缩放不改变音量、语言、补全、提示与代码配色")
 	var before := FileAccess.get_file_as_bytes(path)
 	previous_changes = _changed_count
@@ -526,7 +528,7 @@ func _test_assembly_free_zoom_setting() -> void:
 		broken["interface"]["assembly_free_zoom"] = invalid
 		var source := JSON.stringify(broken)
 		_write_text(path, source)
-		_check(not settings.load_settings().is_ok() and not settings.assembly_free_zoom and settings.volume == 1.0 and settings.language == "zh_CN" and settings.tab_completion and settings.code_hints == "normal" and settings.code_color_mode == "light", "损坏缩放字段恢复全部默认值，不部分采用旧字段")
+		_check(not settings.load_settings().is_ok() and not settings.assembly_free_zoom and settings.volume == 1.0 and settings.language == "zh_CN" and settings.tab_completion and settings.code_hints == "normal" and settings.code_color_mode == "dark", "损坏缩放字段恢复全部默认值，不部分采用旧字段")
 		_check(FileAccess.get_file_as_string(path) == source, "损坏缩放配置保留原件")
 	var blocked := _test_root.path_join("zoom_blocked")
 	_write_text(blocked, "保留")

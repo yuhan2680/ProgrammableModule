@@ -5,6 +5,7 @@ extends RefCounted
 signal changed
 signal completed
 signal attempt_failed
+signal attempt_started
 
 enum State { EDITING, RUNNING, PAUSED, SUCCEEDED, FAILED }
 
@@ -37,7 +38,9 @@ func run() -> DataResult:
 		return DataResult.failure("程序正在运行或暂停，请先停止。")
 	_clear_runtime()
 	_attempt_pending = true
-	var parsed := ProgramParser.parse(source, level.allowed_calls, level.allow_tick, level.allow_named_calls, level.allow_loops, level.allow_conditionals, level.allow_simultaneous, level.allow_distance, level.allow_functions, level.allow_variables, level.allow_radar, level.allow_random, level.allow_for, level.allow_radar_events)
+	# 上层在编译前获知真实新尝试，立即完成的程序也能正确启动独立墙钟。
+	attempt_started.emit()
+	var parsed := ProgramParser.parse(source, level.allowed_calls, level.allow_tick, level.allow_named_calls, level.allow_loops, level.allow_conditionals, level.allow_simultaneous, level.allow_distance, level.allow_functions, level.allow_variables, level.allow_radar, level.allow_random, level.allow_for, level.allow_radar_events, level.enabled_commands if level.has_command_policy else null)
 	if not parsed.is_ok():
 		_set_failure("\n".join(parsed.errors))
 		return parsed

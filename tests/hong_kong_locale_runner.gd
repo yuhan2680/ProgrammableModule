@@ -1,8 +1,8 @@
 extends SceneTree
 ## 香港繁体回归：覆盖真实设置、静态词典、指令资料和原生控件，仅写本次独占目录。
 
-const LOCALES: Array[String] = ["zh_CN", "zh_HK", "en"]
-const LANGUAGE_CAPTIONS: Array[String] = ["简体中文", "繁體中文", "English"]
+const LOCALES: Array[String] = ["zh_CN", "zh_HK", "es", "en"]
+const LANGUAGE_CAPTIONS: Array[String] = ["简体中文", "繁體中文", "Español", "English"]
 
 var _checks := 0
 var _failures := 0
@@ -93,7 +93,7 @@ func _missing_cjk_glyphs(source: String) -> String:
 	return missing
 
 
-## 三种地区选择跨模型保存恢复，旧 en 不迁移，其他偏好与玩家扩展数据保持原值。
+## 四种地区选择跨模型保存恢复，旧 en 不迁移，其他偏好与玩家扩展数据保持原值。
 func _test_settings_round_trip() -> void:
 	var path := _test_root.path_join("settings.json")
 	var legacy := {"format_version": 1, "audio": {"master_volume": 0.35}, "interface": {"language": "en", "tab_completion": false, "code_hints": "more", "code_color_mode": "dark", "assembly_free_zoom": true, "player_note": "设置 main() { move(0, 3) }"}, "future": {"地图名称": "简体玩家地图"}}
@@ -102,7 +102,7 @@ func _test_settings_round_trip() -> void:
 	var settings := GameSettings.new(path)
 	_check(settings.load_settings().is_ok() and settings.language == "en", "旧 en 配置仍按英文加载")
 	_check(FileAccess.get_file_as_bytes(path) == before, "读取旧英文配置不自动迁移或改写文件")
-	_check(GameSettings.SUPPORTED_LANGUAGES == LOCALES, "地区选择固定为简体第一、香港繁体第二、英语第三")
+	_check(GameSettings.SUPPORTED_LANGUAGES == LOCALES, "地区选择固定为简体第一、香港繁体第二、西语第三、英语第四")
 	for locale: String in ["zh_HK", "en", "zh_CN", "zh_HK"]:
 		_check(settings.set_language(locale).is_ok(), "有效地区设置立即保存：" + locale)
 		_check(TranslationServer.get_locale() == locale, "地区选择立即更新引擎：" + locale)
@@ -190,17 +190,17 @@ func _test_startup_failure_locale() -> void:
 			await process_frame
 		_check(startup.get("phase") == "failed", "缺失启动场景进入可重试故障页：" + locale)
 		var retry := startup.find_child("StartupRetry", true, false) as Button
-		var expected_retry := "重試" if locale == "zh_HK" else ("Retry" if locale == "en" else "重试")
+		var expected_retry: String = {"zh_CN": "重试", "zh_HK": "重試", "es": "Reintentar", "en": "Retry"}[locale]
 		_check(retry != null and retry.text == expected_retry, "早期失败重试按钮使用已保存地区：" + locale)
 		var label: Label = startup.get("_message")
-		var expected_message := "找不到啟動資源。" if locale == "zh_HK" else ("A startup resource could not be found." if locale == "en" else "找不到启动资源。")
+		var expected_message: String = {"zh_CN": "找不到启动资源。", "zh_HK": "找不到啟動資源。", "es": "No se ha encontrado un recurso de inicio.", "en": "A startup resource could not be found."}[locale]
 		_check(label != null and label.text == expected_message, "启动资源错误使用已保存地区：" + locale)
 		_check(FileAccess.get_file_as_bytes(path) == before, "启动故障仅读取语言且不改写设置")
 		startup.queue_free()
 		await _settle()
 
 
-## 在最小窗口用真实设置控件切换三个地区，名称自身不翻译且标签、当前值与弹层不溢出。
+## 在最小窗口用真实设置控件切换地区，名称自身不翻译且标签、当前值与弹层不溢出。
 func _test_settings_panel() -> void:
 	var settings := GameSettings.new(_test_root.path_join("panel.json"))
 	settings.load_settings()
@@ -217,7 +217,7 @@ func _test_settings_panel() -> void:
 	var scroll := panel.find_child("SettingsScroll", true, false) as ScrollContainer
 	_check(option != null and row != null and card != null and scroll != null, "最小窗口建立实际设置选择器")
 	if option != null and row != null and card != null and scroll != null:
-		_check(option.item_count == 3, "显示语言包含三个地区选项")
+		_check(option.item_count == 4, "显示语言包含四个地区选项")
 		var labels := row.find_children("*", "Label", true, false)
 		var label := labels[0] as Label if not labels.is_empty() else null
 		for locale: String in ["zh_HK", "en", "zh_CN", "zh_HK"]:
@@ -239,7 +239,7 @@ func _test_settings_panel() -> void:
 			option.show_popup()
 			await _settle()
 			var popup := option.get_popup()
-			_check(popup.visible and Rect2(Vector2.ZERO, Vector2(root.size)).grow(1).encloses(Rect2(Vector2(popup.position), Vector2(popup.size))), "三个地区的原生弹出菜单位于最小窗口内：窗口%s，菜单%s，显示%s" % [root.size, Rect2(Vector2(popup.position), Vector2(popup.size)), popup.visible])
+			_check(popup.visible and Rect2(Vector2.ZERO, Vector2(root.size)).grow(1).encloses(Rect2(Vector2(popup.position), Vector2(popup.size))), "各地区的原生弹出菜单位于最小窗口内：窗口%s，菜单%s，显示%s" % [root.size, Rect2(Vector2(popup.position), Vector2(popup.size)), popup.visible])
 			popup.hide()
 	panel.queue_free()
 	await process_frame

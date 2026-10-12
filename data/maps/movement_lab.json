@@ -2,8 +2,8 @@
 	"format_version": 1,
 	"id": "movement_lab",
 	"name": "移动模块试验场",
-	"width": 12,
-	"height": 10,
+	"width": 42,
+	"height": 20,
 	"tiles": [
 		{
 			"x": 1,
@@ -126,6 +126,11 @@
 			"tile_id": "floor"
 		},
 		{
+			"x": 30,
+			"y": 3,
+			"tile_id": "floor"
+		},
+		{
 			"x": 1,
 			"y": 4,
 			"tile_id": "floor"
@@ -146,6 +151,11 @@
 			"tile_id": "floor"
 		},
 		{
+			"x": 30,
+			"y": 4,
+			"tile_id": "floor"
+		},
+		{
 			"x": 1,
 			"y": 5,
 			"tile_id": "floor"
@@ -166,6 +176,16 @@
 			"tile_id": "floor"
 		},
 		{
+			"x": 19,
+			"y": 5,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
+			"y": 5,
+			"tile_id": "floor"
+		},
+		{
 			"x": 1,
 			"y": 6,
 			"tile_id": "floor"
@@ -182,6 +202,16 @@
 		},
 		{
 			"x": 10,
+			"y": 6,
+			"tile_id": "floor"
+		},
+		{
+			"x": 19,
+			"y": 6,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
 			"y": 6,
 			"tile_id": "floor"
 		},
@@ -236,6 +266,16 @@
 			"tile_id": "floor"
 		},
 		{
+			"x": 20,
+			"y": 7,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
+			"y": 7,
+			"tile_id": "floor"
+		},
+		{
 			"x": 1,
 			"y": 8,
 			"tile_id": "floor"
@@ -283,6 +323,96 @@
 		{
 			"x": 10,
 			"y": 8,
+			"tile_id": "floor"
+		},
+		{
+			"x": 20,
+			"y": 8,
+			"tile_id": "floor"
+		},
+		{
+			"x": 21,
+			"y": 8,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
+			"y": 8,
+			"tile_id": "floor"
+		},
+		{
+			"x": 21,
+			"y": 9,
+			"tile_id": "floor"
+		},
+		{
+			"x": 22,
+			"y": 9,
+			"tile_id": "floor"
+		},
+		{
+			"x": 23,
+			"y": 9,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
+			"y": 9,
+			"tile_id": "floor"
+		},
+		{
+			"x": 23,
+			"y": 10,
+			"tile_id": "floor"
+		},
+		{
+			"x": 24,
+			"y": 10,
+			"tile_id": "floor"
+		},
+		{
+			"x": 25,
+			"y": 10,
+			"tile_id": "floor"
+		},
+		{
+			"x": 26,
+			"y": 10,
+			"tile_id": "floor"
+		},
+		{
+			"x": 27,
+			"y": 10,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
+			"y": 10,
+			"tile_id": "floor"
+		},
+		{
+			"x": 28,
+			"y": 11,
+			"tile_id": "floor"
+		},
+		{
+			"x": 29,
+			"y": 11,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
+			"y": 11,
+			"tile_id": "floor"
+		},
+		{
+			"x": 29,
+			"y": 12,
+			"tile_id": "floor"
+		},
+		{
+			"x": 30,
+			"y": 12,
 			"tile_id": "floor"
 		}
 	],
@@ -312,7 +442,7 @@
 	],
 	"properties": {
 		"level": {
-			"max_ticks": 600,
+			"max_ticks": 600.0,
 			"completion_mode": "reach_or_clear"
 		}
 	}

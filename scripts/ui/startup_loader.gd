@@ -7,7 +7,7 @@ signal completed(game: Node)
 signal failed(message: String)
 
 const GAME_SCENE := "res://scenes/game.tscn"
-# 启动失败时仍需香港繁体提示；静态小词典不引入完整游戏依赖。
+# 启动失败时仍需本土化提示；静态小词典不引入完整游戏依赖。
 const HONG_KONG_ERRORS := {
 	"找不到启动资源。": "找不到啟動資源。",
 	"无法读取启动资源。": "無法讀取啟動資源。",
@@ -15,6 +15,14 @@ const HONG_KONG_ERRORS := {
 	"启动场景格式不正确。": "啟動場景格式不正確。",
 	"启动场景缺少必要的界面。": "啟動場景缺少必要的介面。",
 	"重试": "重試",
+}
+const SPANISH_ERRORS := {
+	"找不到启动资源。": "No se ha encontrado un recurso de inicio.",
+	"无法读取启动资源。": "No se puede leer un recurso de inicio.",
+	"启动资源加载失败。": "No se ha podido cargar un recurso de inicio.",
+	"启动场景格式不正确。": "El formato de la escena de inicio no es válido.",
+	"启动场景缺少必要的界面。": "Falta una interfaz necesaria en la escena de inicio.",
+	"重试": "Reintentar",
 }
 const WARM_RESOURCES := [
 	"res://assets/fonts/NotoSansSC.ttf",
@@ -269,6 +277,8 @@ func _localized(chinese: String, english: String) -> String:
 	var locale := _failure_locale()
 	if locale in ["zh_HK", "zh_Hant_HK"]:
 		return HONG_KONG_ERRORS.get(chinese, chinese)
+	if locale.begins_with("es"):
+		return SPANISH_ERRORS.get(chinese, english)
 	return chinese if locale.begins_with("zh") else english
 
 
@@ -283,7 +293,7 @@ func _failure_locale() -> String:
 					var config: Dictionary = parser.data
 					if config.get("format_version") == 1 and config.get("interface") is Dictionary:
 						var locale: Variant = config["interface"].get("language")
-						if locale is String and locale in ["zh_CN", "en", "zh_HK"]:
+						if locale is String and locale in ["zh_CN", "zh_HK", "es", "en"]:
 							file.close()
 							return locale
 			file.close()

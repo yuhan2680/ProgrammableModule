@@ -5,8 +5,7 @@ extends Node
 const IDLE_SECONDS := 0.8
 const FADE_SECONDS := 0.2
 
-var _scroll: ScrollContainer
-var _bar: VScrollBar
+var _bar: ScrollBar
 var _idle_elapsed := 0.0
 var _dragging := false
 
@@ -15,17 +14,26 @@ var _dragging := false
 static func attach(scroll: ScrollContainer) -> SettingsScrollFade:
 	var controller := SettingsScrollFade.new()
 	controller.name = "SettingsScrollFade"
-	controller._scroll = scroll
+	controller._bar = scroll.get_v_scroll_bar()
 	scroll.add_child(controller)
+	return controller
+
+
+## 用途：让独立的横向或纵向滚动条共用相同的活动淡出，控制器随条一同释放。
+static func attach_bar(bar: ScrollBar) -> SettingsScrollFade:
+	var controller := SettingsScrollFade.new()
+	controller.name = "SettingsScrollFade"
+	controller._bar = bar
+	bar.add_child(controller)
 	return controller
 
 
 ## 默认透明；实际数值变化覆盖滚轮、触控板、键盘和原生拖动的共同路径。
 func _ready() -> void:
-	_bar = _scroll.get_v_scroll_bar()
 	_bar.modulate.a = 0.0
 	_bar.value_changed.connect(_on_value_changed)
 	_bar.gui_input.connect(_on_bar_input)
+	_bar.visibility_changed.connect(_on_visibility_changed)
 	set_process(false)
 
 
@@ -51,7 +59,7 @@ func _on_value_changed(_value: float) -> void:
 
 ## 只在存在可滚动内容的可见页面显示原生条，不改变其宽度或布局状态。
 func _show_scrollbar() -> void:
-	if not _scroll.is_visible_in_tree() or not _bar.is_visible_in_tree():
+	if not _bar.is_visible_in_tree():
 		return
 	_idle_elapsed = 0.0
 	_bar.modulate.a = 1.0
@@ -68,6 +76,16 @@ func _process(delta: float) -> void:
 	_bar.modulate.a = maxf(0.0, 1.0 - (_idle_elapsed - IDLE_SECONDS) / FADE_SECONDS)
 	if _bar.modulate.a == 0.0:
 		set_process(false)
+
+
+## 用途：页面隐藏或内容不再溢出时清理手势，返回页面后不会残留按住状态。
+func _on_visibility_changed() -> void:
+	if _bar.is_visible_in_tree():
+		return
+	_dragging = false
+	_idle_elapsed = 0.0
+	_bar.modulate.a = 0.0
+	set_process(false)
 
 
 ## 窗口失焦可能收不到鼠标松开，解除拖动锁以免滚动条永久停留。

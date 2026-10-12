@@ -26,6 +26,10 @@ static func check(data: Dictionary, registry: ContentRegistry, require_spawn: bo
 	if not data.get("properties", {}) is Dictionary:
 		return DataResult.failure("地图 properties 必须是对象")
 	var level: Variant = data.get("properties", {}).get("level", {})
+	if level is Dictionary and level.has("creator") and not DataValidation.is_creator(level.creator):
+		return DataResult.failure("创作者名字必须为最多 128 字符的单行文本。")
+	if level is Dictionary and level.has("subtitle") and not DataValidation.is_level_subtitle(level.subtitle):
+		return DataResult.failure("副标题最多为 70 个字符，仅支持单行文字、数字和常用标点，不支持表情或控制字符。")
 	if level is Dictionary and level.has("player_max_health"):
 		# 即使草稿还没有出生点，也不能把无效耐久写盘；其他关卡扩展保持原有校验边界。
 		var health: Variant = level.player_max_health
@@ -33,6 +37,14 @@ static func check(data: Dictionary, registry: ContentRegistry, require_spawn: bo
 			return DataResult.failure("关卡 player_max_health 必须为大于 0 且不超过 1000000000 的有限数字。")
 	if level is Dictionary and level.has("enemies_enabled") and not level.enemies_enabled is bool:
 		return DataResult.failure("关卡 enemies_enabled 必须是布尔值。")
+	if level is Dictionary and level.has("restricted_modules"):
+		var restrictions := check_restricted_modules(level.restricted_modules, registry)
+		if not restrictions.is_ok():
+			return restrictions
+	if level is Dictionary and level.has("enabled_commands"):
+		var command_policy := check_enabled_commands(level.enabled_commands)
+		if not command_policy.is_ok():
+			return command_policy
 	var editor: Variant = data.get("properties", {}).get("editor", {})
 	if editor is Dictionary and editor.has("enemy_template"):
 		var template_result := check_enemy_template(editor.enemy_template, registry)
@@ -55,13 +67,54 @@ static func check(data: Dictionary, registry: ContentRegistry, require_spawn: bo
 		var entities_result := _check_entities(data.get(field, []), field, dimensions, registry, instance_ids)
 		if not entities_result.is_ok():
 			return entities_result
+	var deadlines := check_timed_gate_deadlines(data.get("objects", []), level.get("max_ticks", 0) if level is Dictionary else 0)
+	if not deadlines.is_ok():
+		return deadlines
 	var waves := EnemyDefinition.validate_wave_sequence(data.get("enemies", []))
 	if not waves.is_ok():
 		return waves
 	var references := _check_security_references(data.get("enemies", []), data.get("objects", []))
 	if not references.is_ok():
 		return references
-	return _check_dialogue(data.get("dialogue", []))
+	return check_dialogue(data.get("dialogue", []))
+
+
+## 用整数 tick 严格比较关门与截止时刻；旧地图没有正总时限时保留原来的不限时语义。
+static func check_timed_gate_deadline(close_ticks: int, max_ticks: Variant) -> DataResult:
+	if DataValidation.is_integer(max_ticks, 1, 36000) and close_ticks >= int(max_ticks):
+		return DataResult.failure("闸门倒计时必须小于关卡总时间，请缩短闸门倒计时或增加关卡时间限制。")
+	return DataResult.success()
+
+
+## 草稿、载入、写盘与试玩共用闸门时限校验，缩短关卡时间前也检查所有已放置门。
+static func check_timed_gate_deadlines(objects: Array, max_ticks: Variant) -> DataResult:
+	for entry: Dictionary in objects:
+		var properties: Variant = entry.get("properties", {})
+		if entry.get("type") != "timed_gate" or not properties is Dictionary or not DataValidation.is_integer(properties.get("close_after_ticks"), 1, 1000000):
+			continue
+		var result := check_timed_gate_deadline(int(properties.close_after_ticks), max_ticks)
+		if not result.is_ok():
+			return result
+	return DataResult.success()
+
+
+## 未完成草稿也校验固定指令权限，资料目录不能通过未知 ID 注册新的执行能力。
+static func check_enabled_commands(value: Variant) -> DataResult:
+	return CommandPermissions.validate(value)
+
+
+## 草稿和正式关卡共用禁止模块校验；空数组表示不限制，未知 ID 不能静默丢弃。
+static func check_restricted_modules(value: Variant, registry: ContentRegistry) -> DataResult:
+	if registry == null or not value is Array or value.size() > MAX_MODULES:
+		return DataResult.failure("限制使用的模块必须为最多 256 个模块 ID 的数组。")
+	var ids := PackedStringArray()
+	for module_id in value:
+		if not DataValidation.is_id(module_id) or registry.get_module(module_id) == null:
+			return DataResult.failure("限制使用的模块引用了无效或未知模块。")
+		if module_id in ids:
+			return DataResult.failure("限制使用的模块中存在重复 ID：%s。" % module_id)
+		ids.append(module_id)
+	return DataResult.success(ids)
 
 
 ## 校验稀疏地块列表，拒绝重复坐标、越界坐标和显式 void。
@@ -146,16 +199,21 @@ static func _check_entities(value: Variant, label: String, dimensions: Vector2i,
 	return DataResult.success()
 
 
-## 对话仅保存文本及扩展字段，当前阶段不执行触发条件。
-static func _check_dialogue(value: Variant) -> DataResult:
+## 对话与分页引导共用可保存文本及格式校验，缺省保持纯文本且不执行扩展触发条件。
+static func check_dialogue(value: Variant) -> DataResult:
 	if not value is Array or value.size() > MAX_DIALOGUE:
 		return DataResult.failure("dialogue 必须是最多 4096 项的数组")
+	# dialogue 是地图根对象的直接字段，独立编辑时仍按同一嵌套深度检查。
+	if not DataValidation.is_json_value(value, 1):
+		return DataResult.failure("地图包含非 JSON 值、非有限数字或超过 32 层的嵌套")
 	for index in range(value.size()):
 		var entry: Variant = value[index]
 		if not entry is Dictionary or not DataValidation.is_text(entry.get("text")):
 			return DataResult.failure("dialogue[%d].text 必须是字符串" % index)
 		if entry.has("speaker") and not DataValidation.is_text(entry.speaker):
 			return DataResult.failure("dialogue[%d].speaker 必须是字符串" % index)
+		if entry.has("format") and (not entry.format is String or entry.format not in ["plain", "markdown"]):
+			return DataResult.failure("dialogue[%d].format 必须为 plain 或 markdown" % index)
 	return DataResult.success()
 
 

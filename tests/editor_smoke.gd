@@ -32,6 +32,8 @@ func _run() -> void:
 		await process_frame
 		_finish()
 		return
+	# 文件交互只验证信号与持久化，避免图形测试时留下系统文件面板。
+	editor._file_dialog.use_native_dialog = false
 	_check(not editor._message_dialog.visible and not game._message_dialog.visible, "启动没有错误对话框")
 	_check(editor.editor_document.document.id == "movement_lab", "默认示例地图已载入")
 	_check(_find_button(editor, "执行 move") == null and _find_button(editor, "停止测试") == null and _find_button(editor, "重置测试") == null, "地图编辑页面移除直接执行 move 和旧测试控制")
@@ -76,7 +78,7 @@ func _run() -> void:
 	_find_button(editor, "重置起点").pressed.emit()
 	editor._play_button.pressed.emit()
 	_check(game.page == GameShell.Page.EDITOR and game.session == null and game._editor == editor, "缺少出生点时开始测试被拒绝且保留同一地图编辑器")
-	_check(editor._message_dialog.visible and editor._message_dialog.dialog_text.contains("出生"), "缺少出生点时显示中文诊断")
+	_check(editor._test_feedback.visible and editor._test_feedback.text.contains("出生") and not editor._message_dialog.visible, "缺少出生点时在卡片底部显示中文诊断")
 	editor._message_dialog.hide()
 	editor._undo_button.pressed.emit()
 	_check(editor.editor_document.document.player_spawn != null, "撤销移除出生点仍能修复原地图")
@@ -111,6 +113,8 @@ func _test_module_limit(editor: MapEditor) -> void:
 
 ## 尚未失焦的数值文本应先提交再保存；模型回填的旧显示文本不能反向覆盖撤销。
 func _test_pending_module_limit(editor: MapEditor) -> void:
+	var external_path := editor.editor_document.path
+	var external_bytes := FileAccess.get_file_as_bytes(external_path)
 	var line := editor._module_limit_field.get_line_edit()
 	line.grab_focus()
 	line.text = "4"
@@ -118,6 +122,7 @@ func _test_pending_module_limit(editor: MapEditor) -> void:
 	_find_button(editor, "保存").pressed.emit()
 	var saved := MapCodec.load_file(editor.editor_document.path, editor.registry, false)
 	_check(saved.is_ok() and int(saved.value.properties.level.module_limit) == 4 and int(editor._module_limit_field.value) == 4, "保存会提交尚未失焦的上限输入并写入地图")
+	_check(not editor._file_dialog.visible and ProjectSettings.globalize_path(editor.editor_document.path).get_base_dir() == ProjectSettings.globalize_path(_test_directory.path_join("levels")) and FileAccess.get_file_as_bytes(external_path) == external_bytes, "正常保存直接写入隔离的玩家目录并保留先前导出的外部文件")
 	line.release_focus()
 	editor._undo_button.pressed.emit()
 	_find_button(editor, "保存").pressed.emit()
@@ -246,6 +251,8 @@ func _test_playtest_round_trip(game: GameShell, editor: MapEditor) -> void:
 	var old_command := old_runner._command
 	game._back_button.pressed.emit()
 	await process_frame
+	_check(game.page == GameShell.Page.ASSEMBLY and game.session == trial_session, "试玩编程页返回先保留会话进入模块组装")
+	game._back_button.pressed.emit()
 	await process_frame
 	_check(game.page == GameShell.Page.EDITOR and game._editor == editor and editor.editor_document == editor_model, "返回恢复同一个地图编辑器与文档模型")
 	_check(game.session == null and game.workbench == null and trial_session.world == null and trial_session.runner == null, "离开试玩释放会话运行对象")
@@ -281,11 +288,12 @@ func _test_playtest_round_trip(game: GameShell, editor: MapEditor) -> void:
 	editor._play_button.pressed.emit()
 	await process_frame
 	_finish_dialogue(game)
+	game._editor_discard_dialog.use_native_dialog = false
 	game.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
 	await process_frame
-	_check(game.page == GameShell.Page.EDITOR and game._editor == editor and editor._dirty_dialog.visible, "试玩收到关闭窗口请求会返回编辑器并保护未保存地图")
-	editor._dirty_dialog.get_cancel_button().pressed.emit()
-	editor._dirty_dialog.hide()
+	_check(game.page == GameShell.Page.EDITOR and game._editor == editor and game._editor_discard_dialog.visible, "试玩收到关闭窗口请求会返回编辑器并保护未保存地图")
+	game._editor_discard_dialog.get_cancel_button().pressed.emit()
+	game._editor_discard_dialog.hide()
 	_check(game._editor == editor and editor_model.is_dirty() and editor_model.document.get_tile_id(Vector2i(0, 2)) == "floor", "取消关闭请求后未保存地图与编辑器仍然保留")
 	_check(_draft_snapshot(game.drafts.directory) == saved_files, "多轮试玩及返回后同 ID 正式存档原文完全不变")
 
@@ -317,7 +325,7 @@ func _find_button(parent: Node, title: String) -> Button:
 			"保存":
 				return editor._header.save_button
 			"打开":
-				return editor._file_label
+				return editor._actions_menu._items[0]
 	for child in parent.find_children("*", "Button", true, false):
 		if child.text == title:
 			return child

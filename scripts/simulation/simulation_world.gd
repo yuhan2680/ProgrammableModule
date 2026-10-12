@@ -161,6 +161,7 @@ func request_move(machine_id: String, angle_degrees: Variant, distance: Variant,
 	command.module_id = module_id
 	command.angle_degrees = fposmod(float(angle_degrees), 360.0)
 	command.distance = float(distance)
+	command.start_position = machine.position
 	var radians := deg_to_rad(command.angle_degrees)
 	command.direction = Vector2(cos(radians), -sin(radians))
 	# 清理三角函数在四个正方向的浮点尾数，防止沿墙移动时缓慢漂移。
@@ -233,6 +234,7 @@ func _make_simultaneous_child(machine_id: String, action: Dictionary) -> Simulat
 		move.angle_degrees = fposmod(float(action.arguments[0]), 360.0)
 		move.distance = float(action.arguments[1])
 		move.direction = _angle_direction(move.angle_degrees)
+		move.start_position = get_machine(machine_id).position
 		command = move
 	elif action.callee == "attack":
 		var attack := AttackCommand.new()
@@ -530,7 +532,7 @@ func _prepare_move(machine: MachineInstance, command: MovementCommand) -> Dictio
 	if machine == null:
 		return {"machine": null, "command": command, "cancelled": true}
 	if _crushed.has(machine.id):
-		return {"machine": machine, "command": command, "cancelled": false, "displacement": Vector2.ZERO, "distance": 0.0, "blocked": true, "complete": false}
+		return {"machine": machine, "command": command, "cancelled": false, "position": machine.position, "displacement": Vector2.ZERO, "distance": 0.0, "blocked": true, "complete": false}
 	var speed := machine.get_move_speed(command.module_id)
 	if speed <= 0.0 or not is_finite(speed):
 		return {"machine": machine, "command": command, "cancelled": true}
@@ -540,7 +542,10 @@ func _prepare_move(machine: MachineInstance, command: MovementCommand) -> Dictio
 	# 保留相同碰撞结果，同时防止 JSON 的有限 double 转为 Vector2 后溢出。
 	var maximum_sweep := Vector2(document.width, document.height).length() + 1.0
 	step_distance = minf(step_distance, maximum_sweep)
-	var displacement := command.direction * step_distance
+	# Vector2 使用单精度；持续累加 0.1 会令一格宽机器在长迷宫中偏进侧墙。
+	# 每步从动作起点重建绝对目标，再对实际位移扫掠，既不吸附网格也不跳过碰撞。
+	var target := command.start_position + command.direction * minf(command.distance, command.traveled_distance + step_distance)
+	var displacement := target - machine.position
 	var fraction := TerrainCollision.sweep_machine(machine, displacement, document, _content)
 	for object in objects:
 		if not object.is_blocking(tick_index):
@@ -552,6 +557,7 @@ func _prepare_move(machine: MachineInstance, command: MovementCommand) -> Dictio
 		"machine": machine,
 		"command": command,
 		"cancelled": false,
+		"position": target if fraction >= 1.0 else machine.position + displacement * fraction,
 		"displacement": displacement * fraction,
 		"distance": step_distance * fraction,
 		"blocked": fraction < 1.0,
@@ -584,7 +590,7 @@ func _commit_move(proposal: Dictionary, finished_commands: Array[MovementCommand
 		command.set_terminal(MovementCommand.State.CANCELLED, "机器或移动能力已不可用。")
 	else:
 		var machine: MachineInstance = proposal["machine"]
-		machine.position += proposal["displacement"]
+		machine.position = proposal["position"]
 		command.traveled_distance += float(proposal["distance"])
 		command.state = MovementCommand.State.RUNNING
 		if proposal["blocked"]:

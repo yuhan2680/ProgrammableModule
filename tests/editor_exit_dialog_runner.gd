@@ -14,7 +14,7 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 
-## 覆盖当前地图名、模态输入、三个分支和首次保存的取消及完成。
+## 覆盖当前地图名、模态输入、三个分支以及托管保存失败后的重试与完成。
 func _run() -> void:
 	_temporary = "user://tests/editor_exit_%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
 	root.size = Vector2i(1280, 800)
@@ -25,10 +25,11 @@ func _run() -> void:
 	_game.settings_path = _temporary.path_join("settings.json")
 	root.add_child(_game)
 	await _settle()
+	_game._editor_discard_dialog.use_native_dialog = false
 	await _test_layout_and_modal()
 	await _test_existing_save()
 	await _test_discard()
-	await _test_first_save_cancel()
+	await _test_first_save_failure()
 	await _test_first_save_success()
 	await _test_validation_failure()
 	_game.queue_free()
@@ -47,6 +48,8 @@ func _fixture(path: String = "") -> void:
 	var focused := root.gui_get_focus_owner()
 	if focused != null:
 		focused.release_focus()
+	_editor._new_document()
+	_editor.player_levels_directory = _game.user_levels_directory
 	_editor._file_dialog.use_native_dialog = false
 	_editor._file_dialog.current_dir = ProjectSettings.globalize_path(_temporary)
 	var document := MapDocument.new()
@@ -79,7 +82,7 @@ func _test_layout_and_modal() -> void:
 	_check(dialog.visible and dialog._message.text.contains("刚刚输入的地图名字") and model.document.display_name == "刚刚输入的地图名字", "退出提示采用尚未失焦的最新地图名")
 	_check(dialog._warning.texture != null and dialog._warning.texture.resource_path.ends_with(".svg"), "警告三角采用独立SVG资源")
 	_check(dialog._glass.material is ShaderMaterial and dialog._glass.get_viewport() == _editor.get_viewport(), "玻璃在编辑器同一视口采样，内容独立清晰绘制")
-	_check(dialog._panel.get_global_rect().size.distance_to(Vector2(266.0, 285.6)) < 0.1, "普通地图名的弹窗实际显示尺寸缩小至原来的七成")
+	_check(is_equal_approx(dialog._panel.get_global_rect().size.x, 266.0) and dialog._panel.get_global_rect().size.y >= 285.5, "普通地图名的弹窗实际显示尺寸缩小至原来的七成")
 	var before := _signature(model)
 	var history := model._undo_stack.size()
 	var map_point := _cell_point(Vector2i.ZERO)
@@ -132,7 +135,12 @@ func _test_layout_and_modal() -> void:
 			_game.settings.set_language(locale)
 			var map_name := "这是一个非常长而且需要自动换行的地图名称，不能省略后半段的名字" if locale == "zh_CN" else "A very long map name that must wrap onto a second line without truncating its final words"
 			_editor._name_field.release_focus()
-			model.set_identity("exit_fixture", map_name)
+			# 长标题代表历史地图；加载不受新输入上限限制，再实际改地形触发退出保护。
+			var legacy := model.document.duplicate_document()
+			legacy.id = "exit_fixture"
+			legacy.display_name = map_name
+			model.replace_document(legacy)
+			model.paint(Vector2i.ZERO, "floor" if model.document.get_tile_id(Vector2i.ZERO).is_empty() else "")
 			_game._go_back()
 			await _settle()
 			var panel_rect := dialog._panel.get_global_rect()
@@ -155,10 +163,11 @@ func _test_layout_and_modal() -> void:
 	await _settle()
 
 
-## 已有路径的保存必须真实写盘并清除dirty后才能离开编辑器。
+## 打开的外部地图保存到玩家目录后才退出，原始文件必须保留。
 func _test_existing_save() -> void:
 	var path := _temporary.path_join("existing.json")
 	await _fixture(path)
+	var baseline := FileAccess.get_file_as_bytes(path)
 	var model := _editor.editor_document
 	model.set_identity("exit_saved", "已经保存的地图")
 	var before := _signature(model)
@@ -166,8 +175,9 @@ func _test_existing_save() -> void:
 	await _settle()
 	_click(_game._editor_discard_dialog._save_button.get_global_rect().get_center())
 	await _settle()
-	var saved := MapCodec.load_file(path, _game.registry, false)
-	_check(_game.page == GameShell.Page.MAIN and not _game._editor_exit_save_pending and not model.is_dirty(), "已有路径保存完成才返回主菜单，并结束一次退出请求")
+	var saved := MapCodec.load_file(model.path, _game.registry, false)
+	_check(_game.page == GameShell.Page.MAIN and not _game._editor_exit_save_pending and not model.is_dirty() and _is_player_path(model.path), "外部地图保存到玩家目录后才返回主菜单，并结束一次退出请求")
+	_check(FileAccess.get_file_as_bytes(path) == baseline, "退出保存不覆盖原始外部地图")
 	_check(saved.is_ok() and JSON.parse_string(JSON.stringify(saved.value.to_dict(), "", true)) == JSON.parse_string(before), "写盘结果包含全部最新名称及地块编辑")
 
 
@@ -183,31 +193,31 @@ func _test_discard() -> void:
 	_check(_game.page == GameShell.Page.MAIN and FileAccess.get_file_as_string(path) == baseline, "不保存返回开始页且原文件逐字不变")
 
 
-## 首次保存取消文件选择后仍可继续编辑，后续手工保存不能继承旧退出意图。
-func _test_first_save_cancel() -> void:
+## 首次托管保存失败应保留文档并撤销退出意图，修复目录后手动保存仍停留编辑器。
+func _test_first_save_failure() -> void:
 	await _fixture()
 	var model := _editor.editor_document
 	var before := _signature(model)
 	var history := model._undo_stack.size()
+	var blocked := _temporary.path_join("blocked_player_levels")
+	var file := FileAccess.open(blocked, FileAccess.WRITE)
+	file.store_string("retain")
+	file.close()
+	_editor.player_levels_directory = blocked.path_join("levels")
 	_game._go_back()
 	await _settle()
 	_click(_game._editor_discard_dialog._save_button.get_global_rect().get_center())
 	await _settle()
-	_check(_game.page == GameShell.Page.EDITOR and _game._editor_exit_save_pending and _editor._file_dialog.visible and model.path.is_empty(), "首次保存只打开文件选择器，不提前离开或清除dirty")
-	_editor._file_dialog.hide()
-	_editor._file_dialog.canceled.emit()
-	await _settle()
-	_check(not _game._editor_exit_save_pending and model.is_dirty() and _signature(model) == before and model._undo_stack.size() == history, "取消路径选择保留草稿和历史并撤销退出意图")
+	_check(_game.page == GameShell.Page.EDITOR and not _game._editor_exit_save_pending and _editor._message_dialog.visible and not _editor._file_dialog.visible, "托管目录不可写时显示错误并取消退出，不打开保存选择器")
+	_check(model.path.is_empty() and model.is_dirty() and _signature(model) == before and model._undo_stack.size() == history and FileAccess.get_file_as_string(blocked) == "retain", "托管保存失败保留草稿、历史及阻挡文件")
+	_editor._message_dialog.hide()
+	_editor.player_levels_directory = _game.user_levels_directory
 	_editor._save_document(false)
 	await _settle()
-	var path := _temporary.path_join("manual_after_cancel.json")
-	_editor._file_dialog.hide()
-	_editor._file_dialog.file_selected.emit(path)
-	await _settle()
-	_check(_game.page == GameShell.Page.EDITOR and not model.is_dirty() and model.path == path and FileAccess.file_exists(path), "取消后普通保存成功仍停留编辑器")
+	_check(_game.page == GameShell.Page.EDITOR and not model.is_dirty() and _is_player_path(model.path) and FileAccess.file_exists(model.path), "失败后普通保存成功仍停留编辑器并写入玩家目录")
 
 
-## 新地图选定实际目标路径后写盘成功，才完成保存并退出。
+## 新地图退出保存无需路径选择，写入玩家目录成功后立即返回开始页。
 func _test_first_save_success() -> void:
 	await _fixture()
 	var model := _editor.editor_document
@@ -215,11 +225,7 @@ func _test_first_save_success() -> void:
 	await _settle()
 	_click(_game._editor_discard_dialog._save_button.get_global_rect().get_center())
 	await _settle()
-	var path := _temporary.path_join("first_saved.json")
-	_editor._file_dialog.hide()
-	_editor._file_dialog.file_selected.emit(path)
-	await _settle()
-	_check(_game.page == GameShell.Page.MAIN and not model.is_dirty() and FileAccess.file_exists(path), "首次选定保存路径并成功写盘后返回主菜单")
+	_check(_game.page == GameShell.Page.MAIN and not _game._editor_exit_save_pending and not model.is_dirty() and _is_player_path(model.path) and FileAccess.file_exists(model.path), "首次保存自动写入玩家目录后返回主菜单")
 
 
 ## 校验失败不能覆盖有效地图或遗留退出标志，修正后普通保存仍留在编辑器。
@@ -241,7 +247,12 @@ func _test_validation_failure() -> void:
 	model.set_identity("repaired", "修正后的草稿")
 	_editor._save_document(false)
 	await _settle()
-	_check(_game.page == GameShell.Page.EDITOR and not model.is_dirty() and FileAccess.get_file_as_string(path) != baseline, "失败后修正并手动保存，不会意外返回开始页")
+	_check(_game.page == GameShell.Page.EDITOR and not model.is_dirty() and _is_player_path(model.path) and FileAccess.file_exists(model.path) and FileAccess.get_file_as_string(path) == baseline, "失败后修正并保存到玩家目录，不会意外返回开始页或覆盖外部原件")
+
+
+## 比较规范化目录以兼容存储服务返回 user 路径或绝对路径，且拒绝测试目录之外的写入。
+func _is_player_path(path: String) -> bool:
+	return not path.is_empty() and ProjectSettings.globalize_path(path).get_base_dir() == ProjectSettings.globalize_path(_game.user_levels_directory)
 
 
 ## 将实际格心换算为视口位置，覆盖真实地图输入分派。

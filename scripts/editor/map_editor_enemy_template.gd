@@ -105,6 +105,28 @@ static func validate_placement(entry: Dictionary, document: MapDocument, content
 	return DataResult.success(entry.duplicate(true))
 
 
+## 框选只命中实际模块的正面积交集，任一模块相交便选中整组，空隙和贴边不算命中。
+static func in_rectangle(document: MapDocument, area: Rect2i, content: ContentRegistry) -> Array[String]:
+	var identities: Array[String] = []
+	if document == null or content == null:
+		return identities
+	var bounded := area.abs().intersection(Rect2i(Vector2i.ZERO, Vector2i(document.width, document.height)))
+	if not bounded.has_area():
+		return identities
+	var selection := Rect2(bounded)
+	for enemy: Dictionary in document.enemies:
+		if not DataValidation.is_id(enemy.get("id")):
+			continue
+		var checked := _machine_rects(enemy, content)
+		if not checked.is_ok():
+			continue
+		for rect: Rect2 in checked.value:
+			if _overlap(selection, rect):
+				identities.append(enemy.id)
+				break
+	return identities
+
+
 ## 安全读取真实定义尺寸，避免外部元数据的坏类型在预览阶段触发脚本异常。
 static func _machine_rects(entry: Dictionary, content: ContentRegistry) -> DataResult:
 	if not DataValidation.is_position(entry.get("position")):

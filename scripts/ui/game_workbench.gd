@@ -1,6 +1,6 @@
 class_name GameWorkbench
 extends Control
-## 单关工作台：左边观察世界，右边编程或组装；游戏规则只通过 GameSession 调用。
+## 单关工作台：地图覆盖预览与代码独立布局；组装由外层导航，游戏规则只通过 GameSession 调用。
 
 signal draft_changed
 signal save_requested
@@ -9,6 +9,7 @@ signal back_requested
 signal help_requested
 signal commands_requested
 signal actions_requested
+signal code_hint_used
 
 var header: ProgramHeader
 var _actions_menu: ProgramActionsMenu
@@ -28,7 +29,7 @@ var allow_draft_save: bool = true
 var _playfield: PlayfieldCanvas
 var _world_panel: PanelContainer
 var _world_scroll: ScrollContainer
-var _assembly_panel: AssemblyPanel
+var _world_map_area: MarginContainer
 var _code: CodeEdit
 var _completion: ProgramInlineCompletion
 var _code_color_mode := ""
@@ -36,25 +37,22 @@ var _hint_button: Button
 var _hint_undo_button: Button
 var _hint_backdrop: BackBufferCopy
 var _hint_undo_versions: Array[int] = []
-var _hint_base_right_margins: Dictionary = {}
-var _hint_space_reserved := false
 var _hint_busy := false
 var _hint_notice := ""
 var _hint_error := false
 var _tabs: TabContainer
 var _edit_panel: PanelContainer
-var _mode_pill: Panel
-var _assembly_tab_button: Button
-var _program_tab_button: Button
-var _entry_hint: Label
-var _program_entry_text: String
+var code_zoom_percent := 100
+var _code_zoom: WorkbenchCodeZoom
+var _code_toolbar: Control
+var _status_scroll: ScrollContainer
+var _status_margin: MarginContainer
 var _status_row: HBoxContainer
 var _run_button: Button
 var _pause_button: Button
 var _stop_button: Button
 var _reset_code_button: Button
 var _status: Label
-var _position_label: Label
 var _object_status: Label
 var _accumulator: float = 0.0
 var _highlighted_line: int = -1
@@ -78,7 +76,6 @@ func _ready() -> void:
 	if settings != null:
 		settings.changed.connect(_sync_completion_setting)
 	_sync_completion_setting()
-	_refresh_assembly()
 	_sync_session()
 
 
@@ -91,11 +88,12 @@ func _sync_completion_setting() -> void:
 
 ## 设置通知只给已有编辑器换色，不重建工作台、不同步源码或触碰运行状态。
 func _sync_code_color_setting() -> void:
-	var mode := settings.code_color_mode if settings != null else "light"
+	var mode := settings.code_color_mode if settings != null else GameSettings.DEFAULT_CODE_COLOR_MODE
 	if mode == _code_color_mode:
 		return
 	_code_color_mode = mode
 	GameTheme.style_code(_code, mode)
+	_style_code_frame()
 	_style_code_assist_buttons()
 	# 当前行可能来自语法错误或正在运行的指令，保留原行号并刷新对应底色。
 	_highlight_line(_highlighted_line + 1)
@@ -141,7 +139,8 @@ func _build_ui() -> void:
 	header = ProgramHeader.new()
 	header.name = "ProgramHeader"
 	layout.add_child(header)
-	header.configure_level(session.level.display_name, _goal_text(), not allow_draft_save)
+	var custom_subtitle := not session.level.subtitle.is_empty()
+	header.configure_level(session.level.display_name, session.level.subtitle if custom_subtitle else _goal_text(), not allow_draft_save, custom_subtitle)
 	header.back_requested.connect(_request_back)
 	header.run_requested.connect(_run_program)
 	header.pause_requested.connect(_toggle_pause)
@@ -226,7 +225,9 @@ func _build_world_panel(parent: Node) -> void:
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	panel.add_theme_stylebox_override("panel", GameTheme.card())
 	parent.add_child(panel)
-	var layout := VBoxContainer.new()
+	var layout := MarginContainer.new()
+	layout.name = "WorldMapArea"
+	_world_map_area = layout
 	panel.add_child(layout)
 	var scroll := ScrollContainer.new()
 	_world_scroll = scroll
@@ -288,6 +289,24 @@ func _build_guide_button(panel: PanelContainer) -> void:
 	_live_status.name = "WorldLiveStatus"
 	_live_status.right_inset = 64.0
 	overlay.add_child(_live_status)
+	_live_status.resized.connect(_sync_world_map_insets)
+	_guide_button.resized.connect(_sync_world_map_insets)
+	_preview_button.resized.connect(_sync_world_map_insets)
+	overlay.resized.connect(_sync_world_map_insets)
+	_sync_world_map_insets.call_deferred()
+
+
+## 地图和顶部控件各占独立区域，状态收起也保留空隙，运行中不因显隐跳动。
+func _sync_world_map_insets() -> void:
+	if not is_instance_valid(_world_map_area) or not is_instance_valid(_live_status):
+		return
+	# 地图容器与药丸锚点共用卡片内容矩形，因此使用同一逻辑坐标，不重复应用屏幕缩放。
+	var controls_bottom := maxf(_guide_button.get_rect().end.y, _preview_button.get_rect().end.y)
+	controls_bottom = maxf(controls_bottom, _live_status.get_rect().end.y)
+	var top_inset := ceili(controls_bottom + 12.0)
+	if _world_map_area.get_theme_constant("margin_top") != top_inset:
+		_world_map_area.add_theme_constant_override("margin_top", top_inset)
+		_fit_playfield.call_deferred()
 
 
 ## 两个圆形按钮共用尺寸与 SVG 绘制规范，随地图卡片右边缘移动。
@@ -345,6 +364,7 @@ func _on_preview_started(expanding: bool) -> void:
 
 ## 卡片归位后重新计算当前会话权限，并恢复预览按钮外观和地图比例。
 func _on_preview_finished(expanded: bool) -> void:
+	_full_preview_requested = expanded
 	if not expanded:
 		_restore_preview_selection_behavior()
 	_preview_input_shield.hide()
@@ -374,6 +394,9 @@ func _preview_busy() -> bool:
 
 ## 动画期间拦截键鼠事件；动画外由原有控件和弹窗处理。
 func _input(event: InputEvent) -> void:
+	if _preview_layout != null and _preview_layout.handle_drag_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if _preview_busy() and (event is InputEventMouse or event is InputEventKey):
 		get_viewport().set_input_as_handled()
 
@@ -406,24 +429,16 @@ func _show_guidance() -> void:
 	_guide_menu.popup_at(_guide_button)
 
 
-## 卡片内以图标胶囊切换程序与组装；原页签继续共用会话和关卡限制。
+## 单一代码卡片包含独立工具栏、原生编辑器和底部状态区，不再嵌入第二套装配页。
 func _build_edit_panel(parent: Node) -> void:
 	_edit_panel = PanelContainer.new()
 	_edit_panel.name = "WorkbenchEditCard"
 	_edit_panel.custom_minimum_size.x = 430
 	_edit_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_edit_panel.add_theme_stylebox_override("panel", GameTheme.card())
 	parent.add_child(_edit_panel)
 	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
 	_edit_panel.add_child(column)
-	var heading := HBoxContainer.new()
-	heading.add_theme_constant_override("separation", 10)
-	column.add_child(heading)
-	_build_mode_pill(heading)
-	_entry_hint = GameTheme.label(heading, "", 14, true)
-	_entry_hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_entry_hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_entry_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_tabs = TabContainer.new()
 	_tabs.tabs_visible = false
 	_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -432,84 +447,107 @@ func _build_edit_panel(parent: Node) -> void:
 	column.add_child(_tabs)
 	var program_tab := VBoxContainer.new()
 	program_tab.name = "程序"
+	program_tab.add_theme_constant_override("separation", 0)
 	_tabs.add_child(program_tab)
-	var entry_text := "main() 执行一次；tick() 每 0.1 秒调用一次。" if session.level.allow_tick else "程序从 main() 开始，依次执行每条指令。"
-	if session.level.allow_loops:
-		entry_text = "loop { ... } 按顺序重复块内指令，直到关卡结束。"
-	if session.level.allow_conditionals:
-		entry_text = "if / else 根据射击是否就绪，选择不同动作。"
-	if session.level.allow_simultaneous:
-		entry_text = "同步启动多个动作，全部完成后继续执行。"
-	if session.level.allow_distance:
-		entry_text = "distance(角度) 测量前方距离，边探路边移动。"
-	if session.level.allow_radar and session.level.goal_type == "destroy_enemy":
-		entry_text = "反复扫描敌人，在射击冷却期间追近，再重新瞄准。"
-	if session.level.allow_functions:
-		entry_text = "把检测与闪避写进 function，再从 main() 调用。"
-	if session.level.allow_for:
-		entry_text = "for 按步长遍历角度，用一组指令检查不同方向。"
-	if session.level.id == "level_013":
-		entry_text = "用 scan() 锁定目标，再将 Angle() 交给射击模块。"
-	if session.level.id == "level_014":
-		entry_text = "移动中反复 scan()，发现敌人后用 Angle() 瞄准射击。"
-	if session.level.allow_radar_events:
-		entry_text = "使用 onDetected 绑定目标变量，再从 main() 中判断并射击。"
-	_program_entry_text = entry_text
-	_entry_hint.text = entry_text
+	_code_toolbar = Control.new()
+	_code_toolbar.name = "CodeToolbar"
+	_code_toolbar.custom_minimum_size.y = 48
+	program_tab.add_child(_code_toolbar)
+	_code_zoom = WorkbenchCodeZoom.new()
+	_code_zoom.name = "CodeZoom"
+	_code_zoom.set_zoom_percent(code_zoom_percent)
+	_code_toolbar.add_child(_code_zoom)
+	_code_zoom.position = Vector2(12, 10)
+	_code_zoom.zoom_changed.connect(set_code_zoom_percent)
 	_code = CodeEdit.new()
 	_code.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_code.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_code.custom_minimum_size.y = 260
+	_code.custom_minimum_size.y = 120
 	_code.gutters_draw_line_numbers = true
 	_code.auto_brace_completion_enabled = true
 	_code.indent_size = 4
-	_code.add_theme_font_size_override("font_size", 17)
-	_code_color_mode = settings.code_color_mode if settings != null else "light"
+	_code.caret_blink = true
+	# 工具栏和导航先取得原生焦点，不能在字号回调或返回组装前清掉玩家选区。
+	_code.deselect_on_focus_loss_enabled = false
+	_code_color_mode = settings.code_color_mode if settings != null else GameSettings.DEFAULT_CODE_COLOR_MODE
 	GameTheme.style_code(_code, _code_color_mode)
 	program_tab.add_child(_code)
 	_build_hint_button()
-	var help_text := "move(角度, 距离)  ·  一行一条指令，不使用分号\n支持 // 注释。Ctrl+Enter 运行。\n本关只开放 main() 和 move，循环与其他能力稍后解锁。"
-	if "attack" in session.level.allowed_calls:
-		help_text = "move(角度, 距离) · attack(角度)\n近战射程 2 格，从近战模块中心计算。\n一行一条指令，支持 // 注释。Ctrl+Enter 运行。"
-	if "shoot" in session.level.allowed_calls:
-		help_text = "shoot(角度) · 0° 向右\n子弹减速，命中伤害随速度降低；冷却中调用无效果。\n把 shoot(0) 写在 tick() 中持续射击。Ctrl+Enter 运行。" if session.level.allow_tick else "shoot(角度) · 0° 向右\n子弹减速，命中伤害随速度降低；冷却中调用无效果。"
-	if session.level.allow_named_calls:
-		help_text = "模块名.attack(角度) · 只调用该模块\n直接 attack 会调用所有近战模块。\n命名同样支持 move 和 shoot；Ctrl+Enter 运行。"
-	if session.level.allow_loops:
-		help_text = "观察一组台阶，把重复的动作写进 loop。\n花括号内一行一条指令，填写后再运行。\n暂停保留循环进度；Ctrl+Enter 运行。"
-	if session.level.allow_conditionals:
-		help_text = "模块名.ready() 查询射击冷却，不会开火。\n在 loop 中用 if / else 选择射击或后退。\nif 必须填写动作；else 可省略。Ctrl+Enter 运行。"
-	if session.level.allow_simultaneous:
-		help_text = "simultaneously { ... } 同一帧启动块内动作。\n使用不同的模块名分别控制左右攻击，全部完成后再移动。\n警报解除前移动或先后拆除都会报警；Ctrl+Enter 运行。"
-	if session.level.allow_distance:
-		help_text = "distance(角度) 从测距模块中心测量，不消耗时间。\n测得距离减去安全间隙，再交给 move；用 loop 重复转弯。\n请留意整个装配的占地；Ctrl+Enter 运行。"
-	if session.level.allow_radar and session.level.goal_type == "destroy_enemy":
-		help_text = "scan() 探测目标；先判断 != null，再读取 Angle() 和 Distance。\n用 ready() 配合短距离移动与射击；常量、变量可选用。\n敌人随机游走，及时重新扫描；Ctrl+Enter 运行。"
-	if session.level.allow_functions:
-		help_text = "function 定义一组可重复调用的指令。\n用 distance 检测敌人接近，再用 if 选择闪避方向。\n函数写在 main() 外；用 loop 重复调用。Ctrl+Enter 运行。"
-	if session.level.goal_type == "destroy_waves":
-		help_text = "用 for 遍历八个方向，把角度交给 distance 和 shoot。\n先测距再射击，用 loop 持续警戒下一波来敌。\n迭代变量只在 for 块内有效；Ctrl+Enter 运行。"
-	if session.level.id == "level_013":
-		help_text = "用 scan() 扫描目标，判断 != null 后读取 Angle()。\n把角度交给 shoot，用 loop 持续扫描与射击。\n击毁全部 10 波来敌；Ctrl+Enter 运行。"
-	if session.level.id == "level_014":
-		help_text = "用 loop 反复扫描；有目标时射击，没有目标时短步向上移动。\n铁栅栏阻挡机器，但允许雷达、子弹与近战攻击通过。\n消灭全部 10 波；Ctrl+Enter 运行。"
-	if session.level.allow_radar_events:
-		help_text = "在 main() 外声明 variable，再用雷达 onDetected 绑定它。\n事件自动更新目标；无目标为 null，有目标时读取 Angle() 射击。\n没有目标时短步前进；Ctrl+Enter 运行。"
-	var help := GameTheme.label(program_tab, help_text, 14, true)
-	help.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_build_assembly_tab()
-	_tabs.tab_changed.connect(_on_tab_changed)
-	_on_tab_changed(0)
+	_status_scroll = ScrollContainer.new()
+	_status_scroll.name = "CodeStatusScroll"
+	_status_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_status_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_status_scroll.mouse_force_pass_scroll_events = false
+	column.add_child(_status_scroll)
+	_status_margin = GameTheme.margin(_status_scroll, 12)
+	_status_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_status_row = HBoxContainer.new()
 	_status_row.name = "WorkbenchStatus"
-	column.add_child(_status_row)
+	_status_row.add_theme_constant_override("separation", 12)
+	_status_margin.add_child(_status_row)
 	_status = GameTheme.label(_status_row, "", 14)
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_position_label = GameTheme.label(_status_row, "", 13, true)
-	_position_label.custom_minimum_size.x = 160
-	_position_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_position_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_edit_panel.resized.connect(_sync_status_height)
+	_status.resized.connect(_sync_status_height)
+	_status.theme_changed.connect(_sync_status_height)
+	_style_code_frame()
+	set_code_zoom_percent(code_zoom_percent)
+
+
+## 外框、工具栏和错误区共用代码色盘，编辑器仍保留原生选择与语法高亮。
+func _style_code_frame() -> void:
+	var palette: Dictionary = GameTheme.CODE_DARK if _code_color_mode == "dark" else GameTheme.CODE_LIGHT
+	var frame := GameTheme.box(palette.background, Color.TRANSPARENT, 12)
+	frame.set_content_margin_all(0)
+	_edit_panel.add_theme_stylebox_override("panel", frame)
+	# 内层不重复绘制圆角，整块背景由外框统一承接。
+	for state: String in ["normal", "read_only"]:
+		var style := _code.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		style.set_corner_radius_all(0)
+		style.set_content_margin(SIDE_LEFT, 16)
+		style.set_content_margin(SIDE_RIGHT, 16)
+		style.set_content_margin(SIDE_TOP, 10)
+		style.set_content_margin(SIDE_BOTTOM, 12)
+		style.bg_color = palette.background
+		style.corner_radius_bottom_left = 12
+		style.corner_radius_bottom_right = 12
+		_code.add_theme_stylebox_override(state, style)
+	# 仅移除聚焦描边，原生键盘焦点、选区和闪烁光标继续由 CodeEdit 管理。
+	_code.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_code_zoom.set_color_mode(_code_color_mode)
+	if _status != null:
+		_status.add_theme_color_override("font_color", GameTheme.ERROR if session.state == GameSession.State.FAILED or _hint_error else GameTheme.SUCCESS if session.state == GameSession.State.SUCCEEDED else palette.text)
+
+
+## 只调整现有控件字号，保留源码、撤销历史、光标与选择；全局文字缩放继续独立生效。
+func set_code_zoom_percent(percent: int) -> void:
+	code_zoom_percent = clampi(percent, 50, 200)
+	if _code == null:
+		return
+	var vertical := _code.scroll_vertical
+	var horizontal := _code.scroll_horizontal
+	_code_zoom.set_zoom_percent(code_zoom_percent)
+	var factor := code_zoom_percent / 100.0
+	GameTheme.font_size(_code, "font_size", roundi(17 * factor))
+	GameTheme.font_size(_status, "font_size", roundi(14 * factor))
+	_code.scroll_vertical = vertical
+	_code.scroll_horizontal = horizontal
+	if _completion != null:
+		_completion.queue_redraw()
+	_sync_status_height.call_deferred()
+
+
+## 状态在代码卡片底部换行；长错误可单独滚动，不挤掉代码区或扩大整个窗口。
+func _sync_status_height() -> void:
+	if _status_scroll == null or _status == null:
+		return
+	_status_scroll.visible = _status_row.visible
+	if not _status_scroll.visible:
+		return
+	var desired := _status.get_minimum_size().y + 24.0
+	var maximum := maxf(48.0, minf(160.0, _edit_panel.size.y * 0.28))
+	_status_scroll.custom_minimum_size.y = minf(desired, maximum)
 
 
 ## 两个同尺寸 SVG 圆形按钮固定在代码区右上角，撤销紧邻提示左侧。
@@ -517,12 +555,12 @@ func _build_hint_button() -> void:
 	_hint_backdrop = BackBufferCopy.new()
 	_hint_backdrop.name = "CodeAssistBackdrop"
 	_hint_backdrop.copy_mode = BackBufferCopy.COPY_MODE_DISABLED
-	_code.add_child(_hint_backdrop)
+	_code_toolbar.add_child(_hint_backdrop)
 	_hint_button = _code_assist_button("CodeHintButton", "代码提示", "workbench_code_hint", -16)
 	_hint_button.pressed.connect(_apply_code_hint)
 	_hint_undo_button = _code_assist_button("CodeHintUndoButton", "撤销提示", "workbench_hint_undo", -50)
 	_hint_undo_button.pressed.connect(_undo_code_hint)
-	_code.resized.connect(_sync_hint_backdrop)
+	_code_toolbar.resized.connect(_sync_hint_backdrop)
 	_style_code_assist_buttons()
 
 
@@ -546,7 +584,7 @@ func _code_assist_button(node_name: String, caption: String, asset: String, righ
 	glass.material = glass_material
 	button.add_child(glass)
 	glass.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_code.add_child(button)
+	_code_toolbar.add_child(button)
 	button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
 	button.offset_left = right - 28
 	button.offset_right = right
@@ -585,7 +623,7 @@ func _sync_hint_backdrop() -> void:
 		return
 	var glass_active := _code_color_mode == "dark" and _hint_button.visible and not _preview_busy() and not (_preview_layout != null and _preview_layout.expanded)
 	_hint_backdrop.copy_mode = BackBufferCopy.COPY_MODE_RECT if glass_active else BackBufferCopy.COPY_MODE_DISABLED
-	_hint_backdrop.rect = Rect2(Vector2(_code.size.x - 88, 2), Vector2(80, 44))
+	_hint_backdrop.rect = Rect2(Vector2(_code_toolbar.size.x - 88, 2), Vector2(80, 44))
 	for button: Button in [_hint_button, _hint_undo_button]:
 		var glass := button.get_node("CodeAssistGlass") as ColorRect
 		glass.visible = glass_active
@@ -607,27 +645,11 @@ func _sync_hint_button() -> void:
 	if _hint_button == null:
 		return
 	_hint_button.visible = _hint_allowed()
-	_reserve_hint_space(_hint_button.visible)
 	_hint_button.disabled = _hint_busy or _preview_busy() or session.state in [GameSession.State.RUNNING, GameSession.State.PAUSED, GameSession.State.SUCCEEDED] or (_preview_layout != null and _preview_layout.expanded)
 	_hint_button.tooltip_text = "正在查找下一步…" if _hint_busy else "代码提示"
 	_hint_undo_button.visible = _hint_button.visible and not _hint_undo_versions.is_empty() and _code.get_version() == _hint_undo_versions.back() and _code.has_undo()
 	_hint_undo_button.disabled = _hint_button.disabled
 	_sync_hint_backdrop()
-
-
-## 提示出现时为按钮保留文字边距，长代码使用原生横向滚动而不被按钮遮住。
-func _reserve_hint_space(active: bool) -> void:
-	if active == _hint_space_reserved:
-		return
-	_hint_space_reserved = active
-	for state in ["normal", "read_only", "focus"]:
-		var style := _code.get_theme_stylebox(state).duplicate() as StyleBox
-		if not _hint_base_right_margins.has(state):
-			_hint_base_right_margins[state] = style.get_content_margin(SIDE_RIGHT)
-		# 只缓存原始边距；保留当前色盘，避免收起提示时重新套回上一种背景。
-		var original: float = _hint_base_right_margins[state]
-		style.set_content_margin(SIDE_RIGHT, maxf(original, 88.0) if active else original)
-		_code.add_theme_stylebox_override(state, style)
 
 
 ## 撤回最近一次提示的编辑事务；手工输入后隐藏入口，避免撤走玩家的新代码。
@@ -692,89 +714,7 @@ func _apply_code_hint() -> void:
 	_sync_session()
 	_code.grab_focus()
 	draft_changed.emit()
-
-
-## 两个纯图标共用药丸外框，原生悬停提示跟随界面语言切换。
-func _build_mode_pill(parent: Node) -> void:
-	_mode_pill = Panel.new()
-	_mode_pill.name = "WorkbenchModePill"
-	_mode_pill.custom_minimum_size = Vector2(88, 44)
-	_mode_pill.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	var background := GameTheme.box(Color("EAEDF2"), Color.TRANSPARENT, 22)
-	background.set_content_margin_all(0)
-	_mode_pill.add_theme_stylebox_override("panel", background)
-	parent.add_child(_mode_pill)
-	var group := ButtonGroup.new()
-	for index in range(2):
-		var button := Button.new()
-		var assembly := index == 0
-		button.name = "AssemblyModeButton" if assembly else "ProgramModeButton"
-		button.tooltip_text = "组装" if assembly else "程序"
-		button.icon = load("res://assets/ui/workbench_assembly.svg" if assembly else "res://assets/ui/workbench_program.svg")
-		button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.expand_icon = true
-		button.add_theme_constant_override("icon_max_width", 20)
-		button.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-		button.toggle_mode = true
-		button.button_group = group
-		button.custom_minimum_size = Vector2(44, 44)
-		button.position = Vector2(index * 44, 0)
-		button.size = Vector2(44, 44)
-		for color_name in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color"]:
-			button.add_theme_color_override(color_name, Color.WHITE)
-		for state in ["normal", "hover", "pressed", "hover_pressed", "focus"]:
-			var fill := Color("DFE5ED") if state in ["hover", "hover_pressed"] else Color("E4E9F0") if state == "pressed" else Color.TRANSPARENT
-			var style := GameTheme.box(fill, Color("A7CDFF") if state == "focus" else Color.TRANSPARENT, 22)
-			style.set_content_margin_all(0)
-			style.corner_radius_top_left = 22 if assembly else 0
-			style.corner_radius_bottom_left = 22 if assembly else 0
-			style.corner_radius_top_right = 0 if assembly else 22
-			style.corner_radius_bottom_right = 0 if assembly else 22
-			button.add_theme_stylebox_override(state, style)
-		button.pressed.connect(_select_mode.bind(1 if assembly else 0))
-		_mode_pill.add_child(button)
-		if assembly:
-			_assembly_tab_button = button
-		else:
-			_program_tab_button = button
-	var divider := ColorRect.new()
-	divider.color = Color("DCE1E8")
-	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	divider.position = Vector2(43.5, 12)
-	divider.size = Vector2(1, 20)
-	_mode_pill.add_child(divider)
-
-
-## 图标切换只改变当前页，保留编辑内容、装配和运行锁。
-func _select_mode(index: int) -> void:
-	if _preview_busy() or _preview_layout.expanded:
-		return
-	_tabs.current_tab = index
-
-
-## 组装页签使用整行宽度展示双列；返回程序页签时恢复地图观察区。
-func _on_tab_changed(index: int) -> void:
-	if index != 0:
-		_guide_menu.close_menu(false)
-		_live_status.hide_status(true)
-	_world_panel.visible = index == 0
-	_program_tab_button.set_pressed_no_signal(index == 0)
-	_assembly_tab_button.set_pressed_no_signal(index == 1)
-	_entry_hint.text = _program_entry_text if index == 0 else "先组装机器，再开始编写程序。"
-	# 显隐后容器需先分配新尺寸，再按实际观察区域调整地图比例。
-	_fit_playfield.call_deferred()
-	_sync_live_status.call_deferred()
-
-
-## 工作台复用准备页的双列装配组件，目录、画布和所有编辑规则只维护一份。
-func _build_assembly_tab() -> void:
-	_assembly_panel = AssemblyPanel.new()
-	_assembly_panel.name = "组装"
-	_assembly_panel.settings = settings
-	_assembly_panel.model = session.assembly
-	_assembly_panel.registry = registry
-	_assembly_panel.draft_changed.connect(_on_assembly_changed)
-	_tabs.add_child(_assembly_panel)
+	code_hint_used.emit()
 
 
 ## 编程输入只更新草稿；修改失败或成功后的程序会回到可重新运行状态。
@@ -878,12 +818,11 @@ func _sync_session() -> void:
 	header.set_transition_locked(transitioning)
 	_guide_button.disabled = transitioning
 	_preview_button.disabled = transitioning
-	_program_tab_button.disabled = transitioning
-	_assembly_tab_button.disabled = transitioning
+	_code_zoom.set_interaction_enabled(not transitioning and not _preview_layout.expanded)
 	_code.editable = not locked and not transitioning and not _preview_layout.expanded
+	_code.context_menu_enabled = _code.editable
 	if _completion != null:
 		_completion.refresh()
-	_assembly_panel.interaction_enabled = not locked and not transitioning and not _preview_layout.expanded
 	_playfield.world = session.world
 	_playfield.attack_animation_enabled = session.state == GameSession.State.RUNNING
 	_playfield.wreck_animation_enabled = session.state in [GameSession.State.RUNNING, GameSession.State.SUCCEEDED, GameSession.State.FAILED]
@@ -898,21 +837,17 @@ func _sync_session() -> void:
 	_playfield.refresh()
 	_fit_playfield()
 	_status.text = GameI18n.translate_errors(session.message.split("\n"))
-	_status.add_theme_color_override("font_color", GameTheme.ERROR if session.state == GameSession.State.FAILED else GameTheme.SUCCESS if session.state == GameSession.State.SUCCEEDED else GameTheme.TEXT)
-	_position_label.text = "准备就绪"
-	if session.world != null:
-		_position_label.text = tr("位置 (%.2f, %.2f)  ·  %.1f 秒") % [session.world.player.position.x, session.world.player.position.y, session.world.tick_index * SimulationWorld.TICK_DURATION]
-	_position_label.visible = session.world != null
+	_status.add_theme_color_override("font_color", GameTheme.ERROR if session.state == GameSession.State.FAILED else GameTheme.SUCCESS if session.state == GameSession.State.SUCCEEDED else _code.get_theme_color("font_color"))
 	_status_row.visible = session.world != null or session.state in [GameSession.State.FAILED, GameSession.State.SUCCEEDED] or session.message == "代码已恢复为本关初始程序。"
-	_position_label.tooltip_text = _position_label.text
 	_sync_object_status()
 	_sync_live_status()
 	_highlight_line(session.current_line)
 	_sync_hint_button()
 	if not _hint_notice.is_empty() and not locked:
 		_status.text = GameI18n.translate_errors(_hint_notice.split("\n"))
-		_status.add_theme_color_override("font_color", GameTheme.ERROR if _hint_error else GameTheme.TEXT)
+		_status.add_theme_color_override("font_color", GameTheme.ERROR if _hint_error else _code.get_theme_color("font_color"))
 		_status_row.show()
+	_sync_status_height.call_deferred()
 
 
 ## 全尺寸结果优先替换同一药丸并保持显示；普通运行继续展示机关状态。
@@ -948,7 +883,7 @@ func _sync_live_status() -> void:
 	_live_status.show_status(_object_status.text, active)
 
 
-## 按视口完整显示阶梯等较大关卡；极大导入地图保留最低可读网格与滚动条。
+## 按避开顶部药丸的视口完整显示地图；极大导入地图保留最低可读网格与滚动条。
 func _fit_playfield() -> void:
 	if _world_scroll == null or _playfield == null or _playfield.document == null:
 		return
@@ -975,19 +910,6 @@ func _highlight_line(line: int) -> void:
 		return
 	var color := _code.get_theme_color("program_error_color" if session.state == GameSession.State.FAILED else "program_execution_color")
 	_code.set_line_background_color(_highlighted_line, color)
-
-
-## 完成一次装配修改后更新预览并通知外层保存草稿。
-func _on_assembly_changed() -> void:
-	if session.state not in [GameSession.State.RUNNING, GameSession.State.PAUSED]:
-		session.stop()
-	_refresh_assembly()
-	draft_changed.emit()
-
-
-## 刷新数量限制和网格，不直接重新创建装配模型。
-func _refresh_assembly() -> void:
-	_assembly_panel.refresh()
 
 
 ## 将模拟 tick 和目标状态投影为提示，暂停与重置无需额外 UI 计时器。
@@ -1060,7 +982,7 @@ func _sync_object_status() -> void:
 	_object_status.visible = not lines.is_empty()
 
 
-## 波次只读真实世界进度，间隔和冷却均沿用同一模拟 tick，暂停时自然冻结。
+## 波次只显示真实击毁进度与射击冷却，不显示下一波到来倒计时。
 func _sync_wave_status() -> void:
 	var total := session.level.document.enemies.size()
 	var completed := 0
@@ -1070,13 +992,6 @@ func _sync_wave_status() -> void:
 		total = int(status.get("total", total))
 		completed = int(status.get("completed", 0))
 		lines.append(tr("已击毁 %d / %d 波敌人") % [completed, total])
-		if not status.get("all_cleared", false):
-			if not str(status.get("active_enemy_id", "")).is_empty() and session.level.id not in ["level_014", "level_015"]:
-				lines.append(tr("第 %d 波敌人来袭") % int(status.get("current", completed + 1)))
-			# 第十三、十四关省略下一波倒计时，长廊仅显示击毁进度与射击状态。
-			elif session.level.id not in ["level_013", "level_014", "level_015"] and int(status.get("next_spawn_tick", -1)) >= 0:
-				var remaining := maxi(0, int(status.next_spawn_tick) - session.world.tick_index)
-				lines.append(tr("下一波将在 %.1f 秒后出现") % (remaining * SimulationWorld.TICK_DURATION))
 		for module in session.world.player.modules:
 			if module.available and not module.behavior.get_shoot_profile(module).is_empty():
 				var remaining := maxi(0, module.next_shoot_tick - session.world.tick_index - 1)

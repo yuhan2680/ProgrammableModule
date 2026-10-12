@@ -49,7 +49,7 @@ static func next_hint(session: GameSession) -> DataResult:
 static func _load_hint(session: GameSession) -> DataResult:
 	var identity := session.level.id
 	var canonical_path := "res://data/levels/" + identity + ".json"
-	if not identity in ["level_001", "level_002", "level_003", "level_004", "level_005", "level_006", "level_007", "level_008", "level_009", "level_010", "level_011", "level_012", "level_013", "level_014", "level_015"] or session.level.source_path != canonical_path:
+	if not identity in ["level_001", "level_002", "level_003", "level_004", "level_005", "level_006", "level_007", "level_008", "level_009", "level_010", "level_011", "level_012", "level_013", "level_014", "level_015", "level_016"] or session.level.source_path != canonical_path:
 		return DataResult.failure("代码提示仅用于教学关卡，不支持导入关卡或编辑器测试。")
 	var path := HINT_DIRECTORY.path_join(identity + ".json")
 	var file := FileAccess.open(path, FileAccess.READ)

@@ -6,10 +6,14 @@ var _failures := 0
 var _game: GameShell
 var _editor: MapEditor
 var _temporary := ""
+var _capture_directory := ""
 
 
 ## 场景树就绪后再创建实际游戏界面。
 func _initialize() -> void:
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--capture-dir="):
+			_capture_directory = argument.trim_prefix("--capture-dir=")
 	_run.call_deferred()
 
 
@@ -63,7 +67,7 @@ func _run() -> void:
 	await _test_glass_picker()
 	panel.place_button.pressed.emit()
 	await _settle()
-	_check(_editor._canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY, "左侧加号进入敌人放置工具")
+	_check(_editor._canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY, "加号进入敌人放置工具")
 	var point := _editor._canvas.global_position + Vector2(7.5, 5.5) * _editor._canvas.cell_size
 	var motion := InputEventMouseMotion.new()
 	motion.position = point
@@ -76,6 +80,7 @@ func _run() -> void:
 	_check(model.document.enemies.size() == 1 and model.document.enemies[0].modules.size() == 2 and model.document.enemies[0].position == {"x": 7.5, "y": 5.5}, "左键在真实半格位置放置整组敌人")
 	_check(model.document.enemies[0].behavior == "auto_chase_attack" and model.document.enemies[0].properties.module_health.values().all(func(value: Variant) -> bool: return is_equal_approx(value, 2.8)), "放置敌人自动绑定追击攻击行为及每模块耐久")
 	var saved_enemies := model.document.enemies.duplicate(true)
+	await _test_box_delete()
 	panel.enable_switch.button_pressed = false
 	await _settle()
 	_check(not model.get_enemies_enabled() and model.document.enemies == saved_enemies and _editor._canvas.paint_mode != MapEditorCanvas.PaintMode.ENEMY, "关闭保留位置组合耐久，同时取消尚未提交的放置工具")
@@ -86,6 +91,7 @@ func _run() -> void:
 	_check(model.get_enemies_enabled() and panel.enable_switch.button_pressed and model.document.enemies == saved_enemies, "撤销关闭恢复敌人启用状态且不丢失位置")
 	var enabled_world := SimulationWorld.create(model.document, _editor.registry)
 	_check(enabled_world.is_ok() and enabled_world.value.machines.size() == 2, "重新启用后真实世界生成原有敌人")
+	await _test_independent_sections()
 	await _test_layout()
 	var before := JSON.stringify(model.document.to_dict(), "", true)
 	_editor._play_button.pressed.emit()
@@ -100,12 +106,129 @@ func _run() -> void:
 		_check(_game.page == GameShell.Page.PLAY, "确认装配后进入正常编程测试")
 		_game._back_button.pressed.emit()
 		await _settle()
+		_check(_game.page == GameShell.Page.ASSEMBLY, "敌人地图试玩编程返回先进入模块组装")
+		_game._back_button.pressed.emit()
+		await _settle()
 		_check(_game.page == GameShell.Page.EDITOR and _game._editor == _editor and JSON.stringify(model.document.to_dict(), "", true) == before, "结束试玩返回原文档，敌人、模板和历史不被运行状态覆盖")
 	_game.queue_free()
 	await _settle()
 	_cleanup(_temporary)
 	print("敌人编辑界面回归完成：%d 项检查，%d 项失败。" % [_checks, _failures])
 	quit(0 if _failures == 0 else 1)
+
+
+## 框选松手不立即删除，确认只加一次历史；空白、Esc和其它工具均不遗留蓝色高亮。
+func _test_box_delete() -> void:
+	var model := _editor.editor_document
+	var panel := _editor._enemy_panel
+	var scroll := _editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
+	var original := model.document.to_dict()
+	_check(model.place_enemy(Vector2(4.5, 5.5), _editor.registry).is_ok(), "添加框选批量删除的第二组敌人")
+	await _settle()
+	scroll.ensure_control_visible(panel.remove_button)
+	await _settle()
+	_click(panel.remove_button.get_global_rect().get_center())
+	await _settle()
+	_check(_editor._canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY_SELECT and panel.remove_button.button_pressed, "真实垃圾桶点击进入敌人框选")
+	_click(_editor._properties_card.get_global_rect().position + Vector2(18, 6))
+	await _settle()
+	_check(not panel.remove_button.has_focus() and not panel.remove_button.button_pressed and _editor._canvas.paint_mode != MapEditorCanvas.PaintMode.ENEMY_SELECT, "卡片空白真正清除删除工具和焦点")
+	_click(panel.remove_button.get_global_rect().get_center())
+	await _settle()
+	var before := model.document.to_dict()
+	var history := model._undo_stack.size()
+	await _box_drag(Vector2(4.1, 4.1), Vector2(9.1, 6.1))
+	_check(_editor._canvas.enemy_selection_area.has_area() and model.document.to_dict() == before and model._undo_stack.size() == history, "真实框选只保留选区，不修改地图或历史")
+	_check(MapEditorEnemyTemplate.in_rectangle(model.document, _editor._canvas.enemy_selection_area, _editor.registry).size() == 2, "同一选区命中两个完整敌人组合体")
+	# 真正移向垃圾桶会经过地图外；点击事件本身不能替代鼠标移动回归。
+	var selected_area := _editor._canvas.enemy_selection_area
+	var motion := InputEventMouseMotion.new()
+	motion.position = panel.remove_button.get_global_rect().get_center()
+	motion.global_position = motion.position
+	root.push_input(motion, true)
+	await _settle()
+	_check(_editor._canvas.enemy_selection_area == selected_area and model.document.to_dict() == before and model._undo_stack.size() == history, "鼠标移出地图去确认删除时保留整组选区，不修改地图或历史")
+	await _capture("enemy-box-selected")
+	_click(panel.remove_button.get_global_rect().get_center())
+	await _settle()
+	await _capture("enemy-box-deleted")
+	_check(model.document.enemies.is_empty() and model._undo_stack.size() == history + 1, "再次真实点击垃圾桶批量删除两组且只有一次历史")
+	_check(model.document.to_dict().tiles == before.tiles and model.document.properties == before.properties, "删除按钮不擦除地板或改变模板")
+	_editor._undo()
+	await _settle()
+	_check(model.document.to_dict() == before, "真实撤销按钮恢复两组敌人及全部数据")
+	_key(KEY_ESCAPE)
+	await _settle()
+	_check(not panel.remove_button.button_pressed and not _editor._canvas.enemy_selection_area.has_area(), "Esc同时取消删除高亮和残留选框")
+	_editor._undo()
+	await _settle()
+	_check(model.document.to_dict() == original, "验证结束恢复原敌人及现有编辑历史")
+
+
+## 使用既有框选手势经真实视口分发，坐标由当前地图缩放变换换算。
+func _box_drag(from: Vector2, to: Vector2) -> void:
+	var canvas := _editor._canvas
+	var start := canvas.get_global_transform() * (from * canvas.cell_size)
+	var end := canvas.get_global_transform() * (to * canvas.cell_size)
+	var press := InputEventMouseButton.new()
+	press.position = start
+	press.global_position = start
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	root.push_input(press, true)
+	await _settle()
+	var motion := InputEventMouseMotion.new()
+	motion.position = end
+	motion.global_position = end
+	motion.relative = end - start
+	motion.button_mask = MOUSE_BUTTON_MASK_LEFT
+	root.push_input(motion, true)
+	await _settle()
+	press = press.duplicate()
+	press.position = end
+	press.global_position = end
+	press.pressed = false
+	root.push_input(press, true)
+	await _settle()
+
+
+## 可选截图来自真实视口，headless 不作为界面视觉证明。
+func _capture(filename: String) -> void:
+	if _capture_directory.is_empty() or DisplayServer.get_name() == "headless":
+		return
+	await RenderingServer.frame_post_draw
+	DirAccess.make_dir_recursive_absolute(_capture_directory)
+	_check(root.get_texture().get_image().save_png(_capture_directory.path_join(filename + ".png")) == OK, "保存真实界面 " + filename)
+
+
+## 敌人是独立同级分类，折叠不改数据；隐藏时取消未放下的预览，试玩返回仍保持折叠。
+func _test_independent_sections() -> void:
+	var scene := _editor.find_child("MapEditorSceneCollapse", true, false) as Button
+	var enemy := _editor.find_child("MapEditorEnemyCollapse", true, false) as Button
+	var scene_group := _editor.find_child("MapEditorSceneControls", true, false)
+	var enemy_group := _editor.find_child("MapEditorEnemyControls", true, false)
+	var body := _editor.find_child("MapEditorSceneControlsBody", true, false) as Control
+	var before := JSON.stringify(_editor.editor_document.document.to_dict(), "", true)
+	_check(scene_group.get_parent() == enemy_group.get_parent(), "敌人分类与场景玩法分类同级")
+	scene.pressed.emit()
+	await _settle()
+	_check(not body.is_visible_in_tree() and _editor._enemy_panel.is_visible_in_tree() and enemy.is_visible_in_tree(), "收起场景玩法不会隐藏敌人设置和独立箭头")
+	scene.pressed.emit()
+	_editor._enemy_panel.place_button.pressed.emit()
+	_check(_editor._canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY, "独立折叠前启用未落地的敌人放置工具")
+	enemy.pressed.emit()
+	await _settle()
+	_check(body.is_visible_in_tree() and not _editor._enemy_panel.is_visible_in_tree() and enemy.is_visible_in_tree(), "收起敌人只隐藏敌人表单，箭头与玩家设置继续显示")
+	_check(_editor._canvas.paint_mode != MapEditorCanvas.PaintMode.ENEMY, "折叠敌人同步取消尚未落地的敌人预览")
+	_check(JSON.stringify(_editor.editor_document.document.to_dict(), "", true) == before, "分组折叠不改已有敌人、模板或玩家配置")
+	_editor._play_button.pressed.emit()
+	await _settle()
+	_game._dialogue_dialog.hide()
+	_game._return_to_editor()
+	await _settle()
+	_check(not _editor._enemy_panel.is_visible_in_tree() and body.is_visible_in_tree(), "试玩返回保留敌人独立折叠状态")
+	enemy.pressed.emit()
+	await _settle()
 
 
 ## 模块下拉通过真实选项信号更新同一模板，不直接修改文档敌人。
@@ -131,13 +254,12 @@ func _test_layout() -> void:
 			scroll.ensure_control_visible(_editor._enemy_panel.place_button)
 			await _settle()
 			var bounds := scroll.get_global_rect()
-			for control: Control in [_editor._enemy_panel, _editor._enemy_panel.limit_field, _editor._enemy_panel.health_field, _editor._enemy_panel._slots]:
+			for control: Control in [_editor._enemy_panel, _editor._enemy_panel.limit_field, _editor._enemy_panel.health_field, _editor._enemy_panel._slots, _editor._enemy_panel.remove_button]:
 				var rect := control.get_global_rect()
 				_check(rect.position.x >= bounds.position.x - 1 and rect.end.x <= bounds.end.x + 1, "敌人表单不横向溢出 " + locale + str(dimensions) + str(control.name))
 			_check(bounds.grow(1).encloses(_editor._enemy_panel.place_button.get_global_rect()), "属性滚动后能完整显示放置按钮 " + locale + str(dimensions))
-			scroll.ensure_control_visible(_editor._play_button)
 			await _settle()
-			_check(bounds.grow(1).encloses(_editor._play_button.get_global_rect()), "敌人设置增加内容后仍可滚动访问开始测试 " + locale + str(dimensions))
+			_check(_editor._properties_card.get_global_rect().grow(1).encloses(_editor._play_button.get_global_rect()), "敌人设置增加内容后固定底部仍可开始测试 " + locale + str(dimensions))
 			if locale == "en":
 				var choice := _editor._enemy_panel._choices[0]
 				_check(choice.get_item_text(choice.selected) == "Movement Module", "模块药丸实时切换为英文名称")
@@ -158,6 +280,9 @@ func _test_layout() -> void:
 	root.content_scale_size = root.size
 	_game.settings.set_language("zh_CN")
 	await _settle()
+	scroll.ensure_control_visible(_editor._enemy_panel._choices.back())
+	await _settle()
+	await _capture("enemy-combination-layout")
 
 
 ## 弹窗应用新值时底层输入可能仍有焦点，回填必须阻止旧文本在失焦后覆盖 JSON。
@@ -291,7 +416,7 @@ func _test_picker_lifecycle(scroll: ScrollContainer, before: String) -> void:
 	_check(not picker.is_open(), "禁用药丸无法通过show_popup绕过开关")
 	_editor._undo()
 	await _settle()
-	var collapse := _editor.find_child("MapEditorSceneCollapse", true, false) as Button
+	var collapse := _editor.find_child("MapEditorEnemyCollapse", true, false) as Button
 	panel._choices[0].show_popup()
 	await _settle()
 	_check(picker.is_open(), "折叠分类前菜单已展开")

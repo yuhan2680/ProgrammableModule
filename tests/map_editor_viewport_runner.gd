@@ -29,6 +29,7 @@ func _run() -> void:
 	await _test_guide(editor)
 	await _test_coordinates(editor)
 	await _test_view_history(editor)
+	await _test_scrollbar_fade(editor)
 	await _test_no_map_pan(editor)
 	await _test_document_fit(editor)
 	await _test_playtest(editor)
@@ -39,21 +40,25 @@ func _run() -> void:
 	quit(0 if _failures == 0 else 1)
 
 
-## 小地图保持原生格子大小且位于画幅中央，两种语言与窗口尺寸都能看到全部入口。
+## 默认地图完整适配；独立小地图夹具保持原生格子大小，两种语言与窗口尺寸均可操作。
 func _test_layout(editor: MapEditor) -> void:
+	var initial_view := editor._map_view
+	_check(initial_view.zoom <= 1.0 and initial_view.get_global_rect().encloses(editor._canvas.get_global_rect()) and _is_centered(initial_view), "当前示例地图完整适配并居中显示")
+	# 默认示例可独立扩大，原生格子断言使用明确的小地图，避免把内容尺寸变化误报为布局回归。
+	await _load_fixture(editor, "layout_small", Vector2i(8, 6))
 	for dimensions: Vector2i in [Vector2i(1280, 800), Vector2i(1000, 740)]:
 		root.size = dimensions
-		for locale: String in ["zh_CN", "en"]:
+		for locale: String in ["zh_CN", "zh_HK", "en"]:
 			_game.settings.set_language(locale)
 			await _settle()
 			var context := locale + " " + str(dimensions)
 			var view := editor._map_view
 			_check(view.clip_contents and view.canvas == editor._canvas, "地图使用独立裁剪视口并保留绘制画布 " + context)
-			_check(view.get_global_rect().encloses(editor._canvas.get_global_rect()) and _is_centered(view), "默认小地图完整居中显示 " + context)
+			_check(view.get_global_rect().encloses(editor._canvas.get_global_rect()) and _is_centered(view), "小地图夹具完整居中显示 " + context)
 			_check(is_equal_approx(view.zoom, 1.0) and is_equal_approx(editor._canvas.cell_size, 32.0), "小地图保留一倍和每格32像素 " + context)
 			var buttons: Array[Button] = [editor._zoom_in_button, editor._zoom_out_button, editor._guide_button]
 			for button in buttons:
-				_check(button.is_visible_in_tree() and button.icon != null and button.text.is_empty() and not button.get_tooltip().is_empty() and root.get_visible_rect().encloses(button.get_global_rect()), "视图区SVG入口可见且提供说明：" + str(button.name) + " " + context)
+				_check(button.is_visible_in_tree() and button.icon != null and button.text.is_empty() and not button.get_tooltip().is_empty() and editor._header.get_global_rect().encloses(button.get_global_rect()) and not view.get_global_rect().intersects(button.get_global_rect()), "顶部SVG入口可见且不占用地图画幅：" + str(button.name) + " " + context)
 			_check(editor._zoom_out_button.get_global_rect().end.x <= editor._zoom_in_button.global_position.x and editor._zoom_in_button.get_global_rect().end.x <= editor._guide_button.global_position.x, "缩小、放大与问号按顺序排列且互不重叠 " + context)
 			_check(not editor._status.is_visible_in_tree() and not _game._save_label.is_visible_in_tree() and not editor._guide_menu.is_open(), "底部状态和说明默认收进指引且外壳不重复显示 " + context)
 	root.size = Vector2i(1280, 800)
@@ -78,11 +83,10 @@ func _test_properties(editor: MapEditor) -> void:
 				_check(absf(label.get_global_rect().get_center().y - field.get_global_rect().get_center().y) < 1.0 and label.get_global_rect().end.x < field.global_position.x, "属性标签与输入框同行且不重叠 " + context)
 				_check(field.size.y <= 34.0 and scroll.get_global_rect().encloses(field.get_global_rect()), "紧凑输入控件完整显示 " + context)
 			_check(absf(editor._width_field.global_position.y - editor._height_field.global_position.y) < 1.0 and editor._width_field.get_global_rect().end.x < editor._height_field.global_position.x, "宽高在同一行且可分别输入 " + context)
-			# 新增敌人表单允许纵向滚动；测试按钮必须可滚动到完整可见，而非强制全部内容同屏。
+			# 新增敌人表单允许纵向滚动；底部按钮固定可见，正文仍可独立纵向滚动。
 			var original_scroll := scroll.scroll_vertical
-			scroll.ensure_control_visible(editor._play_button)
 			await _settle()
-			_check(scroll.get_global_rect().encloses(editor._play_button.get_global_rect()) and editor._play_button.size.y <= 34.0, "最小窗口滚动后完整显示紧凑测试按钮 " + context)
+			_check(card.get_global_rect().encloses(editor._play_button.get_global_rect()) and editor._play_button.size.y <= 34.0, "最小窗口完整显示固定的紧凑测试按钮 " + context)
 			scroll.scroll_vertical = original_scroll
 			await _settle()
 			var before := card.get_global_rect()
@@ -250,6 +254,72 @@ func _test_view_history(editor: MapEditor) -> void:
 	_check(model.document.get_tile_id(Vector2i(31, 24)) == "floor", "视图操作后仍能重做之前的准确格子修改")
 
 
+## 双轴原生滚动条淡出只影响显示，透明时仍可拖动且不会触碰地图与保存历史。
+func _test_scrollbar_fade(editor: MapEditor) -> void:
+	await _load_fixture(editor, "scrollbar_fade", Vector2i(64, 48))
+	var view := editor._map_view
+	var model := editor.editor_document
+	# 留下可观察的未保存修改和重做分支，避免空历史掩盖滚动事件误入地图的问题。
+	model.paint(Vector2i.ZERO, "floor")
+	model.paint(Vector2i.ONE, "floor")
+	model.undo()
+	view.set_zoom(1.25)
+	await _settle()
+	var before := _signature(editor)
+	var path := model.path
+	var saved_bytes := FileAccess.get_file_as_bytes(path)
+	var undo_count := model._undo_stack.size()
+	var redo_count := model._redo_stack.size()
+	var dirty := model.is_dirty()
+	var zoom := view.zoom
+	var bounds := view.get_global_rect()
+	var usable := view.usable_rect
+	var bars: Array[ScrollBar] = [view._h_scroll, view._v_scroll]
+	var rectangles: Array[Rect2] = [bars[0].get_global_rect(), bars[1].get_global_rect()]
+	_check(undo_count > 0 and redo_count > 0 and dirty, "滚动条淡出夹具同时持有未保存内容与双向历史")
+	_check(bars[0].is_visible_in_tree() and bars[1].is_visible_in_tree() and bars[0].max_value > bars[0].page and bars[1].max_value > bars[1].page, "放大地图后横纵两轴均存在真实可滚动内容")
+	await create_timer(1.15).timeout
+	_check(bars[0].modulate.a < 0.02 and bars[1].modulate.a < 0.02, "横纵滚动条停止操作后均完全淡出")
+	for axis in 2:
+		var bar := bars[axis]
+		var context := "横向" if axis == 0 else "纵向"
+		var start := bar.get_global_rect().get_center()
+		var movement := Vector2(38, 0) if axis == 0 else Vector2(0, 30)
+		var previous_value := bar.value
+		var previous_center := view.view_center
+		_motion(start)
+		await _settle()
+		_check(bar.modulate.a < 0.02, "单纯悬停不唤醒透明滚动条：" + context)
+		_mouse_button(start, MOUSE_BUTTON_LEFT, true)
+		await _settle()
+		_check(bar.modulate.a > 0.98, "透明滚动条仍能真实按下并立即显示：" + context)
+		_motion(start + movement, movement, MOUSE_BUTTON_MASK_LEFT)
+		await _settle()
+		_check(bar.value > previous_value and view.view_center[axis] > previous_center[axis], "真实拖动透明原生条改变对应地图观察位置：" + context)
+		await create_timer(1.15).timeout
+		_check(bar.modulate.a > 0.98, "鼠标保持按住超过一秒时滚动条持续可见：" + context)
+		# 在地图画幅之外松开，验证原生捕获释放后仍能重新启动空闲淡出。
+		var outside := Vector2(300, 12)
+		_motion(outside, outside - start - movement, MOUSE_BUTTON_MASK_LEFT)
+		_mouse_button(outside, MOUSE_BUTTON_LEFT, false)
+		await _settle()
+		_check(bar.modulate.a > 0.98, "移到条外松开后保留短暂显示：" + context)
+		await create_timer(0.85).timeout
+		_check(bar.modulate.a > 0.01 and bar.modulate.a < 0.98, "条外松开后正常进入渐隐过程：" + context)
+		var value_before_wheel := bar.value
+		var wheel := MOUSE_BUTTON_WHEEL_DOWN if bar.value < bar.max_value - bar.page - 1.0 else MOUSE_BUTTON_WHEEL_UP
+		_click(bar.get_global_rect().get_center(), wheel)
+		await _settle()
+		_check(not is_equal_approx(bar.value, value_before_wheel) and bar.modulate.a > 0.98, "淡出途中再次真实滚动立即恢复显示并更新观察位置：" + context)
+		await create_timer(0.3).timeout
+		_check(bar.modulate.a > 0.98, "新滚动重启空闲计时而非继续旧淡出：" + context)
+		await create_timer(0.85).timeout
+		_check(bar.modulate.a < 0.02 and bar.is_visible_in_tree(), "再次空闲后恢复透明且保留原生占位：" + context)
+		_check(bars[0].get_global_rect().is_equal_approx(rectangles[0]) and bars[1].get_global_rect().is_equal_approx(rectangles[1]) and view.get_global_rect().is_equal_approx(bounds) and view.usable_rect.is_equal_approx(usable), "滚动条显隐和拖动不挤动轨道或地图画幅：" + context)
+	_check(_signature(editor) == before and model.path == path and model.is_dirty() == dirty and model._undo_stack.size() == undo_count and model._redo_stack.size() == redo_count and model._action_depth == 0, "滚动条透明度与原生拖动均不修改地图、路径、保存状态和双向历史")
+	_check(FileAccess.get_file_as_bytes(path) == saved_bytes and is_equal_approx(view.zoom, zoom), "滚动条真实输入不写回文件，也不触发地图滚轮缩放")
+
+
 ## 地图本身不提供中键或空格手形平移，文字输入仍正常，弹层关闭不会透传笔画。
 func _test_no_map_pan(editor: MapEditor) -> void:
 	await _load_fixture(editor, "no_map_pan", Vector2i(64, 48))
@@ -281,7 +351,7 @@ func _test_no_map_pan(editor: MapEditor) -> void:
 	field.release_focus()
 	editor._header.more_button.pressed.emit()
 	await _settle()
-	editor._actions_menu._items[2].pressed.emit()
+	editor._actions_menu._items[3].pressed.emit()
 	await _settle()
 	var code := editor._metadata_text
 	var original_json := code.text

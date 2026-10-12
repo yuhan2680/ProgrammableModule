@@ -68,10 +68,8 @@ func _test_staircase(game: GameShell, dimensions: Vector2i) -> void:
 	workbench._code.select(2, 8, 2, 12)
 	workbench._code.set_caret_line(2)
 	workbench._code.set_caret_column(12)
-	workbench._assembly_panel._select_module(0)
 	workbench.session.current_line = 3
 	workbench._sync_session()
-	workbench._preview_layout.split.split_offset = 68
 	await _settle()
 	var snapshot := _snapshot(workbench)
 	var collapsed_world := workbench._world_panel.get_global_rect()
@@ -85,7 +83,7 @@ func _test_staircase(game: GameShell, dimensions: Vector2i) -> void:
 	_transition_events.clear()
 	workbench._preview_button.pressed.emit()
 	_check(workbench._preview_layout.transitioning and not workbench._preview_layout.expanded, "点击立即进入展开过渡 " + label)
-	_check(is_zero_approx(workbench._preview_layout.get_expand_progress()) and _rect_close(workbench._world_panel.get_global_rect(), collapsed_world), "先退去编辑区，再开始拓宽地图 " + label)
+	_check(is_zero_approx(workbench._preview_layout.get_expand_progress()) and _rect_close(workbench._world_panel.get_global_rect(), collapsed_world), "覆盖动画从原始地图矩形连续展开 " + label)
 	_check(workbench._code.get_theme_font("font") == snapshot.font and workbench._code.get_theme_stylebox("normal") == snapshot.style, "过渡重新挂载时保留编辑器继承主题 " + label)
 	if not _exercise_blocked_inputs(game, workbench, label + " 展开"):
 		return
@@ -128,15 +126,12 @@ func _test_staircase(game: GameShell, dimensions: Vector2i) -> void:
 		if not await _wait_preview(workbench, false, label):
 			return
 		_check_restored(workbench, snapshot, collapsed_world, collapsed_editor, "往返 %d " % (cycle + 2) + label)
-	workbench._assembly_tab_button.pressed.emit()
-	await _settle()
-	_check(workbench._tabs.current_tab == 1 and not workbench._world_panel.is_visible_in_tree() and workbench._assembly_panel.is_visible_in_tree(), "收回后仍能进入整行组装页 " + label)
-	workbench._program_tab_button.pressed.emit()
-	await _settle()
-	_check_restored(workbench, snapshot, collapsed_world, collapsed_editor, "组装返回 " + label)
 	workbench.header.back_button.pressed.emit()
 	await _settle()
-	_check(game.page == GameShell.Page.LEVELS, "收回后返回按钮恢复导航 " + label)
+	_check(game.page == GameShell.Page.ASSEMBLY and game.session.source == snapshot.source and JSON.stringify(game.session.assembly.modules) == snapshot.modules, "收回后返回独立装配页并保留程序与装配 " + label)
+	game.assembly_panel.header.back_button.pressed.emit()
+	await _settle()
+	_check(game.page == GameShell.Page.LEVELS, "独立装配页返回关卡列表 " + label)
 
 
 ## 运行过渡保留世界与执行器；模拟时钟可继续，药丸跟随问号固定在其左侧。
@@ -172,7 +167,7 @@ func _test_running_gate(game: GameShell) -> void:
 		return
 	_check(workbench.session.world == world and workbench.session.runner == runner and workbench.session.state == GameSession.State.PAUSED and world.tick_index == paused_tick, "收回保留暂停及同一指令进度")
 	_check_corner_alignment(workbench, true, "闸门收回")
-	_check(not workbench._code.editable and not workbench._assembly_panel.interaction_enabled, "动画结束仍遵守原有暂停编辑锁")
+	_check(not workbench._code.editable, "动画结束仍遵守原有暂停编辑锁")
 	workbench.header.pause_button.pressed.emit()
 	_check(workbench.session.state == GameSession.State.RUNNING, "收回后继续按钮恢复运行")
 	workbench.header.stop_button.pressed.emit()
@@ -186,7 +181,10 @@ func _test_running_gate(game: GameShell) -> void:
 	_check(workbench.session.world == null and workbench.session.source == GATE_PROGRAM, "完全展开重置位置保留代码")
 	workbench.header.back_button.pressed.emit()
 	await _settle()
-	_check(game.page == GameShell.Page.LEVELS, "完全展开时返回按钮可正常离开")
+	_check(game.page == GameShell.Page.ASSEMBLY, "完全展开时返回按钮进入独立装配页")
+	game.assembly_panel.header.back_button.pressed.emit()
+	await _settle()
+	_check(game.page == GameShell.Page.LEVELS, "装配页继续返回关卡列表")
 
 
 ## 退出发生在动画时间线中时，绑定节点的补间与输入锁均随页面释放。
@@ -212,17 +210,16 @@ func _exercise_blocked_inputs(game: GameShell, workbench: GameWorkbench, label: 
 	var state := session.state
 	var source := workbench._code.text
 	var modules := JSON.stringify(session.assembly.modules)
-	var mode := workbench._tabs.current_tab
 	var header := workbench.header
 	_check(workbench._preview_layout.transitioning, "验证输入时动画确实尚未完成 " + label)
-	for button: Button in [header.run_button, header.pause_button, header.stop_button, header.reset_button, header.more_button, header.book_button, workbench._guide_button, workbench._preview_button, workbench._assembly_tab_button, workbench._program_tab_button, header.back_button]:
+	for button: Button in [header.run_button, header.pause_button, header.stop_button, header.reset_button, header.more_button, header.book_button, workbench._guide_button, workbench._preview_button, header.back_button]:
 		_check(button.disabled, "过渡禁用 " + str(button.name) + " " + label)
 		button.pressed.emit()
 		if game.workbench != workbench or game.page != GameShell.Page.PLAY:
 			_check(false, "过渡期间导航不能离开工作台 " + label)
 			return false
 		_check(session.world == world and session.runner == runner and session.state == state, "受保护按钮不替换或改变运行 " + str(button.name) + " " + label)
-	_check(not workbench._code.editable and not workbench._assembly_panel.interaction_enabled and not workbench._assembly_panel.canvas.interaction_enabled, "过渡锁定代码和装配输入 " + label)
+	_check(not workbench._code.editable, "过渡锁定代码输入 " + label)
 	_check(not workbench._actions_menu.is_open() and not workbench._guide_menu.is_open() and not game._command_menu.is_open(), "过渡期间资料和菜单保持关闭 " + label)
 	workbench._code.grab_focus()
 	var key := InputEventKey.new()
@@ -241,9 +238,8 @@ func _exercise_blocked_inputs(game: GameShell, workbench: GameWorkbench, label: 
 	root.push_input(text_key)
 	text_key.pressed = false
 	root.push_input(text_key)
-	workbench._assembly_panel._remove_module(0)
 	_check(session.world == world and session.runner == runner and session.state == state, "Ctrl+Enter 不启动、暂停或重启执行 " + label)
-	_check(workbench._code.text == source and JSON.stringify(session.assembly.modules) == modules and workbench._tabs.current_tab == mode, "过渡输入不修改代码、装配或模式 " + label)
+	_check(workbench._code.text == source and JSON.stringify(session.assembly.modules) == modules, "过渡输入不修改代码和装配 " + label)
 	return true
 
 
@@ -255,8 +251,10 @@ func _wait_preview(workbench: GameWorkbench, expanded: bool, label: String) -> b
 	var monotonic := true
 	var width_monotonic := true
 	var header_fixed := true
-	var saw_wipe_before_growth := false
-	var hidden_during_growth := true
+	var sampled_overlap := false
+	var code_width := workbench._edit_panel.size.x
+	var code_kept_visible := true
+	var code_kept_width := true
 	for frame in MAX_TRANSITION_FRAMES:
 		await process_frame
 		if not is_instance_valid(workbench):
@@ -267,10 +265,10 @@ func _wait_preview(workbench: GameWorkbench, expanded: bool, label: String) -> b
 		var width := workbench._world_panel.size.x
 		width_monotonic = width_monotonic and (width + 1.5 >= previous_width if expanded else width <= previous_width + 1.5)
 		header_fixed = header_fixed and _rect_close(workbench.header.get_global_rect(), header_rect)
-		if expanded and progress < 0.001 and workbench._preview_layout._wipe_progress > 0.01:
-			saw_wipe_before_growth = true
-		if expanded and progress > 0.01:
-			hidden_during_growth = hidden_during_growth and not workbench._edit_panel.is_visible_in_tree()
+		if progress > 0.01 and progress < 0.99:
+			sampled_overlap = sampled_overlap or workbench._world_panel.get_global_rect().intersects(workbench._edit_panel.get_global_rect())
+			code_kept_visible = code_kept_visible and workbench._edit_panel.is_visible_in_tree()
+			code_kept_width = code_kept_width and absf(workbench._edit_panel.size.x - code_width) < 1.5
 		previous_progress = progress
 		previous_width = width
 		if not workbench._preview_layout.transitioning:
@@ -278,8 +276,8 @@ func _wait_preview(workbench: GameWorkbench, expanded: bool, label: String) -> b
 			_check(workbench._preview_layout.expanded == expanded and is_equal_approx(progress, 1.0 if expanded else 0.0), "动画抵达请求状态 " + label)
 			_check(monotonic, "地图展开或收回进度单调 " + label)
 			_check(width_monotonic and header_fixed, "地图宽度单调变化且每帧页头固定 " + label)
-			_check(saw_wipe_before_growth or not expanded, "编辑卡片先经历擦除阶段再拓宽地图 " + label)
-			_check(hidden_during_growth, "地图拓宽阶段编辑卡片已经退场 " + label)
+			_check(sampled_overlap, "展开与收回中真实地图覆盖代码矩形 " + label)
+			_check(code_kept_visible and code_kept_width, "覆盖过渡保留可见代码与原宽度 " + label)
 			return workbench._preview_layout.expanded == expanded
 	_check(false, "动画超过 %d 帧仍未完成 " % MAX_TRANSITION_FRAMES + label)
 	return false
@@ -289,10 +287,10 @@ func _wait_preview(workbench: GameWorkbench, expanded: bool, label: String) -> b
 func _snapshot(workbench: GameWorkbench) -> Dictionary:
 	return {
 		"code": workbench._code, "assembly": workbench.session.assembly,
-		"panel": workbench._assembly_panel, "world_panel": workbench._world_panel,
+		"world_panel": workbench._world_panel,
 		"source": workbench._code.text, "modules": JSON.stringify(workbench.session.assembly.modules),
 		"caret_line": workbench._code.get_caret_line(), "caret_column": workbench._code.get_caret_column(),
-		"selection": workbench._code.get_selected_text(), "selected_module": workbench._assembly_panel.canvas.selected_index,
+		"selection": workbench._code.get_selected_text(),
 		"current_line": workbench.session.current_line, "header": workbench.header.get_global_rect(),
 		"split_offset": workbench._preview_layout.split.split_offset,
 		"font": workbench._code.get_theme_font("font"), "style": workbench._code.get_theme_stylebox("normal")
@@ -313,17 +311,17 @@ func _check_restored(workbench: GameWorkbench, snapshot: Dictionary, world_rect:
 	_check(not workbench._preview_layout.expanded and workbench._edit_panel.is_visible_in_tree() and workbench._world_panel.is_visible_in_tree(), "恢复双卡片可见性 " + label)
 	_check(workbench._preview_button.get_tooltip() == "全尺寸预览", "收回入口恢复全尺寸预览悬停说明 " + label)
 	_check(_rect_close(workbench._world_panel.get_global_rect(), world_rect) and _rect_close(workbench._edit_panel.get_global_rect(), editor_rect), "卡片位置与尺寸恢复且没有累计偏移 " + label)
-	_check(workbench._code.editable and workbench._assembly_panel.interaction_enabled and not workbench._preview_button.disabled, "恢复空闲编辑和预览入口 " + label)
-	_check(workbench._preview_layout.split.split_offset == snapshot.split_offset, "保留玩家调整后的分隔条位置 " + label)
+	_check(workbench._code.editable and not workbench._preview_button.disabled, "恢复空闲编辑和预览入口 " + label)
+	_check(workbench._preview_layout.split.split_offset == snapshot.split_offset, "保留静态基准分栏位置 " + label)
 	_check_preserved(workbench, snapshot, label)
 
 
 ## 比较真实源文本、选择与节点身份，不使用新建内容碰巧相同作为保留证据。
 func _check_preserved(workbench: GameWorkbench, snapshot: Dictionary, label: String) -> void:
-	_check(workbench._code == snapshot.code and workbench.session.assembly == snapshot.assembly and workbench._assembly_panel == snapshot.panel and workbench._world_panel == snapshot.world_panel, "预览复用全部原节点及装配模型 " + label)
+	_check(workbench._code == snapshot.code and workbench.session.assembly == snapshot.assembly and workbench._world_panel == snapshot.world_panel, "预览复用全部原节点及装配模型 " + label)
 	_check(workbench._code.text == snapshot.source and workbench.session.source == snapshot.source and JSON.stringify(workbench.session.assembly.modules) == snapshot.modules, "保留程序和装配内容 " + label)
 	_check(workbench._code.get_caret_line() == snapshot.caret_line and workbench._code.get_caret_column() == snapshot.caret_column and workbench._code.get_selected_text() == snapshot.selection, "保留代码光标和选区 %s 实际=%s 预期=%s" % [label, [_line_column(workbench._code), workbench._code.get_selected_text()], [Vector2i(snapshot.caret_line, snapshot.caret_column), snapshot.selection]])
-	_check(workbench._assembly_panel.canvas.selected_index == snapshot.selected_module and workbench.session.current_line == snapshot.current_line and workbench._highlighted_line == int(snapshot.current_line) - 1, "保留装配选择和当前高亮行 " + label)
+	_check(workbench.session.current_line == snapshot.current_line and workbench._highlighted_line == int(snapshot.current_line) - 1, "保留当前代码高亮行 " + label)
 	_check(_rect_close(workbench.header.get_global_rect(), snapshot.header), "顶部栏矩形不受预览影响 " + label)
 
 

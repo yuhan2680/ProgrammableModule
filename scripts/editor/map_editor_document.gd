@@ -173,12 +173,154 @@ func clear_goal() -> void:
 	apply_metadata({"properties": properties})
 
 
-# 用途：统一修改地图标识与显示名，供表单或其它编辑器前端复用。
-func set_identity(map_id: String, map_name: String) -> void:
+## 新名称按字符限制长度；未修改的旧地图长名称原样保留，ID 继续沿用原有规则。
+func set_identity(map_id: String, map_name: String) -> DataResult:
+	var checked := _validate_map_name(map_name)
+	if not checked.is_ok():
+		return checked
 	begin_action()
 	document.id = map_id
 	document.display_name = map_name
 	end_action()
+	return DataResult.success()
+
+
+## 表单全部通过预校验后才开始同一事务，任一字段无效都不能部分提交其它身份数据。
+func set_identity_with_creator(map_id: String, map_name: String, creator: String) -> DataResult:
+	var checked := _validate_map_name(map_name)
+	if not checked.is_ok():
+		return checked
+	checked = _validate_creator(creator)
+	if not checked.is_ok():
+		return checked
+	begin_action()
+	set_identity(map_id, map_name)
+	set_creator(creator)
+	end_action()
+	return DataResult.success()
+
+
+## 四个身份字段先全部验证，再在同一步历史中提交，非法副标题不能部分改写名称或署名。
+func set_identity_with_subtitle(map_id: String, map_name: String, creator: String, subtitle: String) -> DataResult:
+	var checked := _validate_map_name(map_name)
+	if not checked.is_ok():
+		return checked
+	checked = _validate_creator(creator)
+	if not checked.is_ok():
+		return checked
+	if not DataValidation.is_level_subtitle(subtitle):
+		return DataResult.failure("副标题最多为 70 个字符，仅支持单行文字、数字和常用标点，不支持表情或控制字符。")
+	begin_action()
+	set_identity_with_creator(map_id, map_name, creator)
+	set_subtitle(subtitle)
+	end_action()
+	return DataResult.success()
+
+
+## 旧图缺省为空，只读取原文，不根据规则生成或翻译作者的副标题。
+func get_subtitle() -> String:
+	var level: Variant = document.properties.get("level", {})
+	return level.get("subtitle", "") if level is Dictionary and DataValidation.is_level_subtitle(level.get("subtitle", "")) else ""
+
+
+## 通过原有元数据事务保存可选副标题；清空移除字段且保留关卡描述、目标和其它扩展。
+func set_subtitle(value: String) -> DataResult:
+	if not DataValidation.is_level_subtitle(value):
+		return DataResult.failure("副标题最多为 70 个字符，仅支持单行文字、数字和常用标点，不支持表情或控制字符。")
+	var existing: Variant = document.properties.get("level", {})
+	if not existing is Dictionary:
+		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
+	var subtitle := value.strip_edges()
+	if subtitle.is_empty() and not existing.has("subtitle"):
+		return DataResult.success(subtitle)
+	if not subtitle.is_empty() and existing.get("subtitle") == subtitle:
+		return DataResult.success(subtitle)
+	var properties := document.properties.duplicate(true)
+	var level: Dictionary = existing.duplicate(true)
+	if subtitle.is_empty():
+		level.erase("subtitle")
+	else:
+		level["subtitle"] = subtitle
+	properties["level"] = level
+	apply_metadata({"properties": properties})
+	return DataResult.success(subtitle)
+
+
+## 长度只约束本次新写入的名称，不妨碍旧图加载、调整其它属性或保存副本。
+func _validate_map_name(value: String) -> DataResult:
+	if value != document.display_name and value.length() > DataValidation.MAX_PLAYER_NAME_LENGTH:
+		return DataResult.failure("关卡名称最多为 30 个字符。")
+	return DataResult.success(value)
+
+
+## 读取玩家填写的署名原文；旧图与损坏字段均不臆造创作者名字。
+func get_creator() -> String:
+	var level: Variant = document.properties.get("level", {})
+	if level is Dictionary and DataValidation.is_creator(level.get("creator")):
+		return level.creator
+	return ""
+
+
+## 以可嵌套事务更新署名，空白只移除该字段，不创建无意义规则或覆盖扩展内容。
+func set_creator(value: String) -> DataResult:
+	var checked := _validate_creator(value)
+	if not checked.is_ok():
+		return checked
+	var creator: String = checked.value
+	var existing: Variant = document.properties.get("level", {})
+	if creator.is_empty() and not existing.has("creator"):
+		return DataResult.success(creator)
+	if not creator.is_empty() and existing.get("creator") is String and existing.creator == creator:
+		return DataResult.success(creator)
+	var properties := document.properties.duplicate(true)
+	var level: Dictionary = existing.duplicate(true)
+	if creator.is_empty():
+		level.erase("creator")
+	else:
+		level["creator"] = creator
+	properties["level"] = level
+	apply_metadata({"properties": properties})
+	return DataResult.success(creator)
+
+
+## 未变更的历史署名保留全部原文，新署名只沿用旧字符规则并追加十一字符限制。
+func _validate_creator(value: String) -> DataResult:
+	var existing: Variant = document.properties.get("level", {})
+	if not existing is Dictionary:
+		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
+	if existing.get("creator") is String and value == existing.creator and DataValidation.is_creator(value):
+		return DataResult.success(value)
+	var creator := value.strip_edges()
+	if creator.length() > DataValidation.MAX_EDITOR_CREATOR_LENGTH:
+		return DataResult.failure("创作者名字最多为 11 个字符。")
+	if not DataValidation.is_creator(creator):
+		return DataResult.failure("创作者名字必须为最多 128 字符的单行文本。")
+	return DataResult.success(creator)
+
+
+## 返回引导页的独立副本，让弹窗临时编辑不直接改变地图和撤销历史。
+func get_guide_pages() -> Array:
+	return document.dialogue.duplicate(true)
+
+
+## 一次事务提交引导页，过滤空白页并保留非空正文、既有格式及所有扩展字段。
+func set_guide_pages(pages: Array) -> DataResult:
+	var checked := MapValidation.check_dialogue(pages)
+	if not checked.is_ok():
+		return checked
+	# 旧图的原文可继续往返；新建或实际修改的正文拒绝平台私用字形，不静默改写旧页。
+	var existing_texts: Dictionary = {}
+	for entry: Dictionary in document.dialogue:
+		existing_texts[str(entry.text)] = true
+	var accepted: Array = []
+	for entry: Dictionary in pages:
+		if not DataValidation.is_portable_guide_text(entry.text) and not existing_texts.has(entry.text):
+			return DataResult.failure("关卡引导不支持平台专用字符（如苹果标志），普通 emoji 可以使用。")
+		if not String(entry.text).strip_edges().is_empty():
+			accepted.append(entry.duplicate(true))
+	if accepted != document.dialogue:
+		apply_metadata({"dialogue": accepted})
+	return DataResult.success(accepted.duplicate(true))
 
 
 # 用途：读取显式关卡上限；省略规则时与关卡定义一样沿用出生模板数量，至少为一。
@@ -206,6 +348,99 @@ func set_module_limit(limit: Variant) -> DataResult:
 	properties["level"] = level
 	apply_metadata({"properties": properties})
 	return DataResult.success(int(limit))
+
+
+## 将旧允许列表/出生模板投影为禁止列表供表单显示，不在读取时改写旧地图。
+func get_restricted_modules(content: ContentRegistry) -> PackedStringArray:
+	var metadata: Variant = document.properties.get("level", {})
+	if content == null or not metadata is Dictionary:
+		return PackedStringArray()
+	var restricted := PackedStringArray()
+	if metadata.get("restricted_modules") is Array:
+		for module_id in metadata.restricted_modules:
+			if module_id is String:
+				restricted.append(module_id)
+	if not metadata.has("restricted_modules") or metadata.has("allowed_modules"):
+		var allowed: Array = []
+		if metadata.get("allowed_modules") is Array:
+			allowed = metadata.allowed_modules
+		elif document.player_spawn is Dictionary:
+			for instance: Dictionary in document.player_spawn.get("modules", []):
+				allowed.append(instance.get("module_id", ""))
+		else:
+			return restricted
+		for module_id: String in content.modules:
+			if module_id not in allowed and module_id not in restricted:
+				restricted.append(module_id)
+	return restricted
+
+
+## 显式选择作为一次事务替换模块策略；其余规则和扩展不变，撤销可还原旧允许列表。
+func set_restricted_modules(value: Variant, content: ContentRegistry) -> DataResult:
+	var checked := MapValidation.check_restricted_modules(value, content)
+	if not checked.is_ok():
+		return checked
+	var existing: Variant = document.properties.get("level", {})
+	if not existing is Dictionary:
+		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
+	var ordered: Array = []
+	for module_id: String in content.modules:
+		if module_id in checked.value:
+			ordered.append(module_id)
+	var properties := document.properties.duplicate(true)
+	var metadata: Dictionary = existing.duplicate(true)
+	metadata.erase("allowed_modules")
+	metadata["restricted_modules"] = ordered
+	properties["level"] = metadata
+	if properties != document.properties:
+		apply_metadata({"properties": properties})
+	return DataResult.success(PackedStringArray(ordered))
+
+
+## 读取只投影旧开关，打开表单不补写新策略、不创建撤销历史或改变保存点。
+func get_enabled_commands(_content: ContentRegistry) -> PackedStringArray:
+	var metadata: Variant = document.properties.get("level", {})
+	if not metadata is Dictionary:
+		return PackedStringArray()
+	var checked := CommandPermissions.read(metadata)
+	return checked.value.duplicate() if checked.is_ok() else PackedStringArray()
+
+
+## 单项指令开关与依赖项同一事务提交，禁止主入口或未知项不会部分更改原文档。
+func set_command_enabled(identity: String, enabled: bool, content: ContentRegistry) -> DataResult:
+	if content == null:
+		return DataResult.failure("更改指令权限需要内容注册表。")
+	var metadata: Variant = document.properties.get("level", {})
+	if not metadata is Dictionary:
+		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
+	var existing := CommandPermissions.read(metadata)
+	if not existing.is_ok():
+		return existing
+	var changed := CommandPermissions.toggle(existing.value, identity, enabled)
+	if not changed.is_ok():
+		return changed
+	return set_enabled_commands(changed.value, content)
+
+
+## 显式选择以稳定顺序保存新策略并派生旧家族开关，保留其他规则及所有扩展字段。
+func set_enabled_commands(value: Variant, content: ContentRegistry) -> DataResult:
+	if content == null:
+		return DataResult.failure("更改指令权限需要内容注册表。")
+	var existing: Variant = document.properties.get("level", {})
+	if not existing is Dictionary:
+		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
+	var checked := CommandPermissions.normalize_enabled(value)
+	if not checked.is_ok():
+		return checked
+	var ids: PackedStringArray = checked.value
+	var properties := document.properties.duplicate(true)
+	var metadata: Dictionary = existing.duplicate(true)
+	metadata["enabled_commands"] = Array(ids)
+	metadata.merge(CommandPermissions.legacy_flags(ids), true)
+	properties["level"] = metadata
+	if properties != document.properties:
+		apply_metadata({"properties": properties})
+	return DataResult.success(ids.duplicate())
 
 
 ## 读取玩家每个模块的耐久上限；旧地图未指定时仅在编辑表单中显示默认值一。
@@ -251,6 +486,9 @@ func set_time_limit_seconds(seconds: float) -> DataResult:
 	if not existing is Dictionary:
 		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
 	var ticks := roundi(seconds / SimulationWorld.TICK_DURATION)
+	var deadlines := MapValidation.check_timed_gate_deadlines(document.objects, ticks)
+	if not deadlines.is_ok():
+		return deadlines
 	if existing.get("completion_mode") == "reach_or_clear" and DataValidation.is_integer(existing.get("max_ticks"), 1, 36000) and int(existing.max_ticks) == ticks:
 		return DataResult.success(seconds)
 	var properties := document.properties.duplicate(true)
@@ -338,6 +576,19 @@ func place_enemy(position: Vector2, content: ContentRegistry) -> DataResult:
 	return DataResult.success(created.value.duplicate(true))
 
 
+## 重新按当前地图核验框选结果，一次事务删除完整敌人，地形、机关和模板原样保留。
+func remove_enemies_in_rectangle(area: Rect2i, content: ContentRegistry) -> int:
+	var identities := MapEditorEnemyTemplate.in_rectangle(document, area, content)
+	if identities.is_empty():
+		return 0
+	begin_action()
+	for index in range(document.enemies.size() - 1, -1, -1):
+		if document.enemies[index].get("id") in identities:
+			document.enemies.remove_at(index)
+	end_action()
+	return identities.size()
+
+
 ## 敌人实例名称与敌人、对象共享唯一空间，撤销后重新放置也不会覆盖现有数据。
 func _next_enemy_id() -> String:
 	var used := {"player": true}
@@ -349,6 +600,68 @@ func _next_enemy_id() -> String:
 	while used.has("enemy_%d" % number):
 		number += 1
 	return "enemy_%d" % number
+
+
+## 在格心放置指定倒计时的限时闸门，完整校验后只提交一次撤销事务。
+func place_timed_gate(cell: Vector2i, seconds: float, content: ContentRegistry) -> DataResult:
+	var level: Variant = document.properties.get("level", {})
+	var timer := MapEditorTimedGate.ticks_from_seconds(seconds, level.get("max_ticks", 0) if level is Dictionary else 0)
+	if not timer.is_ok():
+		return timer
+	var placement := MapEditorTimedGate.check_placement(document, cell, content)
+	if not placement.is_ok():
+		return placement
+	var used := {"player": true}
+	for entries: Array in [document.enemies, document.objects]:
+		for entry: Dictionary in entries:
+			if entry.has("id"):
+				used[entry.id] = true
+	var number := 1
+	while used.has("timed_gate_%d" % number):
+		number += 1
+	var gate := {"id": "timed_gate_%d" % number, "type": "timed_gate", "position": {"x": cell.x + 0.5, "y": cell.y + 0.5}, "size": 1, "properties": {"close_after_ticks": timer.value}}
+	begin_action()
+	document.objects.append(gate)
+	end_action()
+	return DataResult.success(gate.duplicate(true))
+
+
+## 单次事务只改所选闸门的倒计时，保留尺寸、ID、位置与全部扩展字段。
+func set_timed_gate_seconds(identity: String, seconds: float) -> DataResult:
+	var level: Variant = document.properties.get("level", {})
+	var timer := MapEditorTimedGate.ticks_from_seconds(seconds, level.get("max_ticks", 0) if level is Dictionary else 0)
+	if not timer.is_ok():
+		return timer
+	for index in document.objects.size():
+		var original: Dictionary = document.objects[index]
+		if original.get("type") != "timed_gate" or original.get("id") != identity:
+			continue
+		if not original.get("properties", {}) is Dictionary:
+			return DataResult.failure("闸门属性无效，请先在元数据中修正。")
+		if original.get("properties", {}).get("close_after_ticks") == timer.value:
+			return DataResult.success(seconds)
+		var gate := original.duplicate(true)
+		gate["properties"] = gate.get("properties", {}).duplicate(true)
+		gate.properties["close_after_ticks"] = timer.value
+		var valid := MapObjectDefinition.validate(gate, Vector2i(document.width, document.height))
+		if not valid.is_ok():
+			return valid
+		begin_action()
+		document.objects[index] = gate
+		end_action()
+		return DataResult.success(seconds)
+	return DataResult.failure("所选限时闸门已不存在。")
+
+
+## 仅删除指定限时闸门，地板、其他对象与机关扩展原样保留。
+func remove_timed_gate(identity: String) -> DataResult:
+	for index in document.objects.size():
+		if document.objects[index].get("type") == "timed_gate" and document.objects[index].get("id") == identity:
+			begin_action()
+			document.objects.remove_at(index)
+			end_action()
+			return DataResult.success()
+	return DataResult.failure("所选限时闸门已不存在。")
 
 
 # 用途：提供可独立编辑的元数据副本，包含当前尚未实现玩法的扩展数据。

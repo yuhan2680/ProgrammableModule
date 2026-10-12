@@ -101,6 +101,12 @@
 		  "speaker": {
 			"type": "string",
 			"maxLength": 65536
+		  },
+		  "format": {
+			"type": "string",
+			"enum": ["plain", "markdown"],
+			"default": "plain",
+			"description": "可选的引导正文格式；旧地图省略时保持纯文本，新编辑页显式使用 markdown。"
 		  }
 		}
 	  }

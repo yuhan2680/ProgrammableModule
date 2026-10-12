@@ -8,6 +8,8 @@ var document: MapDocument
 var id: String = ""
 var display_name: String = ""
 var description: String = ""
+var subtitle: String = ""
+var creator: String = ""
 var source_path: String = ""
 var module_limit: int = 1
 # 零仅表示旧地图未覆盖耐久；显式配置必须为正数，运行时继续继承各模块定义。
@@ -31,6 +33,9 @@ var allow_radar: bool = false
 var allow_radar_events: bool = false
 var allow_random: bool = false
 var allow_for: bool = false
+# 新字段缺省时仅投影旧权限，解析器仍接收 null 并保留原有行为。
+var has_command_policy: bool = false
+var enabled_commands := PackedStringArray()
 var max_ticks: int = 0
 var completion_mode: String = "goal"
 var allowed_calls := PackedStringArray(["move"])
@@ -52,6 +57,10 @@ static func from_document(map_document: MapDocument, content: ContentRegistry, p
 	level.document = map_document.duplicate_document()
 	level.id = map_document.id
 	level.display_name = map_document.display_name
+	# MapCodec 已在所有载入与写盘边界验证可选署名；缺省为空且不翻译玩家输入。
+	level.creator = metadata.get("creator", "")
+	# 可选副标题只用于编程页标题下的小字；缺省时继续显示既有目标说明。
+	level.subtitle = metadata.get("subtitle", "")
 	level.source_path = path
 	var limit: Variant = metadata.get("module_limit", maxi(map_document.player_spawn["modules"].size(), 1))
 	if not DataValidation.is_integer(limit, 1, 256):
@@ -137,18 +146,36 @@ static func from_document(map_document: MapDocument, content: ContentRegistry, p
 			level.allowed_calls.append("attack")
 		if content.get_module(module_id).behavior == "ShootingModule" and not "shoot" in level.allowed_calls:
 			level.allowed_calls.append("shoot")
+	var command_policy := CommandPermissions.read(metadata)
+	if not command_policy.is_ok():
+		return command_policy
+	level.has_command_policy = metadata.has("enabled_commands")
+	level.enabled_commands = command_policy.value
+	if level.has_command_policy:
+		# 布尔家族打开既有解析能力，精确的广播/具名/声明限制由显式 ID 再次校验。
+		var flags := CommandPermissions.legacy_flags(level.enabled_commands)
+		for flag: String in flags:
+			level.set(flag, flags[flag])
 	var goal_result := _read_goal(metadata.get("goal"), level, content)
 	if not goal_result.is_ok():
 		return goal_result
 	return DataResult.success(level)
 
 
-## 未指定可用模块时沿用原出生装配的类型，避免导入地图意外解锁新能力。
+## 显式禁止列表从当前目录扣除；没有新字段的旧图继续沿用允许列表或出生模板。
 static func _read_allowed_modules(metadata: Dictionary, map_document: MapDocument, content: ContentRegistry) -> DataResult:
 	var fallback: Array = []
-	for instance: Dictionary in map_document.player_spawn["modules"]:
-		if not instance["module_id"] in fallback:
-			fallback.append(instance["module_id"])
+	var restricted := PackedStringArray()
+	if metadata.has("restricted_modules"):
+		var checked := MapValidation.check_restricted_modules(metadata.restricted_modules, content)
+		if not checked.is_ok():
+			return checked
+		restricted = checked.value
+		fallback = content.modules.keys()
+	else:
+		for instance: Dictionary in map_document.player_spawn["modules"]:
+			if not instance["module_id"] in fallback:
+				fallback.append(instance["module_id"])
 	var raw_allowed: Variant = metadata.get("allowed_modules", fallback)
 	if not raw_allowed is Array or raw_allowed.is_empty() or raw_allowed.size() > 256:
 		return DataResult.failure("关卡 allowed_modules 必须包含 1..256 个模块 ID。")
@@ -159,6 +186,11 @@ static func _read_allowed_modules(metadata: Dictionary, map_document: MapDocumen
 		if module_id in allowed:
 			return DataResult.failure("关卡 allowed_modules 中存在重复 ID：%s。" % module_id)
 		allowed.append(module_id)
+	# 同时存在两个字段时先验证旧允许列表，再扣除禁止项；手动 JSON 不能绕过限制。
+	for module_id in restricted:
+		var index := allowed.find(module_id)
+		if index >= 0:
+			allowed.remove_at(index)
 	return DataResult.success(allowed)
 
 

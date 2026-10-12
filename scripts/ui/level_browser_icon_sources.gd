@@ -1,0 +1,13 @@
+extends RefCounted
+## 选关 SVG 的可导出源数据；原图导出为纹理后不再保留 XML，回归核对本字典与 assets/ui 原件一致。
+
+const SVG := {
+	"res://assets/ui/navigation_back.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"m14.5 5.5-6.5 6.5 6.5 6.5\" fill=\"none\" stroke=\"#788392\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>\n",
+	"res://assets/ui/navigation_forward.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"m9.5 5.5 6.5 6.5-6.5 6.5\" fill=\"none\" stroke=\"#788392\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>\n",
+	"res://assets/ui/more.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><g fill=\"#788392\"><circle cx=\"5\" cy=\"12\" r=\"1.75\"/><circle cx=\"12\" cy=\"12\" r=\"1.75\"/><circle cx=\"19\" cy=\"12\" r=\"1.75\"/></g></svg>\n",
+	"res://assets/ui/search.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><circle cx=\"10.4\" cy=\"10.4\" r=\"6.5\" fill=\"none\" stroke=\"#788392\" stroke-width=\"1.8\"/><path d=\"m15.2 15.2 5.2 5.2\" fill=\"none\" stroke=\"#788392\" stroke-width=\"1.8\" stroke-linecap=\"round\"/></svg>\n",
+	"res://assets/ui/search_collapse.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"m5 5.5 6.5 6.5L5 18.5m8-13 6.5 6.5-6.5 6.5\" fill=\"none\" stroke=\"#788392\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>\n",
+	"res://assets/ui/refresh.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><g fill=\"none\" stroke=\"#3C4657\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M19.8 14.7A8.1 8.1 0 0 0 12 4H8.5m0 0 3-3m-3 3 3 3\"/><path d=\"M4.2 9.3A8.1 8.1 0 0 0 12 20h3.5m0 0-3-3m3 3-3 3\"/></g></svg>\n",
+	"res://assets/ui/import_level.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><g fill=\"none\" stroke=\"#3C4657\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12.5 6H9.7L7.6 3.9H3.8A1.8 1.8 0 0 0 2 5.7v13.1a1.8 1.8 0 0 0 1.8 1.8h15a1.8 1.8 0 0 0 1.8-1.8v-6.1M2.3 9h9.4\"/><circle cx=\"18.1\" cy=\"6.2\" r=\"4.2\"/><path d=\"M18.1 4.3v3.8m-1.9-1.9h3.8\"/></g></svg>\n",
+	"res://assets/ui/sort.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><g fill=\"none\" stroke=\"#3C4657\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M7.2 20V4m-4 4 4-4 4 4M16.8 4v16m-4-4 4 4 4-4\"/></g></svg>\n",
+}

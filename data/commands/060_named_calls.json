@@ -6,17 +6,20 @@
   "category_title": {
     "zh_CN": "动作指令",
     "zh_HK": "動作指令",
-    "en": "Actions"
+    "en": "Actions",
+    "es": "Acciones"
   },
   "title": {
     "zh_CN": "具名模块调用",
     "zh_HK": "具名模組呼叫",
-    "en": "Named Module Calls"
+    "en": "Named Module Calls",
+    "es": "Llamadas a módulos por nombre"
   },
   "description": {
     "zh_CN": "把 module 替换成你在组装页设置的模块名称，只调用这个模块的对应能力。名称区分大小写，须以英文字母或下划线开头，后续可用英文字母、数字、下划线，且不能使用保留字。指定移动模块时仍移动整台机器人，但只使用该驱动的速度。",
     "zh_HK": "把 module 換成你在組裝頁設定的模組名稱，只呼叫該模組的對應能力。名稱區分大小寫，須以英文字母或底線開頭，其後可用英文字母、數字、底線，而且不能使用保留字。指定移動模組時仍會移動整台機械人，但只使用該驅動模組的速度。",
-    "en": "Replace module with the name assigned in assembly to call only that module’s matching ability. Names are case-sensitive, start with an English letter or underscore, and then use letters, digits, or underscores; reserved words are not allowed. A named move still moves the whole robot, using only the selected drive’s speed."
+    "en": "Replace module with the name assigned in assembly to call only that module’s matching ability. Names are case-sensitive, start with an English letter or underscore, and then use letters, digits, or underscores; reserved words are not allowed. A named move still moves the whole robot, using only the selected drive’s speed.",
+    "es": "Sustituye module por el nombre asignado en el montaje para llamar solo a la capacidad correspondiente de ese módulo. Los nombres distinguen mayúsculas y minúsculas, deben empezar por una letra inglesa o un guion bajo y pueden continuar con letras inglesas, números o guiones bajos; no se permiten palabras reservadas. Una llamada move con nombre sigue moviendo todo el robot, pero usa solo la velocidad del módulo elegido."
   },
   "syntax": "module.move(angle, distance)\nmodule.attack(angle)\nmodule.shoot(angle)",
   "requirements": {

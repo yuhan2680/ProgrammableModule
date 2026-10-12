@@ -4,19 +4,22 @@
   "category_title": {
     "zh_CN": "状态查询",
     "zh_HK": "狀態查詢",
-    "en": "Queries"
+    "en": "Queries",
+    "es": "Consultas"
   },
   "id": "named_distance",
   "order": 111,
   "title": {
     "zh_CN": "具名测距",
     "zh_HK": "具名測距",
-    "en": "Named Distance"
+    "en": "Named Distance",
+    "es": "Medición de distancia por nombre"
   },
   "description": {
     "zh_CN": "用组装页设置的测距模块名称替换 module，从该实例的实际中心测量前方距离；名称区分大小写。模块位置会影响读数，不从机器中心或其他传感器代测。参数、单位、障碍规则及只读特性与 distance 相同；只用于数值参数或条件，不能独立执行。",
     "zh_HK": "用組裝頁設定的測距模組名稱取代 module，從該實例的實際中心測量前方距離；名稱區分大小寫。模組位置會影響讀數，不會從機器中心或其他感應器代為測量。參數、單位、障礙規則及唯讀特性與 distance 相同；只用於數值參數或條件，不能獨立執行。",
-    "en": "Replace module with the rangefinder name assigned in assembly to measure from that instance’s actual center. Names are case-sensitive. Placement affects the reading; it does not measure from the robot center or another sensor. Arguments, units, obstacle rules, and read-only behavior match distance. Use it in a numeric argument or condition, never as a standalone action."
+    "en": "Replace module with the rangefinder name assigned in assembly to measure from that instance’s actual center. Names are case-sensitive. Placement affects the reading; it does not measure from the robot center or another sensor. Arguments, units, obstacle rules, and read-only behavior match distance. Use it in a numeric argument or condition, never as a standalone action.",
+    "es": "Sustituye module por el nombre del módulo de distancia asignado en el montaje para medir desde el centro real de esa instancia. Los nombres distinguen mayúsculas y minúsculas. Su posición afecta a la lectura; no se mide desde el centro del robot ni desde otro sensor. Los argumentos, las unidades, las reglas de obstáculos y el comportamiento de solo lectura son los mismos que los de distance. Úsalo en un argumento numérico o una condición, nunca como acción independiente."
   },
   "syntax": "module.distance(angle)",
   "requirements": {

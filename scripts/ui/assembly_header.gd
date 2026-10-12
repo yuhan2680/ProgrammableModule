@@ -17,6 +17,7 @@ const GAP := 10.0
 var navigation: Panel
 var description_label: Label
 var back_button: Button
+var forward_button: Button
 var confirm_button: Button
 var restore_button: Button
 var save_button: Button
@@ -34,6 +35,8 @@ func _ready() -> void:
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	navigation = GameTheme.navigation_pill(self, back_requested.emit, "返回关卡", "Assembly")
 	back_button = navigation.get_node("AssemblyBackButton")
+	forward_button = navigation.get_node("AssemblyForwardButton")
+	forward_button.pressed.connect(confirm_requested.emit)
 	description_label = GameTheme.label(self, "", 14, true)
 	description_label.name = "AssemblyHeaderDescription"
 	description_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -72,10 +75,18 @@ func configure(returning_from_code: bool = false, playtest: bool = false) -> voi
 	if confirm_button == null:
 		return
 	confirm_button.tooltip_text = tr("确认装配，返回编程") if returning_from_code else tr("确认装配，开始编程")
+	forward_button.tooltip_text = confirm_button.tooltip_text
 	save_button.visible = not playtest
 	restore_button.visible = not playtest
 	_update_tooltips()
 	_layout_header()
+
+
+## 左侧前进箭头与蓝色确认共用同一个校验结果，禁用和失败原因始终一致。
+func set_confirmation_state(valid: bool, tooltip: String) -> void:
+	for button: Button in [confirm_button, forward_button]:
+		button.disabled = not valid
+		button.tooltip_text = tooltip
 
 
 ## 非确认按钮在语言切换时刷新说明，避免覆盖外层刚更新的装配校验错误。

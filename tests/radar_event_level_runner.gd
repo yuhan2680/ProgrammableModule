@@ -198,7 +198,7 @@ func _test_ui() -> void:
 		return
 	bench.set_process(false)
 	_check(bench._hint_button.visible and bench._code.get_theme_stylebox("normal").bg_color == Color("121314"), "保留正式教学提示与深色代码区")
-	_check(bench._entry_hint.text.contains("onDetected") and bench._goal_text().contains("雷达事件"), "页头和目标明确事件主题")
+	_check(WorkbenchProgramGuide.entry_text(bench.session.level).contains("onDetected") and bench._goal_text().contains("雷达事件"), "页头和目标明确事件主题")
 	game.settings.set_language("en")
 	await process_frame
 	_check(game.tr(game.session.level.display_name) == "Level 15 · Automatic Targeting", "关卡名字本土化")

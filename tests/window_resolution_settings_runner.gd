@@ -24,6 +24,7 @@ func _run() -> void:
 	_test_invalid_inputs_and_public_entries()
 	_test_invalid_files()
 	_test_save_failure()
+	_test_ui_scale()
 	AudioServer.set_bus_volume_db(master, original_db)
 	AudioServer.set_bus_mute(master, original_mute)
 	TranslationServer.set_locale(original_locale)
@@ -45,7 +46,7 @@ func _test_defaults_and_round_trip() -> void:
 	_check(settings.set_volume(0.4).is_ok() and settings.set_language("en").is_ok(), "建立独立音量与语言偏好")
 	_check(settings.set_tab_completion(false).is_ok() and settings.set_assembly_free_zoom(true).is_ok(), "建立独立补全与装配缩放偏好")
 	_check(settings.set_code_hints("more").is_ok() and settings.set_code_color_mode("dark").is_ok() and settings.set_menu_background("solid").is_ok(), "建立独立提示、配色与背景偏好")
-	for resolution in ["1024x640", "1152x720", "1280x800", "1440x900", "1600x1000", "1920x1200", "maximized"]:
+	for resolution in ["1024x640", "1152x720", "1280x720", "1280x800", "1366x768", "1440x900", "1600x900", "1600x1000", "1920x1080", "1920x1200", "2560x1440", "3840x2160", "maximized"]:
 		before_changes = _changed_count
 		_check(settings.set_window_resolution(resolution).is_ok(), "允许预设或最大化：" + resolution)
 		_check(_changed_count == before_changes + 1, "每次合法分辨率选择只通知一次")
@@ -89,7 +90,7 @@ func _test_invalid_inputs_and_public_entries() -> void:
 	_check(settings.set_window_resolution("1440x900").is_ok(), "先保存有效窗口预设")
 	var before := FileAccess.get_file_as_bytes(path)
 	var before_changes := _changed_count
-	for value in [true, false, 0, 1280, 1280.0, null, [], {}, Vector2i(1280, 800), "", "1280×800", "1280X800", "1280x720", "1920x1080", "1280x800 ", "MAXIMIZED", "fullscreen", StringName("1280x800")]:
+	for value in [true, false, 0, 1280, 1280.0, null, [], {}, Vector2i(1280, 800), "", "1280×800", "1280X800", "1280x721", "1920x1079", "1280x800 ", "MAXIMIZED", "fullscreen", StringName("1280x800")]:
 		var result := settings.set_window_resolution(value)
 		_check(not result.is_ok(), "拒绝非法尺寸或类型：%s" % str(value))
 		_check(settings.window_resolution == "1440x900" and settings.last_error == "窗口分辨率必须为预设尺寸或最大化。", "非法值保留当前分辨率并给出稳定错误")
@@ -101,7 +102,7 @@ func _test_invalid_inputs_and_public_entries() -> void:
 	_check(not settings.set_tab_completion(false).is_ok() and settings.tab_completion, "补全入口拒绝已有无效分辨率")
 	_check(not settings.set_assembly_free_zoom(true).is_ok() and not settings.assembly_free_zoom, "装配缩放入口拒绝已有无效分辨率")
 	_check(not settings.set_code_hints("none").is_ok() and settings.code_hints == "normal", "代码提示入口拒绝已有无效分辨率")
-	_check(not settings.set_code_color_mode("dark").is_ok() and settings.code_color_mode == "light", "配色入口拒绝已有无效分辨率")
+	_check(not settings.set_code_color_mode("light").is_ok() and settings.code_color_mode == "dark", "配色入口拒绝已有无效分辨率")
 	_check(not settings.set_menu_background("solid").is_ok() and settings.menu_background_mode == "default", "背景事务失败时恢复此前背景")
 	_check(not settings.save_settings().is_ok(), "直接保存拒绝已有无效分辨率")
 	_check(_changed_count == before_changes and FileAccess.get_file_as_bytes(path) == before, "无效内存状态不能通知或覆盖磁盘")
@@ -114,7 +115,7 @@ func _test_invalid_inputs_and_public_entries() -> void:
 
 ## 任一坏分辨率值触发完整默认回退，读取失败不能部分应用其他已解析字段。
 func _test_invalid_files() -> void:
-	var invalid_values: Array = [true, false, 0, 1.5, null, [], {}, "", "1280x720", "MAXIMIZED", "fullscreen"]
+	var invalid_values: Array = [true, false, 0, 1.5, null, [], {}, "", "1280x721", "MAXIMIZED", "fullscreen"]
 	for index in invalid_values.size():
 		var path := _test_root.path_join("invalid_file_%d.json" % index)
 		var config := {"format_version": 1, "audio": {"master_volume": 0.2}, "interface": {"language": "en", "tab_completion": false, "assembly_free_zoom": true, "code_hints": "more", "code_color_mode": "dark", "menu_background_mode": "solid", "window_resolution": invalid_values[index]}}
@@ -125,7 +126,7 @@ func _test_invalid_files() -> void:
 		settings.changed.connect(_on_changed)
 		var before_changes := _changed_count
 		_check(not settings.load_settings().is_ok() and not settings.last_error.is_empty(), "坏分辨率配置明确返回错误")
-		_check(settings.window_resolution == "1280x800" and settings.volume == 1.0 and settings.language == "zh_CN" and settings.tab_completion and not settings.assembly_free_zoom and settings.code_hints == "normal" and settings.code_color_mode == "light" and settings.menu_background_mode == "default", "坏字段使整份设置使用默认值")
+		_check(settings.window_resolution == "1280x800" and settings.volume == 1.0 and settings.language == "zh_CN" and settings.tab_completion and not settings.assembly_free_zoom and settings.code_hints == "normal" and settings.code_color_mode == "dark" and settings.menu_background_mode == "default", "坏字段使整份设置使用默认值")
 		_check(_changed_count == before_changes + 1, "坏文件回退后只通知一次")
 		_check(FileAccess.get_file_as_bytes(path) == before, "坏配置原文保持不变")
 	var background_path := _test_root.path_join("bad_background.json")
@@ -159,6 +160,47 @@ func _test_save_failure() -> void:
 	_check(FileAccess.get_file_as_bytes(path) == before, "超限写盘失败逐字节保留原配置")
 	var reloaded := GameSettings.new(path)
 	_check(reloaded.load_settings().is_ok() and reloaded.window_resolution == "1280x800" and reloaded.volume == 0.5 and reloaded.language == "en", "失败后仍能载入磁盘上的原有效设置")
+
+
+## 缩放档位往返、旧配置补缺与坏值拒绝都经过真实文件及统一校验，不能破坏其他偏好。
+func _test_ui_scale() -> void:
+	var path := _test_root.path_join("ui_scale.json")
+	_write_text(path, JSON.stringify({"format_version": 1, "audio": {"master_volume": 0.4}, "interface": {"language": "en", "window_resolution": "1920x1080", "extension": ["保留", 3]}}))
+	var before := FileAccess.get_file_as_bytes(path)
+	var settings := GameSettings.new(path)
+	_check(settings.load_settings().is_ok() and settings.ui_scale == 100, "旧配置缩放默认 100%")
+	_check(FileAccess.get_file_as_bytes(path) == before, "缩放补缺只在内存，不擅自改旧文件")
+	settings.changed.connect(_on_changed)
+	for value in [100, 110, 125, 150, 200]:
+		var notifications := _changed_count
+		_check(settings.set_ui_scale(value).is_ok() and _changed_count == notifications + 1, "合法百分比立即应用并只通知一次 " + str(value))
+		var stored := GameSettings.new(path)
+		_check(stored.load_settings().is_ok() and stored.ui_scale == value, "缩放百分比跨实例恢复 " + str(value))
+		_check(stored.volume == 0.4 and stored.language == "en" and stored.window_resolution == "1920x1080", "缩放保存保留音量、语言与窗口偏好")
+		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+		_check(data["interface"]["extension"] == JSON.parse_string(before.get_string_from_utf8())["interface"]["extension"] and data["interface"]["ui_scale"] == value, "缩放保存保留未知扩展")
+	before = FileAccess.get_file_as_bytes(path)
+	var notifications := _changed_count
+	for value in [true, false, null, [], {}, "125", 0, 95, 111, 201, 110.5, NAN, INF]:
+		_check(not settings.set_ui_scale(value).is_ok() and settings.ui_scale == 200, "拒绝非法缩放且不改变内存 " + str(value))
+	_check(_changed_count == notifications and FileAccess.get_file_as_bytes(path) == before, "非法缩放不通知且逐字节保留原文件")
+	settings.ui_scale = 111
+	_check(not settings.set_window_resolution("1280x720").is_ok() and not settings.set_volume(0.2).is_ok() and not settings.save_settings().is_ok(), "其他入口与直接保存不能绕过缩放校验")
+	_check(FileAccess.get_file_as_bytes(path) == before, "无效缩放状态不能覆盖有效配置")
+	for value in [true, null, "125", 111, 110.5]:
+		var invalid := _test_root.path_join("bad_scale_%s.json" % str(value))
+		_write_text(invalid, JSON.stringify({"format_version": 1, "audio": {"master_volume": 0.2}, "interface": {"language": "en", "window_resolution": "1920x1080", "ui_scale": value}}))
+		var original := FileAccess.get_file_as_bytes(invalid)
+		var bad := GameSettings.new(invalid)
+		_check(not bad.load_settings().is_ok() and bad.ui_scale == 100 and bad.volume == 1.0 and bad.language == "zh_CN" and bad.window_resolution == "1280x800", "坏缩放字段整份配置回退默认")
+		_check(FileAccess.get_file_as_bytes(invalid) == original, "坏缩放配置原文保留")
+	var blocker := _test_root.path_join("blocked_scale")
+	_write_text(blocker, "保留占位文件")
+	var blocked := GameSettings.new(blocker.path_join("settings.json"))
+	blocked.changed.connect(_on_changed)
+	notifications = _changed_count
+	_check(not blocked.set_ui_scale(125).is_ok() and blocked.ui_scale == 125 and _changed_count == notifications + 1, "缩放写盘失败报告错误，同时保留即时内存选择")
+	_check(FileAccess.get_file_as_string(blocker) == "保留占位文件", "缩放写入失败不能覆盖路径占位文件")
 
 
 ## 累计设置变更信号，验证合法选择和完整载入只通知一次。

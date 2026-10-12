@@ -37,7 +37,7 @@ func _run() -> void:
 	if DisplayServer.get_name() != "headless":
 		_check(root.unresizable, "启动后禁止拖动改变窗口尺寸")
 	_check(root.content_scale_aspect == Window.CONTENT_SCALE_ASPECT_EXPAND, "启动使用 EXPAND 画幅避免比例黑边")
-	_check(root.content_scale_size == Vector2i(1280, 800) and root.content_scale_mode == Window.CONTENT_SCALE_MODE_CANVAS_ITEMS, "逻辑画幅与 Canvas Items 缩放保持稳定")
+	_check(root.content_scale_size == Vector2i(1280, 800) and root.content_scale_mode == (Window.CONTENT_SCALE_MODE_DISABLED if OS.get_name() == "Windows" else Window.CONTENT_SCALE_MODE_CANVAS_ITEMS), "逻辑画幅与 Canvas Items 缩放保持稳定")
 	if not await _open_settings():
 		await _dispose_game()
 		_finish()
@@ -45,11 +45,12 @@ func _run() -> void:
 	_check_layout()
 	await _choose_resolution("1024x640", true)
 	_check_fixed("1024x640")
-	_check(root.get_screen_transform().get_scale().x < 1.0, "1024 窗口真实使用小于 1 的画幅缩放")
+	_check(is_equal_approx(root.get_screen_transform().get_scale().x, 1.0) if OS.get_name() == "Windows" else root.get_screen_transform().get_scale().x < 1.0, "Windows 默认使用像素百分比，其他平台保持自动画幅缩放")
 	await _capture("settings_1024x640")
 	await _choose_resolution("1280x800", false)
 	_check_fixed("1280x800")
 	await _check_languages()
+	await _check_widescreen_presets()
 	await _check_availability()
 	await _check_position_preserved()
 	await _choose_resolution("1024x640", true)
@@ -82,6 +83,12 @@ func _check_area_limits() -> void:
 	_check(exact.has("1280x800") and not exact.has("1440x900"), "可用区域恰好 1280×800 时包含自身且排除更大尺寸")
 	_check(GameWindowController.resolutions_for_area(Vector2i(800, 600)) == PackedStringArray(["maximized"]), "小屏幕仅提供最大化")
 	_check(GameWindowController.resolution_size("1024x640") == Vector2i(1024, 640), "预设值转换为准确客户区尺寸")
+	for dimensions: Vector2i in [Vector2i(1366, 768), Vector2i(1920, 1080), Vector2i(2560, 1440), Vector2i(3840, 2160)]:
+		var value := "%dx%d" % [dimensions.x, dimensions.y]
+		var available := GameWindowController.resolutions_for_area(dimensions)
+		_check(available.has(value) and GameWindowController.resolution_size(value) == dimensions, "常见宽屏与高分辨率在相等边界可用 " + value)
+		_check(not available.has("1920x1200") if dimensions == Vector2i(1920, 1080) else available.has("1280x720"), "按实际宽高判断可用性，不能仅比较宽度 " + value)
+	_check(GameWindowController.resolutions_for_area(Vector2i(3840, 2159)).has("2560x1440") and not GameWindowController.resolutions_for_area(Vector2i(3840, 2159)).has("3840x2160"), "4K 窗口保留标题栏与任务栏边界，超出客户区尺寸不可用")
 
 
 ## 实例使用真实游戏入口，但设置、草稿和用户关卡均指向本轮临时目录。
@@ -100,7 +107,10 @@ func _open_settings() -> bool:
 	if not _check(button != null and button.is_visible_in_tree(), "主菜单设置按钮存在且可见"):
 		return false
 	await _click(button)
-	return _check(_game.page == GameShell.Page.SETTINGS and _game.settings_panel != null, "真实设置按钮打开设置页面")
+	var deadline := Time.get_ticks_msec() + 2000
+	while _game._menu_transitioning and Time.get_ticks_msec() < deadline:
+		await process_frame
+	return _check(not _game._menu_transitioning and _game.page == GameShell.Page.SETTINGS and _game.settings_panel != null, "真实设置按钮打开设置页面")
 
 
 ## 分辨率必须是显示分组首行，并沿用原选项控件和分隔线布局。
@@ -116,7 +126,7 @@ func _check_layout() -> void:
 	_check(row.get_parent() == tab.get_parent() and row.get_index() == 0 and row.get_global_rect().end.y < tab.global_position.y, "分辨率位于显示分组最上方")
 	_check(panel.find_child("WindowResolutionDivider", true, false) != null and row.get_global_rect().encloses(option.get_global_rect()), "分辨率行具有分隔线且选项不超出行边界")
 	_check(option.item_count == GameSettings.SUPPORTED_WINDOW_RESOLUTIONS.size(), "选项数量与模型允许值一致")
-	_check(option.get_item_text(2) == "1280 × 800" and option.get_theme_icon("arrow").resource_path.ends_with("settings_language_toggle.svg"), "尺寸文字和箭头沿用设置样式")
+	_check(option.get_item_text(option.selected) == "1280 × 800" and option.get_theme_icon("arrow").resource_path.ends_with("settings_language_toggle.svg"), "尺寸文字和箭头沿用设置样式")
 
 
 ## 当前设置页面只读取原生选项，不缓存跨页面已销毁控件。
@@ -135,6 +145,9 @@ func _choose_resolution(value: String, mouse_open: bool) -> void:
 	if mouse_open:
 		await _click(option)
 	else:
+		if DisplayServer.get_name() != "headless":
+			root.warp_mouse(option.get_global_transform_with_canvas() * (option.size * 0.5))
+			await _settle()
 		option.grab_focus()
 		await _key(root, KEY_SPACE)
 	var popup := option.get_popup()
@@ -142,7 +155,8 @@ func _choose_resolution(value: String, mouse_open: bool) -> void:
 	await _settle(8)
 	if not _check(popup.visible, "真实输入打开分辨率菜单 " + value):
 		return
-	for attempt in option.item_count * 2:
+	var deadline := Time.get_ticks_msec() + 3000
+	while Time.get_ticks_msec() < deadline:
 		var current := popup.get_focused_item()
 		if current == index:
 			break
@@ -186,10 +200,43 @@ func _check_languages() -> void:
 		var label := _game.settings_panel.find_child("WindowResolutionLabel", true, false) as Label
 		_check(label.atr(label.text) == LABELS[locale], "分辨率标签按当前语言显示 " + locale)
 		_check(option.atr(option.get_item_text(option.item_count - 1)) == MAX_LABELS[locale], "最大化选项按当前语言显示 " + locale)
-		_check(option.get_item_text(0) == "1024 × 640" and option.selected == 2, "切换语言保留尺寸及当前选择 " + locale)
+		_check(option.get_item_text(0) == "1024 × 640" and option.selected == GameSettings.SUPPORTED_WINDOW_RESOLUTIONS.find("1280x800"), "切换语言保留尺寸及当前选择 " + locale)
 		await _capture("settings_1280x800_" + locale)
 	_game.settings.set_language("zh_CN")
 	await _settle()
+
+
+## 新宽屏尺寸走真实下拉菜单并保持等比画幅；桌面只选可容纳项，无显示驱动覆盖到 4K。
+func _check_widescreen_presets() -> void:
+	for value: String in ["1280x720", "1366x768", "1600x900", "1920x1080", "2560x1440", "3840x2160"]:
+		var index := GameSettings.SUPPORTED_WINDOW_RESOLUTIONS.find(value)
+		_check(index >= 0 and _option().get_item_text(index) == value.replace("x", " × "), "下拉菜单包含常见宽屏分辨率 " + value)
+		if _option().is_item_disabled(index):
+			_check(not _game.window_controller.available_resolutions.has(value), "桌面屏幕放不下的窗口保持禁用 " + value)
+			continue
+		await _choose_resolution(value, false)
+		_check_fixed(value)
+		_check(_option().get_global_rect().end.x <= _option().get_parent().get_global_rect().end.x + 1, "宽屏分辨率数值仍完整放入设置行 " + value)
+		await _capture("settings_" + value)
+	await _choose_resolution("1280x720", false)
+	await _click(_option())
+	await _settle(8)
+	var popup := _option().get_popup()
+	_check(popup.visible and root.get_visible_rect().grow(-7).encloses(Rect2(popup.position, popup.size)), "增加至十三项后下拉菜单完整位于小型宽屏画幅内")
+	await _capture("settings_widescreen_options")
+	await _key(root, KEY_ESCAPE)
+	# 用户参考图的第一关教程同样在 16:9 客户区中检查边界与完整图纸。
+	_game._enter_level(_game.catalog.levels[0])
+	await _settle(12)
+	var dialogue_rect := Rect2(_game._dialogue_dialog.position, _game._dialogue_dialog.size)
+	_check(_game._dialogue_dialog.visible and root.get_visible_rect().encloses(dialogue_rect), "16:9 窗口完整显示第一关教程弹窗")
+	var canvas := _game.assembly_panel.canvas
+	_check(Rect2(Vector2.ZERO, canvas.size).grow(1).encloses(canvas._paper_rect()), "16:9 装配图纸完整容纳且不裁剪")
+	await _capture("assembly_tutorial_1280x720")
+	_game._show_main_page()
+	await _settle()
+	await _open_settings()
+	await _choose_resolution("1280x800", false)
 
 
 ## 模拟外层显示器能力通知，检查禁用与恢复，不从设置 UI 修改系统窗口。
@@ -274,22 +321,33 @@ func _check_fast_switch() -> void:
 
 ## Canvas 变换给出逻辑视口命中点；push_input(true) 不能再次逆用根窗口的物理缩放。
 func _click(control: Control) -> void:
-	if not _check(control != null, "真实点击目标存在"):
-		return
+	var opens_page := control.name in [&"StartGameButton", &"MapEditorButton"]
 	var point := control.get_global_transform_with_canvas() * (control.size * 0.5)
+	if DisplayServer.get_name() != "headless":
+		root.warp_mouse(point)
+		await _settle()
+	var window_point := root.get_final_transform() * point
 	var motion := InputEventMouseMotion.new()
-	motion.position = point
-	motion.global_position = point
-	root.push_input(motion, true)
-	await _settle()
+	motion.position = window_point
+	motion.global_position = window_point
+	Input.parse_input_event(motion)
+	Input.flush_buffered_events()
 	for pressed in [true, false]:
 		var event := InputEventMouseButton.new()
-		event.position = point
-		event.global_position = point
+		event.position = window_point
+		event.global_position = window_point
 		event.button_index = MOUSE_BUTTON_LEFT
 		event.pressed = pressed
-		root.push_input(event, true)
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		Input.parse_input_event(event)
+		Input.flush_buffered_events()
 	await _settle()
+	if opens_page:
+		var deadline := Time.get_ticks_msec() + 3000
+		while _game._menu_transitioning and Time.get_ticks_msec() < deadline:
+			await process_frame
+		_check(not _game._menu_transitioning, "主菜单页面转场完成后再验证目的页")
+		await _settle()
 
 
 ## 原生弹窗由根视口路由键盘事件；完整按下与释放验证真实选择生命周期。

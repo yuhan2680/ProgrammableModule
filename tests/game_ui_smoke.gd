@@ -28,6 +28,11 @@ func _run() -> void:
 	root.add_child(game)
 	await process_frame
 	await process_frame
+	_check(game._import_dialog is FileDialog and game._import_dialog.use_native_dialog, "正式导入启用系统原生文件选择器")
+	_check(game._import_dialog.access == FileDialog.ACCESS_FILESYSTEM and game._import_dialog.file_mode == FileDialog.FILE_MODE_OPEN_FILE and game._import_dialog.filters.size() == 1 and game._import_dialog.filters[0].contains("*.json"), "导入选择器允许选择系统目录中的单个 JSON 文件")
+	# 自动化只将系统选择窗口切换为引擎内嵌模式，后续仍走同一文件选择信号。
+	game._clear_progress_dialog.use_native_dialog = false
+	game._import_dialog.use_native_dialog = false
 	_check(not game._message_dialog.visible, "启动没有错误提示")
 	_check(game.page == GameShell.Page.MAIN and game.session == null, "启动停在开始页面")
 	_check(not game._header.visible, "开始页隐藏重复页头")
@@ -36,47 +41,57 @@ func _run() -> void:
 	await _capture("start_page")
 	await _test_settings_page(game)
 	await _test_clear_builtin_progress(game)
-	await _test_clear_user_levels(game)
 	game.find_child("StartGameButton", true, false).pressed.emit()
+	await _wait_menu_transition(game)
 	await process_frame
 	_check(game.page == GameShell.Page.LEVELS, "开始游戏按钮进入关卡网格页")
 	_check(not game._header.visible and game._level_header.is_visible_in_tree() and game.find_child("LevelBackButton", true, false).is_visible_in_tree(), "选关页使用新的图标页头和返回入口")
 	_check(_find_button(game._body, "地图编辑器") == null, "关卡页不再放地图编辑器入口")
 	game._notification(MainLoop.NOTIFICATION_APPLICATION_FOCUS_IN)
 	_check(game.page == GameShell.Page.LEVELS, "选关页重新聚焦只刷新关卡")
-	_check(game.catalog.levels.size() == 15 and game.catalog.levels[0].id == "level_001" and game.catalog.levels[14].id == "level_015" and game.catalog.levels[14].order == 15, "初始包含第一至第十五关，编辑器样例未加入列表")
+	_check(game.catalog.levels.size() == 16 and game.catalog.levels[0].id == "level_001" and game.catalog.levels[14].id == "level_015" and game.catalog.levels[14].order == 15 and game.catalog.levels[15].id == "level_016" and game.catalog.levels[15].order == 16, "初始保留前十五关并追加第十六关逃脱，编辑器样例未加入列表")
 	await _test_level_categories(game)
 	await _test_level_actions_menu(game)
 	_test_level_thumbnails(game)
 	await _capture("level_select")
 	var import_button: Button = game.find_child("ImportLevelButton", true, false)
 	_check(import_button != null, "关卡页存在加号导入按钮")
-	var opened_before := _opened_paths.size()
-	import_button.pressed.emit()
-	_check(_opened_paths.size() == opened_before + 1, "点击加号确实调用一次打开目录接口")
-	_check(DirAccess.dir_exists_absolute(_opened_paths[0]), "导入目录在打开前已创建")
-	_check(_opened_paths[0] == ProjectSettings.globalize_path(game.user_levels_directory), "打开的正是游戏扫描的关卡文件夹")
-	_check(game._import_dialog.visible and game._import_dialog.dialog_text.contains("拖入"), "提示拖入关卡文件及刷新方法")
-	await _capture("level_import")
-	await _test_import_cancel(game)
-	# 放入有效与错误文件，验证一个坏文件不会影响内置关卡和其他有效导入。
+	var downloads := _test_directory.path_join("downloads")
+	DirAccess.make_dir_recursive_absolute(downloads)
 	var custom := game.catalog.levels[0].document.duplicate_document()
 	custom.id = "ui_imported_level"
 	custom.display_name = "导入测试"
-	_check(MapCodec.save_file(custom, game.user_levels_directory.path_join("custom.json"), game.registry).is_ok(), "写入自定义关卡文件")
+	var source_path := downloads.path_join("下载的关卡.json")
+	_check(MapCodec.save_file(custom, source_path, game.registry).is_ok(), "在独立下载目录创建玩家选择的关卡原件")
+	var source_before := FileAccess.get_file_as_bytes(source_path)
+	var opened_before := _opened_paths.size()
+	import_button.pressed.emit()
+	_check(_opened_paths.size() == opened_before, "点击加号直接选择文件，不打开托管关卡目录")
+	_check(game._import_dialog.visible and not game._message_dialog.visible, "点击导入直接显示文件选择器，没有手动复制说明弹窗")
+	var system_downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
+	if not system_downloads.is_empty() and DirAccess.dir_exists_absolute(system_downloads):
+		_check(game._import_dialog.current_dir.simplify_path() == system_downloads.simplify_path(), "导入选择器默认定位系统下载目录")
+	await _capture("level_import")
+	await _test_import_cancel(game, downloads)
+	# 既有坏文件仍单独报告；选择有效文件后由真实信号复制并自动刷新。
+	DirAccess.make_dir_recursive_absolute(game.user_levels_directory)
 	var invalid := FileAccess.open(game.user_levels_directory.path_join("broken.json"), FileAccess.WRITE)
 	invalid.store_string("{broken JSON")
 	invalid.close()
-	game._import_dialog.confirmed.emit()
-	game._import_dialog.hide()
-	_check(game.catalog.levels.size() == 16 and game.catalog.levels[15].id == "ui_imported_level" and not game.catalog.errors.is_empty(), "刷新后有效导入出现在列表，错误文件单独报告")
-	var imported_button := game.find_child("LevelButton_15", true, false) as Button
+	game._import_dialog.file_selected.emit(ProjectSettings.globalize_path(source_path))
+	await process_frame
+	await process_frame
+	_check(not game._import_dialog.visible and not game._message_dialog.visible, "选择有效文件后关闭选择器并完成导入，无需另按刷新")
+	_check(game.catalog.levels.size() == 17 and game.catalog.levels[16].id == "ui_imported_level" and not game.catalog.errors.is_empty(), "自动刷新后有效导入出现在列表，既有错误文件单独报告")
+	_check(game.catalog.levels[16].source_path.get_base_dir() == game.user_levels_directory and FileAccess.file_exists(game.catalog.levels[16].source_path), "导入关卡已自动保存到游戏扫描的托管目录")
+	_check(FileAccess.get_file_as_bytes(source_path) == source_before and _opened_paths.size() == opened_before, "导入不改写下载原件，也不要求玩家打开或手动复制目录")
+	var imported_button := game.find_child("LevelButton_16", true, false) as Button
 	_check(imported_button != null and imported_button.icon != null and imported_button.text.is_empty(), "导入地图自动得到缩略图，无需单独提供图标")
 	var imported_grid := game.find_child("ImportedLevelGrid", true, false) as GridContainer
 	import_button = game.find_child("ImportLevelButton", true, false) as Button
 	_check(imported_grid != null and import_button.get_parent().get_parent() == imported_grid and import_button.get_parent().get_index() == 0, "导入按钮始终位于独立导入网格第一格")
 	_check(imported_button != null and imported_button.get_parent().get_parent() == imported_grid and imported_button.get_parent().get_index() == 1 and imported_button.is_visible_in_tree(), "自定义关卡跟随导入按钮，教学折叠不隐藏导入关卡")
-	_check(_visible_tutorial_count(game) == 7 and _tutorial_toggle_text(game) == "展示更多（15）", "导入关卡不计入教学总数，也不改变默认七张教学卡片")
+	_check(_visible_tutorial_count(game) == 7 and _tutorial_toggle_text(game) == "展示更多（16）", "导入关卡不计入教学总数，也不改变默认七张教学卡片")
 	var first: LevelDefinition = game.catalog.levels[0]
 	var original_map := JSON.stringify(first.document.to_dict(), "", true)
 	await _test_assembly_validity(game, first)
@@ -136,37 +151,39 @@ func _run() -> void:
 	_check(game.session.state == GameSession.State.FAILED and game.session.world == null, "语法错误阻止世界运行")
 	_check(workbench._highlighted_line == 1 and workbench._status.text.contains("第 2 行"), "错误行在代码和状态栏同时显示")
 	workbench._code.text = first.starter_program
-	workbench._tabs.current_tab = 1
+	workbench.header.back_button.pressed.emit()
 	await process_frame
 	await process_frame
-	_check(not workbench._world_panel.visible and workbench._tabs.size.x > 1000, "组装页签暂时隐藏地图，目录与网格使用整行宽度")
-	var canvas := workbench._assembly_panel.canvas
+	_check(game.page == GameShell.Page.ASSEMBLY and game.assembly_panel != null, "返回独立组装页，目录和网格使用完整页面")
+	var canvas := game.assembly_panel.canvas
 	_delete_at(canvas, Vector2.ZERO)
 	_check(game.session.assembly.modules.is_empty(), "选中后 Delete 可以移除玩家安装的模块")
-	_check(workbench._run_button.disabled and workbench._run_button.get_tooltip().contains("至少"), "编程页空装配会实时禁用运行并解释原因")
-	workbench._run_program()
-	_check(game.session.state == GameSession.State.FAILED and workbench._status.text.contains("至少"), "空装配无法运行并提示原因")
-	workbench._tabs.current_tab = 1
-	await process_frame
+	_check(game._confirm_assembly_button.disabled and game._confirm_assembly_button.get_tooltip().contains("至少"), "空装配禁用确认并解释原因")
+	game._confirm_assembly()
+	_check(game.page == GameShell.Page.ASSEMBLY and game.workbench == null, "空装配无法进入编程页")
 	_stroke(canvas, canvas.pixel_at(Vector2.ZERO), MOUSE_BUTTON_LEFT)
 	_check(game.session.assembly.modules.size() == 1, "在网格中左键安装移动模块")
 	_stroke(canvas, canvas.pixel_at(Vector2(1, 0)), MOUSE_BUTTON_LEFT)
 	_check(game.session.assembly.modules.size() == 1, "第一关限制一个模块，失败不会偷偷增加")
 	_drag(canvas, Vector2.ZERO, Vector2(0.5, 0))
-	_check(is_zero_approx(float(game.session.assembly.modules[0].offset.x)), "编程页组装也不能把唯一模块拖离中心")
-	workbench._assembly_panel._module_name.text = "my_drive"
-	workbench._assembly_panel._apply_button.pressed.emit()
+	_check(is_zero_approx(float(game.session.assembly.modules[0].offset.x)), "返回组装也不能把唯一模块拖离中心")
+	game.assembly_panel._module_name.text = "my_drive"
+	game.assembly_panel._apply_button.pressed.emit()
 	_check(game.session.assembly.modules[0].id == "my_drive", "属性面板可以重命名模块")
 	await _capture("level_assembly")
 	game.settings.set_language("en")
 	await _capture("level_assembly_english")
 	game.settings.set_language("zh_CN")
+	game._confirm_assembly_button.pressed.emit()
+	await process_frame
+	workbench = game.workbench
+	workbench.set_process(false)
 	workbench._code.text = SOLUTION
 	await _activate_visible_button(workbench.header.run_button, "通过蓝色图标运行程序")
 	_check(workbench.header.run_button.disabled and not workbench.header.pause_button.disabled and not workbench.header.stop_button.disabled, "运行中顶部运行禁用，暂停和停止可用")
 	_check(workbench._world_panel.visible and workbench._tabs.current_tab == 0, "运行自动返回程序页并恢复地图观察区")
 	_check(game.session.state == GameSession.State.RUNNING, "程序由运行按钮启动")
-	_check(not workbench._code.editable and not canvas.interaction_enabled, "运行时锁定程序和装配编辑")
+	_check(not workbench._code.editable and game.assembly_panel == null, "运行时锁定程序且不存在可绕过锁的内嵌装配页")
 	var active_world := game.session.world
 	var active_runner := game.session.runner
 	workbench._accumulator = 0.05
@@ -223,6 +240,7 @@ func _run() -> void:
 	await process_frame
 	_check(game.page == GameShell.Page.MAIN, "关卡页返回开始页面")
 	game.find_child("MapEditorButton", true, false).pressed.emit()
+	await _wait_menu_transition(game)
 	await process_frame
 	_check(game._editor != null, "旧地图编辑器可以从游戏入口打开")
 	var opened_editor := game._editor
@@ -705,20 +723,18 @@ func _test_assembly_validity(game: GameShell, source_level: LevelDefinition) -> 
 		_press_back(game)
 		return
 	game.workbench.set_process(false)
-	game.workbench._tabs.current_tab = 1
+	game.workbench.header.back_button.pressed.emit()
 	await process_frame
-	canvas = game.workbench._assembly_panel.canvas
+	canvas = game.assembly_panel.canvas
 	_delete_at(canvas, Vector2.ZERO)
-	_check(game.workbench._run_button.disabled and game.workbench._run_button.get_tooltip().contains("中心"), "编程页删除中心后运行按钮立即禁用并显示同一原因")
-	game.workbench._run_program()
-	_check(game.session.state == GameSession.State.FAILED and game.session.world == null, "直接调用运行也不能绕过缺少中心的装配")
-	game.workbench._tabs.current_tab = 1
-	await process_frame
+	_check(game._confirm_assembly_button.disabled and game._confirm_assembly_button.get_tooltip().contains("中心"), "返回组装删除中心后确认禁用并显示原因")
+	game._confirm_assembly()
+	_check(game.page == GameShell.Page.ASSEMBLY and game.workbench == null, "直接确认不能绕过缺少中心的装配")
 	_stroke(canvas, canvas.pixel_at(Vector2.ZERO), MOUSE_BUTTON_LEFT)
-	_check(not game.workbench._run_button.disabled and not game.workbench._run_button.get_tooltip().contains("中心"), "编程页补回中心后运行立即恢复，移除过期提示")
+	_check(not game._confirm_assembly_button.disabled and not game._confirm_assembly_button.get_tooltip().contains("中心"), "补回中心后确认恢复并移除过期提示")
 	_press_back(game)
 	await process_frame
-	_check(game.page == GameShell.Page.LEVELS and game.catalog.levels.size() == 16, "临时关卡不会新增到关卡目录，结束后恢复原选关流程")
+	_check(game.page == GameShell.Page.LEVELS and game.catalog.levels.size() == 17, "临时关卡不会新增到关卡目录，结束后恢复原选关流程")
 
 
 ## 四种编程状态均通过实际按钮返回组装，保留内存作品并终止旧试运行。
@@ -872,54 +888,68 @@ func _enter_recovery_level(game: GameShell, definition: LevelDefinition) -> void
 	_finish_dialogue(game)
 
 
-## 通过焦点输入切换分类，验证折叠数量、独立导入区和会话内刷新记忆。
+## 通过焦点输入切换分类，验证折叠数量、玩家关卡分类和会话内刷新记忆。
 func _test_level_categories(game: GameShell) -> void:
 	var sections := game.find_child("LevelSections", true, false) as VBoxContainer
 	var tutorial := game.find_child("TutorialSection", true, false) as Control
 	var imported := game.find_child("ImportedSection", true, false) as Control
 	var grid := game.find_child("LevelGrid", true, false) as GridContainer
 	var imported_grid := game.find_child("ImportedLevelGrid", true, false) as GridContainer
-	_check(sections != null and tutorial != null and imported != null and tutorial.get_parent() == sections and imported.get_parent() == sections, "教学与导入分类都位于同一个纵向列表")
-	_check(grid != null and imported_grid != null and grid != imported_grid and grid.columns == 7 and imported_grid.columns == 7, "教学关卡和导入关卡分别使用七列网格")
+	_check(sections != null and tutorial != null and imported != null and tutorial.get_parent() == sections and imported.get_parent() == sections, "教学与玩家分类都位于同一个纵向列表")
+	_check(grid != null and imported_grid != null and grid != imported_grid and grid.columns == 7 and imported_grid.columns == 7, "教学关卡和玩家关卡分别使用七列网格")
+	_check_player_category_title(game, "玩家关卡")
 	_check(not game._tutorials_expanded and _visible_tutorial_count(game) == 7, "首次进入教学关卡只显示前七张")
-	for index in range(15):
+	for index in range(16):
 		var button := game.find_child("LevelButton_%d" % index, true, false) as Button
 		_check(button != null and button.get_parent().get_parent() == grid and button.is_visible_in_tree() == (index < 7), "教学卡片 %d 保留原节点且按默认折叠状态显示" % (index + 1))
 	var tenth := game.find_child("LevelButton_9", true, false) as Button
-	var tenth_labels := PackedStringArray()
-	for child in tenth.get_parent().get_children():
-		if child is Label:
-			tenth_labels.append(child.text)
-	_check("第十关 · 猎人游戏" in tenth_labels and "雷达追击 · 制导射击" in tenth_labels, "第十关显示用户指定名称与制导射击说明，不沿用蛇形寻路文案")
+	var tenth_title := tenth.get_parent().get_node("LevelCardTitle") as Label
+	var tenth_caption := tenth.get_parent().get_node("LevelCardCaption") as Label
+	_check(tenth_title.text == "第十关 · 猎人游戏", "第十关保留用户指定名称，不沿用蛇形寻路名称")
+	_check(tenth_caption.text.is_empty() and not tenth_caption.visible, "未完成的第十关隐藏说明小字，即使展开卡片也不显示")
 	var twelfth := game.find_child("LevelButton_11", true, false) as Button
-	var twelfth_labels := PackedStringArray()
-	for child in twelfth.get_parent().get_children():
-		if child is Label:
-			twelfth_labels.append(child.text)
-	_check("第十二关 · 八方来敌" in twelfth_labels and "for 循环 · 八方警戒" in twelfth_labels, "第十二关使用八方来敌名称和范围循环主题，不沿用闪避教学")
-	_check(_tutorial_toggle_text(game) == "展示更多（15）", "中文展示更多标出十五个教学关卡总数")
+	var twelfth_title := twelfth.get_parent().get_node("LevelCardTitle") as Label
+	var twelfth_caption := twelfth.get_parent().get_node("LevelCardCaption") as Label
+	_check(twelfth_title.text == "第十二关 · 八方来敌", "第十二关保留八方来敌名称，不沿用闪避教学名称")
+	_check(twelfth_caption.text.is_empty() and not twelfth_caption.visible, "未完成的第十二关隐藏说明小字，即使展开卡片也不显示")
+	_check(_tutorial_toggle_text(game) == "展示更多（16）", "中文展示更多标出十六个教学关卡总数")
 	var settings_before := FileAccess.get_file_as_string(game.settings_path)
 	await _activate_visible_button(game.find_child("TutorialToggleButton", true, false), "展开教学关卡")
-	_check(game._tutorials_expanded and _visible_tutorial_count(game) == 15 and _tutorial_toggle_text(game) == "收起", "实际切换按钮展开全部十五张并显示收起")
+	_check(game._tutorials_expanded and _visible_tutorial_count(game) == 16 and _tutorial_toggle_text(game) == "收起", "实际切换按钮展开全部十六张并显示收起")
 	await _open_actions_menu(game)
 	await _activate_visible_button(game.find_child("LevelRefreshMenuItem", true, false), "从二级菜单刷新已展开的教学关卡")
-	_check(game._tutorials_expanded and _visible_tutorial_count(game) == 15, "手动刷新后保留展开状态")
+	_check(game._tutorials_expanded and _visible_tutorial_count(game) == 16, "手动刷新后保留展开状态")
 	game._notification(MainLoop.NOTIFICATION_APPLICATION_FOCUS_OUT)
 	game._notification(MainLoop.NOTIFICATION_APPLICATION_FOCUS_IN)
 	await process_frame
-	_check(game._tutorials_expanded and _visible_tutorial_count(game) == 15, "失焦后回到选关页保留展开状态")
+	_check(game._tutorials_expanded and _visible_tutorial_count(game) == 16, "失焦后回到选关页保留展开状态")
 	await _activate_visible_button(game.find_child("TutorialToggleButton", true, false), "收起教学关卡")
 	_check(not game._tutorials_expanded and _visible_tutorial_count(game) == 7, "再次操作按钮收回到前七张")
 	_check(FileAccess.get_file_as_string(game.settings_path) == settings_before, "展开和收起不向设置文件写入会话状态")
 	game.settings.set_language("en")
 	await process_frame
-	_check(_tutorial_toggle_text(game) == "Show More (15)", "英文收起状态展示教学关卡总数")
+	_check_player_category_title(game, "Player Levels")
+	_check(_tutorial_toggle_text(game) == "Show More (16)", "英文收起状态展示教学关卡总数")
 	await _activate_visible_button(game.find_child("TutorialToggleButton", true, false), "英文展开教学关卡")
-	_check(_visible_tutorial_count(game) == 15 and _tutorial_toggle_text(game) == "Show Less", "英文展开按钮变为 Show Less")
+	_check(_visible_tutorial_count(game) == 16 and _tutorial_toggle_text(game) == "Show Less", "英文展开按钮变为 Show Less")
+	game.settings.set_language("zh_HK")
+	await process_frame
+	_check_player_category_title(game, "玩家關卡")
 	game.settings.set_language("zh_CN")
 	await process_frame
-	_check(_visible_tutorial_count(game) == 15 and _tutorial_toggle_text(game) == "收起", "语言切换保留展开状态并更新按钮翻译")
+	_check(_visible_tutorial_count(game) == 16 and _tutorial_toggle_text(game) == "收起", "语言切换保留展开状态并更新按钮翻译")
 	await _activate_visible_button(game.find_child("TutorialToggleButton", true, false), "恢复默认教学折叠视图")
+
+
+## 分类标题使用玩家关卡源串与三种翻译；导入按钮和菜单操作继续沿用原有导入名称。
+func _check_player_category_title(game: GameShell, expected: String) -> void:
+	var section := game.find_child("ImportedSection", true, false)
+	var found := false
+	if section != null:
+		for child in section.find_children("*", "Label", true, false):
+			if child is Label and child.text == "玩家关卡" and child.tr(child.text) == expected:
+				found = true
+	_check(found, "玩家关卡分类使用当前语言标题：" + expected)
 
 
 ## 二级菜单通过真实鼠标屏障和键盘输入验证关闭、导航及原有刷新和导入链路。
@@ -984,8 +1014,8 @@ func _test_level_actions_menu(game: GameShell) -> void:
 	await _open_actions_menu(game)
 	await _menu_key(KEY_DOWN)
 	await _menu_key(KEY_ENTER)
-	_check(game._import_dialog.visible and not header._actions_menu.is_open(), "键盘选择导入后先关闭二级菜单，再显示原导入提示")
-	_check(_opened_paths.size() == opened_before + 1, "菜单导入只调用一次现有目录打开接口")
+	_check(game._import_dialog.visible and not header._actions_menu.is_open(), "键盘选择导入后先关闭二级菜单，再打开文件选择器")
+	_check(_opened_paths.size() == opened_before, "菜单导入同样直接选文件，不启动资源管理目录")
 	game._import_dialog.get_cancel_button().pressed.emit()
 	await process_frame
 	await process_frame
@@ -1046,7 +1076,7 @@ func _menu_key(keycode: Key) -> void:
 ## 只计算教学卡片的真实树可见性，隐藏节点和占位控件不计入数量。
 func _visible_tutorial_count(game: GameShell) -> int:
 	var count := 0
-	for index in range(15):
+	for index in range(16):
 		var button := game.find_child("LevelButton_%d" % index, true, false) as Button
 		if button != null and button.is_visible_in_tree():
 			count += 1
@@ -1061,6 +1091,10 @@ func _tutorial_toggle_text(game: GameShell) -> String:
 
 ## 经过视口的键盘焦点处理激活按钮，隐藏或禁用的入口不能伪装成可点击。
 func _activate_visible_button(button: Button, reason: String) -> void:
+	var opens_page := button != null and button.name in [&"StartGameButton", &"MapEditorButton"]
+	var ancestor: Node = button
+	while ancestor != null and not ancestor is GameShell:
+		ancestor = ancestor.get_parent()
 	var usable := button != null and button.is_visible_in_tree() and not button.disabled
 	_check(usable, reason + " 的按钮可见且可操作")
 	if not usable:
@@ -1075,6 +1109,8 @@ func _activate_visible_button(button: Button, reason: String) -> void:
 		root.push_input(event)
 	await process_frame
 	await process_frame
+	if opens_page and ancestor is GameShell:
+		await _wait_menu_transition(ancestor as GameShell)
 
 
 ## 折叠中的后续关卡先通过展示更多露出入口，再经真实 GUI 输入进入空装配。
@@ -1129,10 +1165,20 @@ func _test_level_thumbnails(game: GameShell) -> void:
 	_check(LevelThumbnail.create_texture(preview, game.registry) != null, "最大地图仍能生成有效 SVG 纹理")
 
 
+## 等待正式入口的内容淡出淡入结束，超时仍以断言失败报告而不跳过页面检查。
+func _wait_menu_transition(game: GameShell) -> void:
+	var deadline := Time.get_ticks_msec() + 2000
+	while game._menu_transitioning and Time.get_ticks_msec() < deadline:
+		await process_frame
+	_check(not game._menu_transitioning, "菜单入口内容切换完成")
+	await process_frame
+
+
 ## 设置通过实际控件更新，并验证聚焦不会把设置页错误切回关卡页。
 func _test_settings_page(game: GameShell) -> void:
+	game.system_sound_preview_handler = func() -> void: pass
 	game.find_child("SettingsButton", true, false).pressed.emit()
-	await process_frame
+	await _wait_menu_transition(game)
 	_check(game.page == GameShell.Page.SETTINGS, "设置按钮进入设置页面")
 	_check(game._header.visible and game._back_button.is_visible_in_tree(), "设置页恢复页头导航")
 	_check(game._back_button == game.find_child("GameBackButton", true, false) and game._back_button.text.is_empty() and game._back_button.icon != null, "设置页复用纯箭头药丸返回入口")
@@ -1198,8 +1244,10 @@ func _test_clear_builtin_progress(game: GameShell) -> void:
 	var settings_before := FileAccess.get_file_as_bytes(game.settings_path)
 	var custom_before := FileAccess.get_file_as_bytes(custom_path)
 	await _activate_visible_button(game.find_child("SettingsButton", true, false), "进入清除进度设置")
+	await _wait_menu_transition(game)
 	var clear := game.find_child("ClearProgressButton", true, false) as Button
 	_check(clear != null and clear.is_visible_in_tree() and TranslationServer.translate(clear.text) == game.tr("清除预设进度"), "更多设置提供重命名后的清除预设进度入口")
+	_check(game.find_child("ClearUserLevelsButton", true, false) == null and not game.has_method("_request_clear_user_levels"), "批量清除用户关卡入口及路由已移除")
 	for method in ["cancel", "escape", "outside"]:
 		await _activate_visible_button(clear, "打开清除确认：" + method)
 		await create_timer(0.22).timeout
@@ -1248,7 +1296,7 @@ func _test_clear_builtin_progress(game: GameShell) -> void:
 	_press_back(game)
 	await process_frame
 	await _activate_visible_button(game.find_child("StartGameButton", true, false), "清除后重新查看关卡")
-	_check(not _has_completion_caption(game.find_child("LevelButton_0", true, false)) and _has_completion_caption(game.find_child("LevelButton_15", true, false)), "关卡列表刷新内置完成标记并保留导入完成标记")
+	_check(not _has_completion_caption(game.find_child("LevelButton_0", true, false)) and _has_completion_caption(game.find_child("LevelButton_16", true, false)), "关卡列表刷新内置完成标记并保留导入完成标记")
 	await _activate_visible_button(game.find_child("LevelButton_0", true, false), "清除后进入第一关")
 	game._dialogue_dialog.hide()
 	_check(game.session.source == game.session.level.starter_program and game._saved_modules.is_empty(), "清除后首次进入恢复初始代码且没有可载入的旧装配")
@@ -1259,94 +1307,6 @@ func _test_clear_builtin_progress(game: GameShell) -> void:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(custom_path)
-	game.catalog.refresh(game.registry)
-	_press_back(game)
-	await process_frame
-
-
-## 用户清除仅影响独占导入目录及对应记录，两个确认范围不能相互替换或遗留。
-func _test_clear_user_levels(game: GameShell) -> void:
-	var builtin_id := game.catalog.levels[0].id
-	var custom_ids: Array[String] = ["user_clear_alpha", "level_901"]
-	var created_paths: Array[String] = []
-	var map_paths: Array[String] = []
-	var modules: Array = [{"id": "drive", "module_id": "movement", "offset": {"x": 0.0, "y": 0.0}}]
-	for identity in custom_ids:
-		var document := game.catalog.levels[0].document.duplicate_document()
-		document.id = identity
-		document.display_name = "用户清除测试 " + identity
-		var map_path := game.user_levels_directory.path_join(identity + ".json")
-		_check(MapCodec.save_file(document, map_path, game.registry).is_ok(), "用户清除夹具创建导入地图：" + identity)
-		map_paths.append(map_path)
-	for identity in [builtin_id] + custom_ids:
-		_check(game.drafts.save_draft(identity, SOLUTION, modules).is_ok() and game.drafts.mark_completed(identity).is_ok(), "用户清除夹具写入草稿与完成记录：" + identity)
-		created_paths.append(game.drafts._path(identity, "draft"))
-		created_paths.append(game.drafts._path(identity, "progress"))
-		var recovery := game.drafts.backup_draft(identity)
-		_check(recovery.is_ok() and recovery.value != null, "用户清除夹具包含恢复副本：" + identity)
-		if recovery.is_ok() and recovery.value != null:
-			created_paths.append(recovery.value)
-	game.catalog.refresh(game.registry)
-	var records_before := _clear_records_snapshot(game.drafts.directory)
-	var maps_before := _clear_records_snapshot(game.user_levels_directory)
-	var settings_before := FileAccess.get_file_as_bytes(game.settings_path)
-	await _activate_visible_button(game.find_child("SettingsButton", true, false), "进入用户关卡清除设置")
-	var clear_user := game.find_child("ClearUserLevelsButton", true, false) as Button
-	var clear_builtin := game.find_child("ClearProgressButton", true, false) as Button
-	_check(clear_user != null and clear_user.is_visible_in_tree() and TranslationServer.translate(clear_user.text) == game.tr("清除用户关卡"), "更多设置第三行显示独立的清除用户关卡入口")
-	for method in ["cancel", "escape", "outside"]:
-		await _activate_visible_button(clear_user, "打开用户关卡清除确认：" + method)
-		await create_timer(0.22).timeout
-		var cancel := game.find_child("CancelClearProgressButton", true, false) as Button
-		var warning := game.find_child("ClearProgressBody", true, false) as Label
-		_check(game._clear_progress_dialog.is_open() and cancel.has_focus() and TranslationServer.translate(warning.text) == game.tr(ClearProgressDialog.USER_LEVELS_WARNING_BODY), "用户清除显示专属范围警告并默认聚焦取消：" + method)
-		if method == "cancel":
-			await _activate_visible_button(cancel, "取消用户关卡清除")
-		elif method == "escape":
-			await _menu_key(KEY_ESCAPE)
-		else:
-			await _menu_click(game._back_button.get_global_rect().get_center())
-		_check(not game._clear_progress_dialog.is_open() and game.page == GameShell.Page.SETTINGS and not _clear_action_has_red_focus_border(clear_user), "取消用户清除后不返回、不遗留红色焦点边框：" + method)
-		_check(_clear_records_snapshot(game.drafts.directory) == records_before and _clear_records_snapshot(game.user_levels_directory) == maps_before, "取消用户清除逐字节保留全部地图和记录：" + method)
-	# 弹窗已打开时，另一请求不得偷偷替换玩家正在阅读的清除范围。
-	await _activate_visible_button(clear_user, "检查用户确认范围固定")
-	game._request_clear_progress()
-	var warning := game.find_child("ClearProgressBody", true, false) as Label
-	_check(TranslationServer.translate(warning.text) == game.tr(ClearProgressDialog.USER_LEVELS_WARNING_BODY), "用户确认打开时预设清除请求不能串用正文")
-	await _menu_key(KEY_ESCAPE)
-	await _activate_visible_button(clear_builtin, "检查预设确认范围固定")
-	game._request_clear_user_levels()
-	_check(TranslationServer.translate(warning.text) == game.tr(ClearProgressDialog.WARNING_BODY), "预设确认打开时用户清除请求不能串用正文")
-	await _menu_key(KEY_ESCAPE)
-	game._confirm_clear_progress()
-	_check(_clear_records_snapshot(game.drafts.directory) == records_before and _clear_records_snapshot(game.user_levels_directory) == maps_before, "交替取消后不存在可重放的用户或预设清除请求")
-	await _activate_visible_button(clear_user, "明确请求只清除用户关卡")
-	await create_timer(0.22).timeout
-	await _activate_visible_button(game.find_child("ConfirmClearProgressButton", true, false), "明确确认清除用户关卡")
-	_check(not game._clear_progress_dialog.is_open() and game.page == GameShell.Page.SETTINGS, "用户清除结束后关闭确认框并保留设置页面")
-	for map_path in map_paths:
-		_check(not FileAccess.file_exists(map_path), "用户清除删除对应导入 JSON：" + map_path.get_file())
-	var after := _clear_records_snapshot(game.drafts.directory)
-	for identity in custom_ids:
-		var remaining := false
-		for filename in after:
-			remaining = remaining or str(filename).begins_with(identity.sha256_text() + ".")
-		_check(not remaining and not game.drafts.is_completed(identity) and game.drafts.load_draft(identity).value == null, "用户关卡通关记录、代码、装配与恢复副本一并清除：" + identity)
-	for filename in records_before:
-		if str(filename).begins_with(builtin_id.sha256_text() + "."):
-			_check(after.get(filename) == records_before[filename], "用户清除保留预设关卡各记录及恢复副本")
-	_check(FileAccess.get_file_as_bytes(game.settings_path) == settings_before, "用户关卡清除保留音量及语言设置")
-	var status := game.find_child("SettingsStatus", true, false) as Label
-	_check(status.is_visible_in_tree() and not status.text.is_empty(), "用户关卡清除显示结果反馈")
-	_press_back(game)
-	await process_frame
-	await _activate_visible_button(game.find_child("StartGameButton", true, false), "用户清除后查看关卡目录")
-	_check(game.catalog.levels.size() == 15 and game.find_child("LevelButton_15", true, false) == null and game.find_child("ImportLevelButton", true, false).is_visible_in_tree(), "选关页移除所有用户卡片并保留十五个预设关卡与导入入口")
-	_check(_has_completion_caption(game.find_child("LevelButton_0", true, false)), "用户清除没有误删或隐藏预设关卡完成标记")
-	# 仅清理本函数显式创建的夹具，让后续原有预设关卡流程仍从空记录开始。
-	for path in created_paths + map_paths:
-		if FileAccess.file_exists(path):
-			DirAccess.remove_absolute(path)
 	game.catalog.refresh(game.registry)
 	_press_back(game)
 	await process_frame
@@ -1597,12 +1557,15 @@ func _test_object_playtest(game: GameShell) -> void:
 		_check(not MapCodec.save_file(broken, path, editor.registry, true).is_ok() and FileAccess.get_file_as_string(path) == disk_text, "非法对象不能覆盖有效地图文件")
 
 
-## 通过实际按钮、标题栏鼠标和键盘取消，确认不会刷新列表或退出游戏。
-func _test_import_cancel(game: GameShell) -> void:
+## 文件选择器通过实际取消、标题关闭和 Escape 退出，原件与目录记录均保持原样。
+func _test_import_cancel(game: GameShell, source_directory: String) -> void:
 	var original_level := game.catalog.levels[0]
 	var original_page_child := game._body.get_child(0)
 	var original_quit_count := _quit_requests
-	_check(game._import_dialog.get_cancel_button().text == "取消导入", "导入提示提供明确的取消导入按钮")
+	var original_sources := _clear_records_snapshot(source_directory)
+	var original_maps := _clear_records_snapshot(game.user_levels_directory)
+	var original_drafts := _clear_records_snapshot(game.drafts.directory)
+	_check(not game._import_dialog.get_cancel_button().text.is_empty(), "文件选择器提供取消按钮")
 	for method in ["button", "title_close", "escape", "close_request"]:
 		if not game._import_dialog.visible:
 			game.find_child("ImportLevelButton", true, false).pressed.emit()
@@ -1610,11 +1573,12 @@ func _test_import_cancel(game: GameShell) -> void:
 		await process_frame
 		var opened_before := _opened_paths.size()
 		var dialog := game._import_dialog
+		dialog.current_file = "下载的关卡.json"
 		if method == "button":
 			dialog.get_cancel_button().pressed.emit()
 		elif method == "title_close":
-			var icon := dialog.get_theme_icon("close", "Window")
-			var close_position := Vector2(dialog.position) + Vector2(dialog.size.x - dialog.get_theme_constant("close_h_offset", "Window"), -dialog.get_theme_constant("close_v_offset", "Window")) + icon.get_size() / 2.0
+			var icon := dialog.get_theme_icon("close")
+			var close_position := Vector2(dialog.position) + Vector2(dialog.size.x - dialog.get_theme_constant("close_h_offset"), -dialog.get_theme_constant("close_v_offset")) + icon.get_size() / 2.0
 			# 走内嵌窗口的真实命中处理，不能用直接 hide 代替关闭图标测试。
 			for pressed in [true, false]:
 				var click := InputEventMouseButton.new()
@@ -1633,23 +1597,24 @@ func _test_import_cancel(game: GameShell) -> void:
 			dialog.close_requested.emit()
 		await process_frame
 		await process_frame
-		_check(not dialog.visible and game.page == GameShell.Page.LEVELS, method + " 关闭导入提示并留在选关页")
+		_check(not dialog.visible and game.page == GameShell.Page.LEVELS, method + " 关闭文件选择器并留在选关页")
 		_check(game.catalog.levels[0] == original_level and game._body.get_child(0) == original_page_child, method + " 不重新扫描或重建关卡列表")
 		_check(_opened_paths.size() == opened_before and _quit_requests == original_quit_count, method + " 不打开额外目录或退出游戏")
+		_check(_clear_records_snapshot(source_directory) == original_sources and _clear_records_snapshot(game.user_levels_directory) == original_maps and _clear_records_snapshot(game.drafts.directory) == original_drafts, method + " 不改写原件、已有关卡或玩家记录")
 	game.settings.set_language("en")
 	game._import_levels()
 	await process_frame
 	await process_frame
-	_check(TranslationServer.translate(game._import_dialog.get_cancel_button().text) == "Cancel Import", "取消导入支持英文翻译")
+	_check(TranslationServer.translate(game._import_dialog.title) == "Import Level", "文件选择器标题支持英文翻译")
 	var dialog := game._import_dialog
 	for button in [dialog.get_cancel_button(), dialog.get_ok_button()]:
-		_check(dialog.get_visible_rect().encloses(button.get_global_rect()), "中英确认与取消按钮都位于提示窗口内")
+		_check(dialog.get_visible_rect().encloses(button.get_global_rect()), "中英文件确认与取消按钮都位于选择器窗口内")
 	dialog.get_cancel_button().pressed.emit()
 	await process_frame
 	game.settings.set_language("zh_CN")
 	game._import_levels()
 	await process_frame
-	_check(game._import_dialog.visible, "连续取消后仍能重新打开导入并继续原有确认流程")
+	_check(game._import_dialog.visible, "连续取消后仍能重新打开选择器并继续选择文件")
 
 
 ## 第四关沿用真实空装配、按钮运行、返回编辑和进度保存流程。
@@ -1804,9 +1769,9 @@ func _test_seventh_level(game: GameShell) -> void:
 	_check(game.page == GameShell.Page.ASSEMBLY and game.session.assembly.modules.is_empty() and game._confirm_assembly_button.disabled, "第七关从空装配与禁用确认开始")
 	_check(game._dialogue_dialog.visible and seventh.document.dialogue.size() >= 6 and game._dialogue_previous.disabled, "条件关卡打开分页引导并正确禁用首页返回")
 	var source_before := game.session.source
-	for index in range(seventh.document.dialogue.size()):
+	for index in range(seventh.document.dialogue.size() + 1):
 		var original := game._dialogue_dialog.dialog_text
-		_check(original == seventh.document.dialogue[index].text, "第七关引导按作者定义逐页显示")
+		_check(original == (seventh.document.dialogue[index].text if index < seventh.document.dialogue.size() else WorkbenchProgramGuide.entry_text(seventh)), "第七关引导按作者定义逐页显示")
 		game.settings.set_language("en")
 		await process_frame
 		_check(game.tr(original) != original and game.tr(game._dialogue_dialog.ok_button_text) != game._dialogue_dialog.ok_button_text, "第七关每页引导和导航按钮均有英文翻译")
@@ -1890,9 +1855,9 @@ func _test_eighth_level(game: GameShell) -> void:
 	_check(eighth.module_limit == 3 and eighth.allow_simultaneous, "第八关开放并发并限制三个模块")
 	var source_before := game.session.source
 	_check(game._dialogue_dialog.visible and game._dialogue_previous.disabled, "同步关卡的分页引导从首页开始")
-	for index in range(eighth.document.dialogue.size()):
+	for index in range(eighth.document.dialogue.size() + 1):
 		var original := game._dialogue_dialog.dialog_text
-		_check(original == eighth.document.dialogue[index].text, "第八关教程按 JSON 顺序逐页显示")
+		_check(original == (eighth.document.dialogue[index].text if index < eighth.document.dialogue.size() else WorkbenchProgramGuide.entry_text(eighth)), "第八关教程按 JSON 顺序逐页显示")
 		game.settings.set_language("en")
 		await process_frame
 		_check(game.tr(original) != original and game.tr(game._dialogue_dialog.ok_button_text) != game._dialogue_dialog.ok_button_text, "第八关每页教程及分页操作均有英文译文")
@@ -1926,9 +1891,9 @@ func _test_eighth_level(game: GameShell) -> void:
 	for control in workbench._code.get_parent().get_children():
 		if control is Label and control.text == help_source:
 			help_label = control
-	_check(help_label != null and help_label.is_visible_in_tree(), "程序卡片显示第八关专属三行说明")
-	_check(workbench._entry_hint.text == "同步启动多个动作，全部完成后继续执行。" and workbench._goal_text() == "本关目标：同时解除左右两个警报器，再向上逃出监狱。", "工作台使用同步提示与双警报目标，不沿用上一关退射提示")
-	for source in [help_source, workbench._entry_hint.text, workbench._goal_text(), "警报器 {alive} / {total}", "警报已解除，出口已打开", "同时破坏两个警报器后，再向上逃出监狱。", "出口已解锁，请继续向上走到终点。"]:
+	_check(help_label == null, "程序卡片不再常驻旧三行说明")
+	_check(WorkbenchProgramGuide.entry_text(workbench.session.level) == "同步启动多个动作，全部完成后继续执行。" and workbench._goal_text() == "本关目标：同时解除左右两个警报器，再向上逃出监狱。", "工作台使用同步提示与双警报目标，不沿用上一关退射提示")
+	for source in [help_source, WorkbenchProgramGuide.entry_text(workbench.session.level), workbench._goal_text(), "警报器 {alive} / {total}", "警报已解除，出口已打开", "同时破坏两个警报器后，再向上逃出监狱。", "出口已解锁，请继续向上走到终点。"]:
 		game.settings.set_language("en")
 		_check(game.tr(source) != source, "第八关工作台和警报状态文案有英文译文")
 	game.settings.set_language("zh_CN")
@@ -2079,7 +2044,7 @@ func _test_reset_code(game: GameShell, first: LevelDefinition) -> void:
 		await process_frame
 		_check(old_runner.state == ProgramRunner.State.CANCELLED and session.runner == null and session.world == null, "运行或暂停中重置会取消旧解释器并释放世界引用")
 		_check(session.state == GameSession.State.EDITING and session.current_line == 0 and workbench._highlighted_line == -1 and is_zero_approx(workbench._accumulator), "运行重置清除时间余量与当前行高亮")
-		_check(workbench._code.text == first.starter_program and session.source == first.starter_program and workbench._code.editable and workbench._assembly_panel.interaction_enabled, "运行重置立即显示模板并解除程序与装配编辑锁")
+		_check(workbench._code.text == first.starter_program and session.source == first.starter_program and workbench._code.editable and game.assembly_panel == null, "运行重置立即显示模板并解除程序与装配编辑锁")
 		old_runner.step()
 		session.step()
 		_check(old_world.tick_index == tick_before, "取消后旧解释器与会话都不能继续推进旧世界")
@@ -2202,7 +2167,11 @@ func _press_back(game: GameShell) -> void:
 	var button: Button = game.find_child("LevelBackButton", true, false) if game.page == GameShell.Page.LEVELS else game._back_button
 	_check(button != null and button.is_visible_in_tree() and not button.disabled, "当前页面的返回按钮可见且可操作")
 	if button != null and button.is_visible_in_tree() and not button.disabled:
+		var was_play := game.page == GameShell.Page.PLAY
 		button.pressed.emit()
+		if was_play:
+			_check(game.page == GameShell.Page.ASSEMBLY, "编程返回先进入保留代码的组装页")
+			game._back_button.pressed.emit()
 
 
 ## 第九关从真实选关与空装配进入，验证本土化、测距资料及动态导航的保存链路。
@@ -2214,9 +2183,9 @@ func _test_ninth_level(game: GameShell) -> void:
 	_check(game.page == GameShell.Page.ASSEMBLY and game.session.assembly.modules.is_empty() and game._confirm_assembly_button.disabled, "第九关保留空装配与禁用确认")
 	var palette: Button = game.assembly_panel.palette_buttons["rangefinder"]
 	_check(not palette.disabled and palette.icon != null, "新测距模块带可用 SVG 图标进入实际目录")
-	for index in range(ninth.document.dialogue.size()):
+	for index in range(ninth.document.dialogue.size() + 1):
 		var original := game._dialogue_dialog.dialog_text
-		_check(original == ninth.document.dialogue[index].text, "第九关教程按 JSON 顺序显示")
+		_check(original == (ninth.document.dialogue[index].text if index < ninth.document.dialogue.size() else WorkbenchProgramGuide.entry_text(ninth)), "第九关教程按 JSON 顺序显示")
 		game.settings.set_language("en")
 		await process_frame
 		_check(game.tr(original) != original and game.tr(ninth.display_name) == "Level 9 · Winding Passage", "教程与关卡名字具有英文译文")
@@ -2240,7 +2209,7 @@ func _test_ninth_level(game: GameShell) -> void:
 	workbench.set_process(false)
 	_check(workbench._code.text == ninth.starter_program and not workbench._code.text.contains("distance"), "初始代码不预填完整测距答案")
 	_check((workbench._code.syntax_highlighter as CodeHighlighter).keyword_colors.has("distance"), "测距查询使用正式语法高亮")
-	_check(workbench._entry_hint.text.contains("distance"), "工作台显示测距专属引导")
+	_check(WorkbenchProgramGuide.entry_text(workbench.session.level).contains("distance"), "工作台显示测距专属引导")
 	var menu := game._command_menu
 	await _activate_visible_button(workbench.header.book_button, "从第九关打开测距指令资料")
 	await _activate_visible_button(_command_section_button(menu, "rangefinder"), "选择新测距目录")
@@ -2289,7 +2258,7 @@ func _test_twelfth_level(game: GameShell) -> void:
 	await process_frame
 	var workbench := game.workbench
 	workbench.set_process(false)
-	_check(workbench._entry_hint.text.contains("for") and workbench._goal_text().contains("八个方向"), "工作台说明与目标使用新的八方循环主题")
+	_check(WorkbenchProgramGuide.entry_text(workbench.session.level).contains("for") and workbench._goal_text().contains("八个方向"), "工作台说明与目标使用新的八方循环主题")
 	_check(workbench._object_status.text.contains("0 / 8"), "未运行时指引显示八波待处理进度")
 	for keyword in ["for", "in", "step"]:
 		_check((workbench._code.syntax_highlighter as CodeHighlighter).keyword_colors.has(keyword), "新增范围语法有正式代码高亮：" + keyword)
@@ -2341,14 +2310,14 @@ func _test_thirteenth_level(game: GameShell) -> void:
 	await process_frame
 	var bench := game.workbench
 	bench.set_process(false)
-	_check(bench._entry_hint.text.contains("scan()") and bench._goal_text().contains("10 波") and bench._object_status.text.contains("0 / 10"), "目标、入口说明和状态均使用雷达十波主题")
+	_check(WorkbenchProgramGuide.entry_text(bench.session.level).contains("scan()") and bench._goal_text().contains("10 波") and bench._object_status.text.contains("0 / 10"), "目标、入口说明和状态均使用雷达十波主题")
 	game.settings.set_code_hints("more")
 	game.settings.set_code_color_mode("dark")
 	await process_frame
 	_check(bench._hint_button.visible and bench._code.get_theme_stylebox("normal").bg_color == Color("121314"), "沿用教学提示与深色代码区")
 	game.settings.set_language("en")
 	await process_frame
-	_check(game.tr(level.display_name) == "Level 13 · Ambush from All Sides" and game.tr(bench._entry_hint.text).contains("scan()"), "第十三关名称和雷达说明有英文")
+	_check(game.tr(level.display_name) == "Level 13 · Ambush from All Sides" and game.tr(WorkbenchProgramGuide.entry_text(bench.session.level)).contains("scan()"), "第十三关名称和雷达说明有英文")
 	for page: Dictionary in level.document.dialogue:
 		_check(game.tr(page.text) != page.text, "每页新教程都有英文翻译")
 	game.settings.set_language("zh_CN")
@@ -2387,7 +2356,7 @@ func _test_fourteenth_level(game: GameShell) -> void:
 	await process_frame
 	var bench := game.workbench
 	bench.set_process(false)
-	_check(bench._goal_text().contains("栅栏") and bench._entry_hint.text.contains("移动") and bench._object_status.text.contains("0 / 10"), "编程界面使用推进射击的目标与说明")
+	_check(bench._goal_text().contains("栅栏") and WorkbenchProgramGuide.entry_text(bench.session.level).contains("移动") and bench._object_status.text.contains("0 / 10"), "编程界面使用推进射击的目标与说明")
 	game.settings.set_code_hints("more")
 	game.settings.set_code_color_mode("dark")
 	await process_frame

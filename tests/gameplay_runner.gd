@@ -29,7 +29,7 @@ func _run() -> void:
 	if not _ok(catalog.refresh(_content), "空用户目录下可以加载内置关卡"):
 		quit(1)
 		return
-	if not _expect(catalog.levels.size() == 15 and catalog.levels[14].id == "level_015" and catalog.levels[14].order == 15, "第一至第十五关按顺序完整加载"):
+	if not _expect(catalog.levels.size() == 16 and catalog.levels[14].id == "level_015" and catalog.levels[14].order == 15 and catalog.levels[15].id == "level_016" and catalog.levels[15].order == 16, "前十五关顺序保留，第十六关逃脱排在末尾"):
 		quit(1)
 		return
 	_builtin = catalog.levels[0]

@@ -14,6 +14,7 @@ const SEARCH_MAX_WIDTH := 344.0
 const SEARCH_MIN_WIDTH := 240.0
 const BUTTON_GAP := 12.0
 const SEARCH_BACKGROUND := Color("EAEDF2")
+const IconSources := preload("res://scripts/ui/level_browser_icon_sources.gd")
 
 var _navigation: Panel
 var _back_button: Button
@@ -31,6 +32,11 @@ var _search_tween: Tween
 var _search_open: bool = false
 var _search_progress: float = 0.0
 var _active: bool = false
+var _icon_raster_scale := 1
+var _focus_buttons: Array[Button] = []
+var _focus_styles: Array[StyleBox] = []
+var _keyboard_focus_visible := false
+var _restore_search_focus := false
 
 
 ## 控件只创建一次，刷新目录时保留输入焦点、光标和正在进行的展开动画。
@@ -77,10 +83,14 @@ func set_search_open(open: bool, animate: bool = true) -> void:
 		return
 	_actions_menu.close_menu(false)
 	_stop_search_tween()
+	_restore_search_focus = not open and _keyboard_focus_visible and (_search_input.has_focus() or _search_close_button.has_focus())
 	_search_open = open
 	_search_input.editable = open
+	_search_input.context_menu_enabled = open
 	if not open:
 		_search_input.release_focus()
+		if not _keyboard_focus_visible:
+			_search_close_button.release_focus()
 		if not _search_input.text.is_empty():
 			_search_input.clear()
 			query_changed.emit("")
@@ -105,11 +115,49 @@ func get_query() -> String:
 	return _search_input.text if _search_input != null else ""
 
 
+## 小 SVG 根据 Windows 页面比例重新栅格化，避免只放大原来 24 像素的导航与菜单图标。
+func set_presentation_scale(factor: float) -> void:
+	var raster_scale := ceili(maxf(1.0, factor))
+	if raster_scale == _icon_raster_scale or not is_node_ready():
+		return
+	_icon_raster_scale = raster_scale
+	_refresh_svg_icons(self, raster_scale)
+
+
+## 只替换本页控件持有的纹理，保留原 SVG 路径及所有尺寸；恢复基准时释放放大副本。
+func _refresh_svg_icons(node: Node, raster_scale: int) -> void:
+	if node is Button or node is TextureRect:
+		var texture: Texture2D = node.icon if node is Button else node.texture
+		var path: String = node.get_meta("level_svg_source", texture.resource_path if texture != null else "")
+		if path.ends_with(".svg") and path.begins_with("res://"):
+			node.set_meta("level_svg_source", path)
+			if node is Button:
+				var icon_width := int(node.get_meta("level_svg_logical_width", node.get_theme_constant("icon_max_width")))
+				if icon_width <= 0:
+					icon_width = texture.get_width()
+				node.set_meta("level_svg_logical_width", icon_width)
+				node.expand_icon = true
+				node.add_theme_constant_override("icon_max_width", icon_width)
+			var rendered: Texture2D = load(path)
+			if raster_scale > 1 and IconSources.SVG.has(path):
+				var image := Image.new()
+				# 源 XML 随脚本打包，不读取在正式导出中已替换为纹理的 .svg 文件。
+				if image.load_svg_from_string(IconSources.SVG[path], raster_scale) == OK:
+					rendered = ImageTexture.create_from_image(image)
+			if node is Button:
+				node.icon = rendered
+			else:
+				node.texture = rendered
+	for child in node.get_children():
+		_refresh_svg_icons(child, raster_scale)
+
+
 ## 左侧胶囊保留真实返回操作；没有浏览历史时，前进箭头明确禁用。
 func _build_navigation() -> void:
 	_navigation = GameTheme.navigation_pill(self, _request_back, "返回开始页面", "Level")
 	_back_button = _navigation.get_node("LevelBackButton")
 	_forward_button = _navigation.get_node("LevelForwardButton")
+	_register_focus_button(_back_button)
 	_title = GameTheme.label(self, "可编程模块", 22)
 	_title.name = "LevelBrowserTitle"
 	_title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -141,6 +189,8 @@ func _build_search() -> void:
 	_search_input.name = "LevelSearchInput"
 	_search_input.placeholder_text = "搜索关卡"
 	_search_input.tooltip_text = "搜索关卡"
+	_search_input.caret_blink = true
+	_search_input.caret_blink_interval = 0.5
 	_search_input.add_theme_color_override("font_placeholder_color", GameTheme.MUTED)
 	_search_input.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	_search_input.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -170,7 +220,63 @@ func _icon_button(parent: Node, node_name: String, icon_path: String, tooltip: S
 	if action.is_valid():
 		button.pressed.connect(action)
 	parent.add_child(button)
+	_register_focus_button(button)
 	return button
+
+
+## 鼠标操作隐藏按钮焦点圈，键盘操作保留原生焦点与对应圆角描边。
+func _register_focus_button(button: Button) -> void:
+	_focus_buttons.append(button)
+	_focus_styles.append(button.get_theme_stylebox("focus"))
+	button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
+
+## 输入方式只控制页头按钮外观，不改变搜索文字或键盘导航顺序。
+func _set_keyboard_focus_visible(enabled: bool) -> void:
+	if _keyboard_focus_visible == enabled:
+		return
+	_keyboard_focus_visible = enabled
+	for index in range(_focus_buttons.size()):
+		_focus_buttons[index].add_theme_stylebox_override("focus", _focus_styles[index] if enabled else StyleBoxEmpty.new())
+
+
+## 空白点击延迟到原生控件命中完成后释放焦点，搜索和卡片仍收到原输入。
+func _input(event: InputEvent) -> void:
+	_observe_input(event)
+
+
+## 更多菜单消费输入前也报告输入方式，避免归还页头焦点时重新出现鼠标蓝圈。
+func _observe_input(event: InputEvent) -> void:
+	if not _active or not is_visible_in_tree():
+		return
+	if event is InputEventMouseMotion or event is InputEventMouseButton or event is InputEventScreenTouch:
+		_set_keyboard_focus_visible(false)
+		_restore_search_focus = false
+	elif (event is InputEventKey or event is InputEventAction) and event.is_pressed():
+		_set_keyboard_focus_visible(true)
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT and not _actions_menu.is_open() and not _interactive_hit(event.position):
+		_release_blank_focus.call_deferred(event.position)
+
+
+## 仅清理本页头仍持有的焦点；别的按钮、输入框和弹层按原生规则取得焦点。
+func _release_blank_focus(point: Vector2) -> void:
+	if not _active or not is_visible_in_tree() or _actions_menu.is_open() or not get_viewport().get_visible_rect().has_point(point) or _interactive_hit(point):
+		return
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused != null and is_ancestor_of(focused):
+		focused.release_focus()
+
+
+## 按实际命中控件父链识别交互区域，避免拖动光标或点击滚动条时误取消编辑。
+func _interactive_hit(point: Vector2) -> bool:
+	var hovered := get_viewport().gui_get_hovered_control()
+	if is_instance_valid(hovered) and hovered.is_visible_in_tree() and hovered.get_global_rect().has_point(point):
+		var target: Node = hovered
+		while target != null:
+			if target is BaseButton or target is LineEdit or target is TextEdit or target is Range:
+				return true
+			target = target.get_parent()
+	return false
 
 
 ## 纯图标控件不需要主题默认内边距，44 像素命中区对应真正的圆形或胶囊。
@@ -241,11 +347,13 @@ func _stop_search_tween() -> void:
 	_search_tween = null
 
 
-## 收起完成后交还搜索焦点；期间打开的工具菜单优先保有当前选择。
+## 仅键盘收起才交还搜索入口焦点；鼠标空白点击和期间取得的新焦点不会被动画抢回。
 func _finish_search_motion() -> void:
 	_search_tween = null
-	if not _search_open and _active and not _actions_menu.is_open():
+	var focused := get_viewport().gui_get_focus_owner()
+	if _restore_search_focus and not _search_open and _active and not _actions_menu.is_open() and (focused == null or focused == _search_close_button):
 		_search_button.grab_focus()
+	_restore_search_focus = false
 
 
 ## 点击放大镜只改变搜索栏形态，不主动扫描或重建目录。
@@ -287,6 +395,7 @@ func _build_actions_menu() -> void:
 	_actions_menu.refresh_requested.connect(_request_refresh)
 	_actions_menu.import_requested.connect(_request_import)
 	_actions_menu.sort_changed.connect(_request_sort)
+	_actions_menu.input_observed.connect(_observe_input)
 	add_child(_actions_menu)
 
 

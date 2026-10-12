@@ -59,7 +59,7 @@ func _run() -> void:
 	var highlighter := workbench._code.syntax_highlighter as CodeHighlighter
 	_check(highlighter != null and highlighter.has_keyword_color("function"), "function 使用统一语法高亮")
 	_check(highlighter != null and highlighter.has_keyword_color("constant") and highlighter.has_keyword_color("variable") and highlighter.has_keyword_color("value"), "常量、变量与旧别名使用统一语法高亮")
-	_check(workbench._entry_hint.text.contains("function"), "编辑区提示以函数教学为主")
+	_check(WorkbenchProgramGuide.entry_text(workbench.session.level).contains("function"), "编辑区提示以函数教学为主")
 	_check(workbench._goal_text().contains("躲过"), "指引目标为闪避而非击毁敌人或抵达终点")
 	_check(workbench._object_status.text == "已躲过 0 / 5 次攻击 · 等待开始", "未运行时显示零次闪避及准备状态")
 	_check(not workbench._live_status.is_expanded(), "未运行时不自动弹出状态药丸")

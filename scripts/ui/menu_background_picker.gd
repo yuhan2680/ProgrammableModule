@@ -5,6 +5,8 @@ extends PanelContainer
 const TILE_SIZE := Vector2(144, 112)
 const THUMBNAIL_SIZE := Vector2(128, 80)
 const CUSTOM_GAP := 10
+const SCROLLBAR_GAP := 8
+const SCROLLBAR_THICKNESS := 8
 
 var settings: GameSettings
 var _buttons: Dictionary = {}
@@ -62,10 +64,15 @@ func _build_ui() -> void:
 	_custom_scroll.follow_focus = true
 	row.add_child(_custom_scroll)
 	# 横条溢出时常显，不挂接设置页纵向条的闲置淡出脚本。
+	_style_custom_scrollbar(_custom_scroll.get_h_scroll_bar())
+	var content_margin := MarginContainer.new()
+	content_margin.name = "CustomBackgroundContentMargin"
+	content_margin.add_theme_constant_override("margin_bottom", SCROLLBAR_GAP)
+	_custom_scroll.add_child(content_margin)
 	_custom_row = HBoxContainer.new()
 	_custom_row.name = "CustomBackgroundRow"
 	_custom_row.add_theme_constant_override("separation", CUSTOM_GAP)
-	_custom_scroll.add_child(_custom_row)
+	content_margin.add_child(_custom_row)
 	_add_tile(_custom_row, "default", "默认", MainMenuBackground.SOURCE_TEXTURE)
 	_add_tile(_custom_row, "solid", "纯色模式", null)
 	_add_tile(_custom_row, "add", "自定义", null, true)
@@ -87,13 +94,18 @@ func _build_ui() -> void:
 	_delete_popup = PopupMenu.new()
 	_delete_popup.name = "DeleteBackgroundMenu"
 	_delete_popup.add_item("删除", 0)
-	_delete_popup.add_theme_font_size_override("font_size", 12)
+	GameTheme.font_size(_delete_popup, "font_size", 12)
 	_delete_popup.add_theme_constant_override("v_separation", 2)
 	_delete_popup.add_theme_constant_override("h_separation", 0)
+	# 单项纯文本菜单不需要预留勾选图标列；新版默认紧凑栏仍保留图标宽度，会反过来撑大窗口。
+	_delete_popup.add_theme_constant_override("gutter_compact", 0)
 	_delete_popup.add_theme_constant_override("item_start_padding", 3)
 	_delete_popup.add_theme_constant_override("item_end_padding", 3)
 	var popup_style := GameTheme.box(Color("FBFCFE"), Color(0, 0, 0, 0.06), 8)
 	popup_style.set_content_margin_all(5)
+	# 保留12号字体和上下留白，只收窄两侧面板边距，让英文 Delete 连同原生滚动槽与阴影也能容纳。
+	popup_style.content_margin_left = 3
+	popup_style.content_margin_right = 3
 	popup_style.shadow_color = Color(0.1, 0.14, 0.2, 0.12)
 	popup_style.shadow_size = 3
 	_delete_popup.add_theme_stylebox_override("panel", popup_style)
@@ -103,6 +115,21 @@ func _build_ui() -> void:
 	_delete_popup.add_theme_color_override("font_color", GameTheme.ERROR)
 	_delete_popup.id_pressed.connect(_delete_selected_background)
 	add_child(_delete_popup)
+
+
+## 保留原生横向拖动与溢出常显，只用透明轨道和低对比度蓝灰滑块弱化滚动条。
+func _style_custom_scrollbar(bar: HScrollBar) -> void:
+	for state: String in ["scroll", "scroll_focus", "grabber", "grabber_highlight", "grabber_pressed"]:
+		var style := StyleBoxFlat.new()
+		var opacity := 0.0 if state.begins_with("scroll") else 0.25
+		if state == "grabber_highlight":
+			opacity = 0.35
+		elif state == "grabber_pressed":
+			opacity = 0.45
+		style.bg_color = Color(0.50, 0.57, 0.66, opacity)
+		style.set_corner_radius_all(4)
+		style.set_content_margin_all(SCROLLBAR_THICKNESS * 0.5)
+		bar.add_theme_stylebox_override(state, style)
 
 
 ## 整张缩略图和下方说明构成一个按钮，用户图片名称只截断显示，不参与界面翻译。
@@ -251,6 +278,11 @@ func _show_delete_menu(background_id: String, pointer_position: Vector2) -> void
 	var origin := Vector2i(clampf(pointer_position.x, 0, maxf(0, bounds.size.x - menu_size.x)), clampf(pointer_position.y, 0, maxf(0, bounds.size.y - menu_size.y)))
 	_delete_popup.size = menu_size
 	_delete_popup.popup(Rect2i(origin, menu_size))
+	# 缩放后的原生窗口以整数像素计量，向上取整以免截掉内容并出现多余滚动条。
+	var scaled_minimum := (_delete_popup.get_contents_minimum_size() * _delete_popup.content_scale_factor).ceil()
+	_delete_popup.size = _delete_popup.size.max(Vector2i(scaled_minimum))
+	# PopupMenu 弹出时才补入阴影并调整最小尺寸；按最终外框再次夹紧，四角不能多出阴影宽度。
+	_delete_popup.position = Vector2i(Vector2(_delete_popup.position).clamp(bounds.position, (bounds.end - Vector2(_delete_popup.size)).max(bounds.position)))
 
 
 ## 提交时再次检查使用状态，模型拒绝活动图片删除，成功后才移除缩略图。

@@ -68,7 +68,7 @@ func _test_design_and_unlocks() -> void:
 		var ids: Array[String] = []
 		for entry: LevelDefinition in catalog.levels:
 			ids.append(entry.id)
-		_check(ids == ["level_001", "level_002", "level_003", "level_004", "level_005", "level_006", "level_007", "level_008", "level_009", "level_010", "level_011", "level_012", "level_013", "level_014", "level_015"], "目录按第一至第十五关依次排列")
+		_check(ids == ["level_001", "level_002", "level_003", "level_004", "level_005", "level_006", "level_007", "level_008", "level_009", "level_010", "level_011", "level_012", "level_013", "level_014", "level_015", "level_016"], "目录保留前十五关顺序并追加第十六关逃脱")
 	for number in range(1, 10):
 		var loaded := MapCodec.load_file("res://data/levels/level_%03d.json" % number, _content, true)
 		if not _check(loaded.is_ok(), "第 %d 关的旧地图仍可加载" % number):

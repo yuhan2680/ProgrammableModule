@@ -1,6 +1,6 @@
 class_name MapExitDialog
 extends Control
-## 地图退出提醒与页面共用视口绘制毛玻璃；保存结果由编辑器和外壳负责。
+## 地图退出优先使用系统询问窗口，不支持时保留玻璃后备面板；写盘仍由外壳负责。
 
 signal save_requested
 signal confirmed
@@ -13,6 +13,12 @@ const PADDING := 24.0
 const BUTTON_HEIGHT := 42.0
 const BUTTON_GAP := 8.0
 const MESSAGE_SIZE := 16
+
+# 可替换系统边界以隔离回归，正式游戏使用 DisplayServer 的原生接口。
+var use_native_dialog := true
+var native_dialog_handler: Callable
+var _native_active := false
+var _request_generation := 0
 
 var _layer: CanvasLayer
 var _overlay: Control
@@ -28,6 +34,7 @@ var _buttons: Array[Button] = []
 var _map_name := ""
 var _previous_focus: Control
 var _keyboard_focus_visible := false
+var _presentation_scale := 1.0
 
 
 ## 独立画布层高于菜单，但仍在主视口内复制地图作为玻璃底图。
@@ -92,7 +99,7 @@ func _ready() -> void:
 	_message.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_message.add_theme_font_size_override("font_size", MESSAGE_SIZE)
+	GameTheme.font_size(_message, "font_size", MESSAGE_SIZE)
 	_message.add_theme_color_override("font_color", GameTheme.TEXT)
 	_message.add_theme_constant_override("line_spacing", 4)
 	_message_scroll.add_child(_message)
@@ -113,7 +120,7 @@ func _make_button(node_name: String, caption: String, primary: bool, action: Cal
 	button.name = node_name
 	button.text = caption
 	button.mouse_filter = Control.MOUSE_FILTER_STOP
-	button.add_theme_font_size_override("font_size", 16)
+	GameTheme.font_size(button, "font_size", 16)
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
 		var fill := GameTheme.ACCENT if primary else Color(0.73, 0.77, 0.82, 0.30)
 		if state == "hover":
@@ -137,14 +144,55 @@ func _make_button(node_name: String, caption: String, primary: bool, action: Cal
 
 ## 每次打开读取当前地图名，名称只插入已本土化句子，不自动翻译玩家文本。
 func open_for_map(map_name: String) -> void:
+	if is_visible_in_tree():
+		return
+	_request_generation += 1
 	_map_name = map_name
 	_previous_focus = get_viewport().gui_get_focus_owner()
 	_set_keyboard_focus_visible(false)
 	_refresh_text()
 	_message_scroll.scroll_vertical = 0
+	_native_active = use_native_dialog and (native_dialog_handler.is_valid() or (OS.get_name() in ["macOS", "Windows"] and DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG)))
 	show()
+	if _native_active:
+		var generation := _request_generation
+		# 系统回调可能在 dialog_show 返回之前触发，业务动作延后到系统窗口关闭后执行。
+		var callback := _on_native_choice.bind(generation)
+		var buttons := PackedStringArray([tr("保存"), tr("不保存"), tr("取消")])
+		var title := tr("保存地图更改？")
+		var description := _save_question()
+		var result: int = native_dialog_handler.call(title, description, buttons, callback) if native_dialog_handler.is_valid() else DisplayServer.dialog_show(title, description, buttons, callback)
+		if result == OK or generation != _request_generation or not is_visible_in_tree():
+			return
+		# 系统调用失败仍须提供退出保护，并使可能晚到的原生回调失效。
+		_request_generation += 1
+		_native_active = false
+		_sync_visibility()
 	_layout_dialog()
 	_focus_cancel.call_deferred()
+
+
+## 玩家地图名原样插入已翻译的询问，明确说明不保存会丢失本次修改。
+func _save_question() -> String:
+	return tr("要在离开之前保存对“%s”的更改吗？\n如果不保存，本次更改将会丢失。") % _map_name
+
+
+## 延后处理原生按钮，避免在系统模态窗口内部更换页面或弹出保存错误。
+func _on_native_choice(index: int, generation: int) -> void:
+	_apply_native_choice.call_deferred(index, generation)
+
+
+## 只接受当前一次询问的选择；关闭或未知结果视为取消，不把迟到回调当成放弃。
+func _apply_native_choice(index: int, generation: int) -> void:
+	if not _native_active or generation != _request_generation or not is_visible_in_tree():
+		return
+	match index:
+		0:
+			_save()
+		1:
+			_discard()
+		_:
+			_cancel()
 
 
 ## 保留外壳和既有测试使用的取消按钮接口。
@@ -156,7 +204,13 @@ func get_cancel_button() -> Button:
 func _refresh_text() -> void:
 	if not is_instance_valid(_message):
 		return
-	_message.text = tr("返回开始界面前，请确认“%s”是否已保存。") % _map_name
+	_message.text = _save_question()
+	_layout_dialog()
+
+
+## 保留退出提醒的七成相对尺寸，并跟随 Windows 编辑页比例；遮罩仍使用物理全屏范围。
+func set_presentation_scale(factor: float) -> void:
+	_presentation_scale = maxf(1.0, factor)
 	_layout_dialog()
 
 
@@ -165,17 +219,20 @@ func _layout_dialog() -> void:
 	if not is_instance_valid(_panel) or not is_instance_valid(_cancel_button):
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
-	var available := (viewport_size / DISPLAY_SCALE - Vector2.ONE * EDGE_MARGIN * 2.0).max(Vector2.ONE)
+	var display_scale := DISPLAY_SCALE * _presentation_scale
+	_panel.scale = Vector2.ONE * display_scale
+	var available := (viewport_size / display_scale - Vector2.ONE * EDGE_MARGIN * 2.0).max(Vector2.ONE)
 	var width := minf(BASE_SIZE.x, available.x)
 	var padding := minf(PADDING, width * 0.08)
 	var body_width := maxf(1.0, width - padding * 2.0)
 	var font := _message.get_theme_font("font")
-	var text_size := font.get_multiline_string_size(_message.text, HORIZONTAL_ALIGNMENT_LEFT, maxf(1.0, body_width - 14.0), MESSAGE_SIZE, -1, TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE)
-	var text_height := ceilf(text_size.y + float(maxi(1, int(ceilf(text_size.y / font.get_height(MESSAGE_SIZE))))) * 4.0)
+	var font_size := _message.get_theme_font_size("font_size")
+	var text_size := font.get_multiline_string_size(_message.text, HORIZONTAL_ALIGNMENT_LEFT, maxf(1.0, body_width - 14.0), font_size, -1, TextServer.BREAK_MANDATORY | TextServer.BREAK_WORD_BOUND | TextServer.BREAK_ADAPTIVE)
+	var text_height := ceilf(text_size.y + float(maxi(1, int(ceilf(text_size.y / font.get_height(font_size))))) * 4.0)
 	var message_height := clampf(text_height, 60.0, 132.0)
 	var height := minf(BASE_SIZE.y + message_height - 60.0, available.y)
 	_panel.size = Vector2(width, height)
-	_panel.position = ((viewport_size - _panel.size * DISPLAY_SCALE) * 0.5).floor()
+	_panel.position = ((viewport_size - _panel.size * display_scale) * 0.5).floor()
 	_glass.size = _panel.size
 	(_glass.material as ShaderMaterial).set_shader_parameter("panel_size", _panel.size)
 	var button_height := minf(BUTTON_HEIGHT, maxf(20.0, height * 0.12))
@@ -196,7 +253,7 @@ func _layout_dialog() -> void:
 
 ## 延后聚焦取消，避免打开弹窗的同一个键意外触发保存或放弃。
 func _focus_cancel() -> void:
-	if is_visible_in_tree():
+	if is_visible_in_tree() and not _native_active:
 		_cancel_button.grab_focus()
 
 
@@ -205,7 +262,10 @@ func _sync_visibility() -> void:
 	if not is_instance_valid(_layer):
 		return
 	var active := is_visible_in_tree()
-	_layer.visible = active
+	if not active and _native_active:
+		_native_active = false
+		_request_generation += 1
+	_layer.visible = active and not _native_active
 	set_process_input(active)
 
 
@@ -238,6 +298,10 @@ func _cancel() -> void:
 ## 键盘焦点只在三个按钮之间循环，页面快捷键不会穿透确认界面。
 func _input(event: InputEvent) -> void:
 	if not is_visible_in_tree():
+		return
+	if _native_active:
+		# 原生窗口自己处理键盘；编辑器不能收到残留按键或鼠标事件。
+		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey:
 		get_viewport().set_input_as_handled()

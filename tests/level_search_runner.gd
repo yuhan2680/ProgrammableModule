@@ -29,6 +29,7 @@ func _run() -> void:
 	_game.settings.set_language("zh_CN")
 	_game._show_level_page()
 	await _settle()
+	await _test_search_focus_inputs()
 	await _test_matching_and_state()
 	await _test_sorting_and_state()
 	for dimensions: Vector2i in [Vector2i(1280, 800), Vector2i(1000, 740)]:
@@ -44,6 +45,114 @@ func _run() -> void:
 	_remove_temporary(_temporary)
 	print("关卡搜索回归完成：%d 项检查，%d 项失败。" % [_checks, _failures])
 	quit(0 if _failures == 0 else 1)
+
+
+## 用实际鼠标和键盘往返验证空白失焦、动画后的输入与键盘导航，不直接发射按钮信号。
+func _test_search_focus_inputs() -> void:
+	var header := _game._level_header
+	var input := _input_field()
+	var search := _button("LevelSearchButton")
+	var close := _button("LevelSearchCloseButton")
+	var more := _button("LevelMoreButton")
+	var blank := (_game.find_child("LevelBrowserTitle", true, false) as Control).get_global_rect().get_center()
+	await _click_at(search.get_global_rect().get_center())
+	await create_timer(0.36).timeout
+	_check(header._search_open and input.has_focus(), "鼠标展开动画结束后输入框保有真实焦点")
+	_check(input.caret_blink and is_equal_approx(input.caret_blink_interval, 0.5), "搜索光标由原生输入框每0.5秒闪烁")
+	_check(not _focus_hint_visible(close) and not _focus_hint_visible(search), "鼠标展开搜索不残留按钮焦点圈")
+	_type_text("循")
+	await _settle()
+	_check(input.text == "循", "鼠标展开动画后真实Unicode输入正常提交")
+	await _click_at(blank)
+	_check(not input.has_focus() and header.get_query() == "循" and header._search_open, "点击标题旁空白真正释放搜索焦点并保留查询")
+	_type_text("x")
+	await _settle()
+	_check(input.text == "循", "空白失焦后字符不会继续输入搜索框")
+	await _click_at(input.get_global_rect().get_center())
+	_type_text("环")
+	await _settle()
+	_check(input.has_focus() and input.text == "循环", "重新点击搜索输入框可正常继续编辑")
+	await _click_at(close.get_global_rect().get_center())
+	await _click_at(blank)
+	await create_timer(0.28).timeout
+	_check(not header._search_open and header.get_query().is_empty() and not search.has_focus(), "鼠标收起后点击空白不会被动画重新抢回搜索焦点")
+	_check(not _focus_hint_visible(search), "鼠标收起终态不显示蓝色焦点圈")
+	_button("LevelBackButton").grab_focus()
+	_key(KEY_TAB)
+	# 原生禁用的前进按钮仍可取得键盘焦点，保留既有顺序并继续到更多入口。
+	_key(KEY_TAB)
+	await _settle()
+	_check(more.has_focus() and _focus_hint_visible(more), "Tab正常导航到更多按钮并显示键盘焦点：%s" % root.gui_get_focus_owner())
+	_key(KEY_TAB)
+	await _settle()
+	_check(search.has_focus() and _focus_hint_visible(search), "Tab可继续导航到搜索按钮并显示键盘焦点：%s" % root.gui_get_focus_owner())
+	_key(KEY_ENTER)
+	await create_timer(0.36).timeout
+	_check(header._search_open and input.has_focus(), "键盘激活搜索后正常取得输入焦点")
+	_key(KEY_ESCAPE)
+	await create_timer(0.28).timeout
+	_check(search.has_focus() and _focus_hint_visible(search), "Esc收起后返回搜索入口并保留键盘焦点圈")
+	await _click_at(blank)
+	_check(not search.has_focus(), "页面空白可真正释放收起后的搜索按钮焦点")
+	await _click_at(more.get_global_rect().get_center())
+	await create_timer(0.20).timeout
+	_check(header._actions_menu.is_open(), "鼠标仍可打开更多菜单")
+	_key(KEY_ESCAPE)
+	await _settle()
+	_check(more.has_focus() and _focus_hint_visible(more), "菜单消费Esc后页头仍恢复键盘焦点提示")
+	await _click_at(more.get_global_rect().get_center())
+	await create_timer(0.20).timeout
+	await _click_at(blank)
+	_check(not header._actions_menu.is_open() and not _focus_hint_visible(more), "鼠标关闭更多菜单后不会恢复蓝色焦点圈")
+	await _click_at(blank)
+	_check(not more.has_focus(), "菜单关闭后页面空白仍可清理页头焦点")
+
+
+## 配对鼠标输入先更新真实悬停命中，再通过窗口变换发送按下和抬起。
+func _click_at(point: Vector2) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = root.get_final_transform() * point
+	motion.global_position = motion.position
+	Input.parse_input_event(motion)
+	await _settle()
+	for pressed in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.position = motion.position
+		event.global_position = motion.position
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		event.pressed = pressed
+		Input.parse_input_event(event)
+		await process_frame
+	await _settle()
+
+
+## 让原生GUI处理真实按键，不绕过按钮和搜索框的焦点路由。
+func _key(code: Key) -> void:
+	for pressed in [true, false]:
+		var event := InputEventKey.new()
+		event.keycode = code
+		event.physical_keycode = code
+		event.pressed = pressed
+		root.push_input(event)
+
+
+## Unicode字符经当前真实焦点提交，失焦时不得继续修改搜索文本。
+func _type_text(value: String) -> void:
+	for character in value:
+		for pressed in [true, false]:
+			var event := InputEventKey.new()
+			event.unicode = character.unicode_at(0)
+			event.pressed = pressed
+			root.push_input(event)
+
+
+## 只有当前可见且实际聚焦的按钮才检查焦点提示，避免只比对孤立样式资源。
+func _focus_hint_visible(button: Button) -> bool:
+	if not button.has_focus() or not button.is_visible_in_tree():
+		return false
+	var style := button.get_theme_stylebox("focus") as StyleBoxFlat
+	return style != null and ((style.draw_center and style.bg_color.a > 0.01) or (style.border_color.a > 0.01 and (style.border_width_left + style.border_width_top + style.border_width_right + style.border_width_bottom) > 0))
 
 
 ## 写入有效自定义关卡，名称独立于文件名、稳定 ID 和说明内容。
@@ -100,13 +209,13 @@ func _test_matching_and_state() -> void:
 	await _settle()
 	_check(_visible_ids().size() == 9 and _button("TutorialToggleButton").is_visible_in_tree(), "只有空白的查询恢复默认折叠列表")
 	await _activate(_button("TutorialToggleButton"), "搜索框打开时展开全部教学")
-	_check(_game._tutorials_expanded and _visible_ids().size() == 17, "空查询仍可展开第一至第十五关共十五张教学卡片")
+	_check(_game._tutorials_expanded and _visible_ids().size() == 18, "空查询仍可展开第一至第十六关共十六张教学卡片")
 	_set_query("星海")
 	await _settle()
 	_expect_ids(["a_import"], "只匹配导入名称时教学卡片全部隐藏")
 	await _activate(_button("LevelSearchCloseButton"), "收回搜索框")
 	await create_timer(0.28).timeout
-	_check(header.get_query().is_empty() and _game._tutorials_expanded and _visible_ids().size() == 17, "关闭搜索清除筛选并恢复此前全部展开状态")
+	_check(header.get_query().is_empty() and _game._tutorials_expanded and _visible_ids().size() == 18, "关闭搜索清除筛选并恢复此前全部展开状态")
 	await _activate(_button("TutorialToggleButton"), "恢复折叠偏好")
 	header.set_search_open(true, false)
 	_set_query("阶梯")
@@ -172,7 +281,7 @@ func _test_sorting_and_state() -> void:
 	_check(not _game._unfinished_first and original_order.button_pressed and not unfinished.button_pressed, "首次排序子菜单只勾选默认顺序")
 	await _activate(unfinished, "选择未通关优先")
 	_check(_game._unfinished_first and unfinished.button_pressed and not original_order.button_pressed and not _game._level_header._actions_menu.is_open(), "选择排序后单选勾选更新且菜单自动收起")
-	var tutorial_order: Array[String] = ["level_002", "level_004", "level_005", "level_006", "level_007", "level_008", "level_009", "level_010", "level_011", "level_012", "level_013", "level_014", "level_015", "level_001", "level_003"]
+	var tutorial_order: Array[String] = ["level_002", "level_004", "level_005", "level_006", "level_007", "level_008", "level_009", "level_010", "level_011", "level_012", "level_013", "level_014", "level_015", "level_016", "level_001", "level_003"]
 	_check(_grid_level_ids("LevelGrid") == tutorial_order, "教学按未通关与已通关稳定分区，组内维持原顺序")
 	_check(_grid_level_ids("LevelGrid", true) == tutorial_order.slice(0, 7), "默认七张按排序后次序选取，包含默认折叠的第八关")
 	_check(_grid_level_ids("ImportedLevelGrid") == ["b_import", "c_import", "a_import"] and _button("ImportLevelButton").get_parent().get_index() == 0, "导入分类独立排序且加号仍占第一格")

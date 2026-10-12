@@ -13,7 +13,7 @@ func _initialize() -> void:
 	_run.call_deferred()
 
 
-## 在真实准备页和工作台页签覆盖查看、编辑及浮层生命周期。
+## 在真实准备页和编程往返覆盖查看、编辑及浮层生命周期。
 func _run() -> void:
 	_temporary = "user://tests/assembly_viewport_%d_%d" % [OS.get_process_id(), Time.get_ticks_usec()]
 	root.size = Vector2i(1280, 800)
@@ -299,7 +299,7 @@ func _test_switch_to_fixed() -> void:
 	await _settle()
 
 
-## 指引、工作台页签和页面销毁均关闭独立画布层，不留下不可见输入屏障。
+## 指引、独立装配页面和页面销毁均关闭独立画布层，不留下不可见输入屏障。
 func _test_lifecycle() -> void:
 	var panel := _game.assembly_panel
 	_click(panel._palette_button.get_global_rect().get_center())
@@ -321,28 +321,32 @@ func _test_lifecycle() -> void:
 	_check(_game.page == GameShell.Page.PLAY and (not is_instance_valid(preparation_drawer) or not preparation_drawer.is_open()), "确认进入程序页时清理准备页抽屉")
 	if _game.workbench == null:
 		return
-	_game.workbench.set_process(false)
-	_game.workbench._tabs.current_tab = 1
+	var session := _game.session
+	var modules := _signature()
+	_game.workbench.header.back_button.pressed.emit()
 	await _settle()
-	var workbench_panel := _game.workbench._assembly_panel
-	_check(not workbench_panel.canvas.free_zoom_enabled and workbench_panel.canvas.material == null, "新工作台装配页签沿用已关闭的自由缩放设置")
+	var returned_panel := _game.assembly_panel
+	_check(_game.page == GameShell.Page.ASSEMBLY and returned_panel.preparation_mode and returned_panel.header != null and _game.session == session and _signature() == modules, "编程返回独立装配页并复用原会话模型")
+	_check(not returned_panel.canvas.free_zoom_enabled and returned_panel.canvas.material == null, "返回装配页沿用已关闭的自由缩放设置")
 	_game.settings.set_assembly_free_zoom(true)
-	_check(workbench_panel.canvas.free_zoom_enabled, "已创建的工作台装配页签也即时接收设置变更")
+	_check(returned_panel.canvas.free_zoom_enabled, "返回的独立装配页即时接收设置变更")
 	_game.settings.set_assembly_free_zoom(false)
-	_click(workbench_panel._palette_button.get_global_rect().get_center())
+	_click(returned_panel._palette_button.get_global_rect().get_center())
 	await _settle()
-	_check(workbench_panel._palette_drawer.is_open(), "工作台装配页签使用同一模块抽屉")
-	_game.workbench._tabs.current_tab = 0
+	_check(returned_panel._palette_drawer.is_open(), "返回的装配页仍可操作模块抽屉")
+	var returned_drawer := returned_panel._palette_drawer
+	returned_panel.header.forward_button.pressed.emit()
 	await _settle()
-	_check(not workbench_panel._palette_drawer.is_open(), "隐藏工作台装配页签立即关闭 CanvasLayer 抽屉")
-	_game.workbench._tabs.current_tab = 1
+	_check(_game.page == GameShell.Page.PLAY and (not is_instance_valid(returned_drawer) or not returned_drawer.is_open()), "右箭头确认返回编程时关闭装配抽屉")
+	_game.workbench.header.back_button.pressed.emit()
 	await _settle()
-	_click(workbench_panel._palette_button.get_global_rect().get_center())
+	returned_panel = _game.assembly_panel
+	_click(returned_panel._palette_button.get_global_rect().get_center())
 	await _settle()
-	var workbench_drawer := workbench_panel._palette_drawer
-	_game._back_button.pressed.emit()
+	var exiting_drawer := returned_panel._palette_drawer
+	returned_panel.header.back_button.pressed.emit()
 	await _settle()
-	_check(_game.page == GameShell.Page.LEVELS and (not is_instance_valid(workbench_drawer) or not workbench_drawer.is_open()), "退出关卡时抽屉随所属页面销毁")
+	_check(_game.page == GameShell.Page.LEVELS and (not is_instance_valid(exiting_drawer) or not exiting_drawer.is_open()), "退出关卡时抽屉随所属装配页面销毁")
 
 
 ## 记录真实模型变更信号，查看操作不能以内容相同为由掩盖多余草稿写入。

@@ -3,6 +3,7 @@ extends CanvasLayer
 ## 地图编辑器更多菜单只发出操作意图，文档保存、校验和元数据仍交给编辑器处理。
 
 signal save_as_requested
+signal open_requested
 signal validate_requested
 signal metadata_requested
 
@@ -13,6 +14,8 @@ const ROW_HEIGHT := 44.0
 const ROW_GAP := 4.0
 
 var _items: Array[Button] = []
+var _focus_styles: Array[StyleBox] = []
+var _keyboard_focus_visible := false
 var _overlay: Control
 var _panel: Panel
 var _glass: ColorRect
@@ -54,14 +57,15 @@ func _ready() -> void:
 	glass_material.shader = load("res://assets/ui/menu_glass.gdshader")
 	_glass.material = glass_material
 	_panel.add_child(_glass)
-	_add_item("MapEditorSaveAsMenuItem", "另存为", "res://assets/ui/map_editor_save_as.svg", 0)
-	_add_item("MapEditorValidateMenuItem", "校验", "res://assets/ui/map_editor_validate.svg", 1)
-	_add_item("MapEditorMetadataMenuItem", "元数据 JSON", "res://assets/ui/map_editor_metadata.svg", 2)
+	_add_item("MapEditorOpenMenuItem", "打开地图", "res://assets/ui/map_editor_open.svg", 0)
+	_add_item("MapEditorSaveAsMenuItem", "另存为", "res://assets/ui/map_editor_save_as.svg", 1)
+	_add_item("MapEditorValidateMenuItem", "校验", "res://assets/ui/map_editor_validate.svg", 2)
+	_add_item("MapEditorMetadataMenuItem", "元数据 JSON", "res://assets/ui/map_editor_metadata.svg", 3)
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	set_process_input(false)
 
 
-## 三项操作统一使用原生按钮和高清 SVG，复用编程菜单的焦点、悬停与按下外观。
+## 文件与编辑操作统一使用原生按钮和高清 SVG，复用编程菜单的焦点、悬停与按下外观。
 func _add_item(node_name: String, caption: String, icon_path: String, index: int) -> void:
 	var item := Button.new()
 	item.name = node_name
@@ -73,7 +77,7 @@ func _add_item(node_name: String, caption: String, icon_path: String, index: int
 	item.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	item.add_theme_constant_override("h_separation", 12)
 	item.add_theme_constant_override("icon_max_width", 22)
-	item.add_theme_font_size_override("font_size", 16)
+	GameTheme.font_size(item, "font_size", 16)
 	for state in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color", "icon_disabled_color"]:
 		item.add_theme_color_override(state, Color.WHITE)
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
@@ -81,6 +85,8 @@ func _add_item(node_name: String, caption: String, icon_path: String, index: int
 		var style := GameTheme.box(fill, Color.TRANSPARENT, 10)
 		style.set_content_margin_all(10)
 		item.add_theme_stylebox_override(state, style)
+	_focus_styles.append(item.get_theme_stylebox("focus"))
+	item.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	item.pressed.connect(_activate.bind(index))
 	_panel.add_child(item)
 	_items.append(item)
@@ -94,6 +100,8 @@ func popup_at(anchor: Control) -> void:
 	if not is_instance_valid(anchor) or not anchor.is_visible_in_tree():
 		return
 	_anchor = anchor
+	var header := _anchor_header()
+	_set_keyboard_focus_visible(header.is_keyboard_focus_visible() if header != null else false)
 	_open = true
 	_swallowed_button = MOUSE_BUTTON_NONE
 	_overlay.show()
@@ -141,7 +149,8 @@ func _update_placement() -> void:
 	if not is_instance_valid(_anchor) or not _anchor.is_visible_in_tree():
 		close_menu(false)
 		return
-	var viewport_size := get_viewport().get_visible_rect().size
+	var factor := GameTheme.sync_popup_scale(_overlay, _anchor)
+	var viewport_size := get_viewport().get_visible_rect().size / factor
 	var width := MENU_WIDTH
 	for item in _items:
 		if item.visible:
@@ -154,6 +163,7 @@ func _update_placement() -> void:
 		cursor_y += ROW_HEIGHT + ROW_GAP
 	var menu_size := Vector2(width, cursor_y - ROW_GAP + 8)
 	var anchor_rect := _anchor.get_global_rect()
+	anchor_rect = Rect2(anchor_rect.position / factor, anchor_rect.size / factor)
 	_origin = Vector2(anchor_rect.end.x - width, anchor_rect.end.y + ANCHOR_GAP)
 	_origin.x = clampf(_origin.x, EDGE_MARGIN, maxf(EDGE_MARGIN, viewport_size.x - width - EDGE_MARGIN))
 	_origin.y = clampf(_origin.y, EDGE_MARGIN, maxf(EDGE_MARGIN, viewport_size.y - menu_size.y - EDGE_MARGIN))
@@ -167,6 +177,11 @@ func _update_placement() -> void:
 
 ## 优先接管关闭和焦点操作，吞掉外部完整点击，防止再次点入口时重开或误操作地图。
 func _input(event: InputEvent) -> void:
+	# 浮层截获事件后页头收不到同一次输入，必须在归还焦点前同步显示方式。
+	if event is InputEventMouseMotion or event is InputEventMouseButton or event is InputEventScreenTouch:
+		_set_keyboard_focus_visible(false)
+	elif event is InputEventKey and event.pressed and _open:
+		_set_keyboard_focus_visible(true)
 	if event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
 		if _swallowed_button != MOUSE_BUTTON_NONE and mouse.button_index == _swallowed_button:
@@ -202,6 +217,29 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+## 只控制焦点样式，保留菜单默认焦点、原生悬停以及关闭后从入口继续Tab的行为。
+func _set_keyboard_focus_visible(enabled: bool) -> void:
+	_keyboard_focus_visible = enabled
+	for index in range(_items.size()):
+		var style: StyleBox = _focus_styles[index] if enabled else StyleBoxEmpty.new()
+		_items[index].add_theme_stylebox_override("focus", style)
+	var header := _anchor_header()
+	if header != null:
+		header.set_keyboard_focus_visible(enabled)
+
+
+## 仅在地图页头提供的入口上同步焦点模式，独立菜单或测试用普通按钮仍可使用。
+func _anchor_header() -> MapEditorHeader:
+	if not is_instance_valid(_anchor):
+		return null
+	var current: Node = _anchor
+	while current != null:
+		if current is MapEditorHeader:
+			return current as MapEditorHeader
+		current = current.get_parent()
+	return null
+
+
 ## 只收集可见且可用的行，键盘焦点始终停留在当前菜单。
 func _focusable_items() -> Array[Button]:
 	var result: Array[Button] = []
@@ -227,10 +265,12 @@ func _activate(index: int) -> void:
 	close_menu()
 	match index:
 		0:
-			save_as_requested.emit()
+			open_requested.emit()
 		1:
-			validate_requested.emit()
+			save_as_requested.emit()
 		2:
+			validate_requested.emit()
+		3:
 			metadata_requested.emit()
 
 

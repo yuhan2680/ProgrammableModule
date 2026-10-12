@@ -78,6 +78,7 @@ func set_search_open(open: bool, animate: bool = true) -> void:
 	_stop_search_tween()
 	_search_open = open
 	search_input.editable = open
+	search_input.context_menu_enabled = open
 	if not open:
 		search_input.release_focus()
 		if not search_input.text.is_empty():
@@ -141,6 +142,7 @@ func _build_search() -> void:
 	search_input.name = "CommandReferenceSearchInput"
 	search_input.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	search_input.editable = false
+	search_input.context_menu_enabled = false
 	search_input.add_theme_color_override("font_placeholder_color", GameTheme.MUTED)
 	search_input.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	search_input.add_theme_stylebox_override("focus", StyleBoxEmpty.new())

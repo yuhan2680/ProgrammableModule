@@ -5,6 +5,7 @@ extends CanvasLayer
 signal refresh_requested
 signal import_requested
 signal sort_changed(enabled: bool)
+signal input_observed(event: InputEvent)
 
 const MENU_WIDTH := 220.0
 const EDGE_MARGIN := 12.0
@@ -35,7 +36,8 @@ func _ready() -> void:
 	_overlay.theme = GameTheme.create_theme()
 	_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_overlay)
-	_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	_overlay.size = get_viewport().get_visible_rect().size
 	_overlay.hide()
 	# 显式在菜单绘制前复制页面，防止圆角阴影或前一帧菜单混入模糊采样。
 	var backdrop := BackBufferCopy.new()
@@ -123,7 +125,7 @@ func _add_sort_option(node_name: String, caption: String, enabled: bool) -> void
 	mark.name = "SortCheckmark"
 	mark.text = "✓"
 	mark.add_theme_color_override("font_color", GameTheme.ACCENT)
-	mark.add_theme_font_size_override("font_size", 18)
+	GameTheme.font_size(mark, "font_size", 18)
 	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -133,7 +135,7 @@ func _add_sort_option(node_name: String, caption: String, enabled: bool) -> void
 
 ## 主菜单和子菜单共用行间距与悬停反馈，勾选不另起一套视觉风格。
 func _style_menu_item(item: Button) -> void:
-	item.add_theme_font_size_override("font_size", 16)
+	GameTheme.font_size(item, "font_size", 16)
 	for state in ["normal", "hover", "pressed", "hover_pressed", "focus"]:
 		var color := Color(0.79, 0.87, 0.99, 0.68) if state in ["hover", "focus"] else Color(0.71, 0.82, 0.98, 0.82) if state in ["pressed", "hover_pressed"] else Color.TRANSPARENT
 		var style := GameTheme.box(color, Color.TRANSPARENT, 10)
@@ -194,20 +196,22 @@ func set_sort_enabled(enabled: bool) -> void:
 		_sort_options[index].set_pressed_no_signal(selected)
 
 
-## 使用逻辑画布坐标定位，缩放窗口和切换语言都保持右边缘对齐及安全留白。
+## 独立浮层补入入口的实际缩放一次，继续在原逻辑尺寸内排版和限制边缘。
 func _update_placement() -> void:
 	if not _open:
 		return
 	if not is_instance_valid(_anchor) or not _anchor.is_visible_in_tree():
 		close_menu(false)
 		return
-	var viewport_size := get_viewport().get_visible_rect().size
+	var presentation_scale := _sync_anchor_scale()
+	var viewport_size := get_viewport().get_visible_rect().size / presentation_scale
 	var width := MENU_WIDTH
 	for item in _items:
 		width = maxf(width, item.get_combined_minimum_size().x + 44.0)
 	width = minf(width, maxf(0.0, viewport_size.x - EDGE_MARGIN * 2.0))
 	var menu_size := Vector2(width, 168.0)
-	var anchor_rect := _anchor.get_global_rect()
+	var actual_anchor_rect := _anchor.get_global_rect()
+	var anchor_rect := Rect2(actual_anchor_rect.position / presentation_scale, actual_anchor_rect.size / presentation_scale)
 	var origin := Vector2(anchor_rect.end.x - menu_size.x, anchor_rect.end.y + ANCHOR_GAP)
 	origin.x = clampf(origin.x, EDGE_MARGIN, maxf(EDGE_MARGIN, viewport_size.x - menu_size.x - EDGE_MARGIN))
 	origin.y = clampf(origin.y, EDGE_MARGIN, maxf(EDGE_MARGIN, viewport_size.y - menu_size.y - EDGE_MARGIN))
@@ -227,6 +231,16 @@ func _update_placement() -> void:
 	_sort_chevron.size = Vector2(18, 18)
 	if _sort_open:
 		_place_sort_menu(viewport_size)
+
+
+## CanvasLayer 不继承页根变换；全屏命中层统一缩放，避免菜单与字号重复放大。
+func _sync_anchor_scale() -> float:
+	var anchor_transform := _anchor.get_global_transform()
+	var presentation_scale := maxf(0.01, minf(anchor_transform.x.length(), anchor_transform.y.length()))
+	_overlay.position = Vector2.ZERO
+	_overlay.scale = Vector2.ONE * presentation_scale
+	_overlay.size = get_viewport().get_visible_rect().size / presentation_scale
+	return presentation_scale
 
 
 ## 主菜单位于右侧时优先向左打开排序选项，空间不足时改到下方并限制在视口内。
@@ -276,6 +290,7 @@ func _close_sort_menu() -> void:
 func _input(event: InputEvent) -> void:
 	if not _open:
 		return
+	input_observed.emit(event)
 	if event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
 		var inside_sort := _sort_open and _sort_panel.get_global_rect().has_point(mouse.position)

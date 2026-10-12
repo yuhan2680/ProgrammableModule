@@ -25,7 +25,7 @@ func _run() -> void:
 	_game.settings.set_code_color_mode("dark")
 	for dimensions: Vector2i in [Vector2i(1280, 800), Vector2i(1000, 740)]:
 		root.size = dimensions
-		for locale: String in ["zh_CN", "en"]:
+		for locale: String in ["zh_CN", "zh_HK", "en"]:
 			_game.settings.set_language(locale)
 			await _test_geometry(locale + " " + str(dimensions))
 	root.size = Vector2i(1280, 800)
@@ -34,6 +34,7 @@ func _run() -> void:
 	var editor := _game._editor
 	await _test_dialog_appearance(editor)
 	await _test_menu(editor)
+	await _test_menu_focus_modes(editor)
 	await _test_save_and_history(editor)
 	await _test_history_shortcuts(editor)
 	await _test_dirty_safety(editor)
@@ -55,6 +56,7 @@ func _test_geometry(context: String) -> void:
 	await _settle()
 	var editor := _game._editor
 	_check(editor._file_dialog.use_native_dialog and editor._file_dialog.access == FileDialog.ACCESS_FILESYSTEM, "文件选择器优先使用系统原生窗口并允许选择其他目录 " + context)
+	_check(editor._file_dialog.filters.size() == 1 and editor._file_dialog.filters[0].begins_with("*.json"), "原生打开和另存为保持地图 JSON 文件过滤 " + context)
 	# 自动回归只操作内嵌后备窗口，不在图形测试主机上弹出无法自动关闭的系统保存面板。
 	editor._file_dialog.use_native_dialog = false
 	_check((editor._metadata_text.get_theme_stylebox("normal") as StyleBoxFlat).bg_color == Color("121314"), "新建地图编辑器继承已选择的深色代码配色 " + context)
@@ -63,21 +65,25 @@ func _test_geometry(context: String) -> void:
 	_check(_game._back_button == header.back_button and header.back_button.get_global_rect().is_equal_approx(expected_back) and header.navigation.get_global_rect().is_equal_approx(expected_navigation), "编辑器导航精确复用选关页位置与尺寸 " + context)
 	_check(header.navigation.global_position.is_equal_approx(Vector2(24, 24)) and is_equal_approx(header.navigation.size.y, 44), "导航保持24像素外边距及44像素高度 " + context)
 	_check(header.back_button.get_tooltip() == _game.tr("返回开始页面"), "返回悬停说明随当前语言显示目标 " + context)
-	var buttons: Array[Button] = [header.back_button, header.new_button, header.save_button, header.undo_button, header.redo_button, header.more_button, header.reload_button]
+	var buttons: Array[Button] = [header.back_button, editor._zoom_out_button, editor._zoom_in_button, editor._guide_button, header.new_button, header.save_button, header.undo_button, header.redo_button, header.more_button, header.reload_button]
 	for button in buttons:
 		_check(button.is_visible_in_tree() and button.text.is_empty() and button.icon != null and not button.get_tooltip().is_empty(), "工具栏入口采用带提示的纯SVG图标：" + str(button.name) + " " + context)
 		_check(root.get_visible_rect().grow(1).encloses(button.get_global_rect()) and button.size.x > 0 and button.size.y > 0, "图标按钮完整位于视口：" + str(button.name) + " " + context)
+		_check(is_equal_approx(button.size.y, 44.0) and is_equal_approx(button.get_global_rect().get_center().y, header.back_button.get_global_rect().get_center().y), "顶部所有入口同为44像素并沿导航中线对齐：" + str(button.name) + " " + context)
 	for index in buttons.size():
 		for other in range(index + 1, buttons.size()):
 			_check(not buttons[index].get_global_rect().grow(-0.5).intersects(buttons[other].get_global_rect().grow(-0.5)), "图标按钮之间没有重叠：%s / %s %s" % [buttons[index].name, buttons[other].name, context])
+	for index in range(1, buttons.size() - 1):
+		_check(buttons[index].get_global_rect().end.x <= buttons[index + 1].global_position.x, "操作顺序为缩放、指引、新建保存、历史更多、重载：" + str(buttons[index].name) + " " + context)
+	_check(editor._zoom_out_button == header.zoom_out_button and editor._zoom_in_button == header.zoom_in_button and editor._guide_button == header.guide_button, "迁移入口保留编辑器原操作句柄 " + context)
 	_check(editor._undo_button == header.undo_button and editor._redo_button == header.redo_button and header.undo_button.disabled and header.redo_button.disabled, "首次载入保留历史句柄且正确禁用空历史 " + context)
-	# 只替换显示路径，不写文件；长路径不能通过最小尺寸把整个工具栏推到视口外。
+	# 改变内部路径不应重新生成可见路径控件，也不能推动页头或占用工作区。
 	var original_path := editor.editor_document.path
 	var reload_right := header.reload_button.get_global_rect().end.x
 	editor.editor_document.path = _temporary.path_join("nested_path_".repeat(12) + "map.json")
 	editor._on_document_changed()
 	await _settle()
-	_check(root.get_visible_rect().grow(1).encloses(editor._file_label.get_global_rect()), "约200字符的路径按钮仍完整位于视口 " + context)
+	_check(editor.find_child("MapEditorOpenButton", true, false) == null, "标题下不再创建路径按钮或空白占位行 " + context)
 	_check(is_equal_approx(header.reload_button.get_global_rect().end.x, reload_right), "长路径不会推动页头最右侧重载按钮 " + context)
 	editor.editor_document.path = original_path
 	editor._on_document_changed()
@@ -86,11 +92,11 @@ func _test_geometry(context: String) -> void:
 	_press(header.more_button)
 	await create_timer(0.23).timeout
 	var menu := editor._actions_menu
-	_check(menu.is_open() and menu._items.size() == 3, "更多菜单只包含三个编辑操作 " + context)
+	_check(menu.is_open() and menu._items.size() == 4, "更多菜单包含打开、另存为、校验与元数据 " + context)
 	var panel := menu._panel.get_global_rect()
 	_check(root.get_visible_rect().encloses(panel) and absf(panel.end.x - anchor.end.x) < 1 and absf(panel.position.y - anchor.end.y - 8) < 1, "菜单右对齐入口并在其下方完整展开 " + context)
 	_check(header.more_button.get_global_rect().is_equal_approx(anchor), "展开菜单不挤动工具栏 " + context)
-	var captions := ["另存为", "校验", "元数据 JSON"]
+	var captions := ["打开地图", "另存为", "校验", "元数据 JSON"]
 	for index in menu._items.size():
 		var item: Button = menu._items[index]
 		_check(item.is_visible_in_tree() and item.icon != null and panel.encloses(item.get_global_rect()) and TranslationServer.translate(item.text) == _game.tr(captions[index]), "菜单项目含图标且正确本土化：" + captions[index] + " " + context)
@@ -113,8 +119,9 @@ func _test_menu(editor: MapEditor) -> void:
 	_press(editor._header.more_button)
 	await _settle()
 	_key(KEY_DOWN)
+	_key(KEY_DOWN)
 	await _settle()
-	_check(menu._items[1].has_focus(), "下方向键切到校验项目")
+	_check(menu._items[2].has_focus(), "下方向键依次越过另存为后切到校验项目")
 	_key(KEY_ENTER)
 	await _settle()
 	_check(not menu.is_open() and editor._status.text.contains("校验通过"), "键盘确认执行真实地图校验并关闭菜单")
@@ -132,7 +139,7 @@ func _test_menu(editor: MapEditor) -> void:
 	_check(not menu.is_open() and _signature(editor) == before, "外部点击关闭菜单且完整吞掉笔画点击")
 	_press(editor._header.more_button)
 	await _settle()
-	_press(menu._items[2])
+	_press(menu._items[3])
 	_check(editor._metadata_dialog.visible and not menu.is_open(), "元数据菜单仍打开原有JSON编辑窗口")
 	var metadata := editor.editor_document.metadata_dict()
 	metadata.extra["toolbar_regression"] = {"preserved": true}
@@ -145,20 +152,81 @@ func _test_menu(editor: MapEditor) -> void:
 	_check(_signature(editor) == before and editor.editor_document._undo_stack.size() == undo_count and editor.editor_document.is_dirty() and editor._status.text.contains("内容已重载"), "重载内容更新注册表并保留文档、未保存状态与历史")
 
 
-## 两类窗口使用完整圆角，并用真实嵌入窗口点击验证对称位置的关闭命中区域。
+## 真实鼠标和键盘往返只改变焦点提示；菜单关闭不能残留蓝框或穿透修改地图。
+func _test_menu_focus_modes(editor: MapEditor) -> void:
+	var header := editor._header
+	var menu := editor._actions_menu
+	var more := header.more_button
+	var model := editor.editor_document
+	var before := _signature(editor)
+	var undo_count := model._undo_stack.size()
+	var redo_count := model._redo_stack.size()
+	var saved_path := model.path
+	var levels_before := _snapshot(_game.user_levels_directory)
+	var empty_header := header.title_label.get_global_rect().get_center()
+	await _click_at(more.get_global_rect().get_center())
+	_check(menu.is_open() and menu._items[0].has_focus() and not _focus_hint_visible(menu._items[0]), "鼠标打开更多仍保留可操作焦点，但不显示额外键盘高亮")
+	await _click_at(more.get_global_rect().get_center())
+	_check(not menu.is_open() and more.has_focus() and not _focus_hint_visible(more), "鼠标再次点击更多关闭菜单后不残留淡蓝焦点描边")
+	await _move_pointer(empty_header)
+	await _move_pointer(more.get_global_rect().get_center())
+	_check(more.is_hovered(), "真实鼠标移入更多按钮仍能触发悬停")
+	await _move_pointer(empty_header)
+	_check(not more.is_hovered() and more.has_focus() and not _focus_hint_visible(more), "鼠标移出后悬停和蓝框均消失，原生焦点仍保留")
+	await _click_at(header.reload_button.get_global_rect().get_center())
+	_check(header.reload_button.has_focus() and not more.has_focus() and not _focus_hint_visible(header.reload_button), "点击另一工具栏按钮正确转移焦点且不新增鼠标焦点环")
+	_key(KEY_TAB, false, false, true)
+	await _settle()
+	_check(more.has_focus() and _focus_hint_visible(more), "Shift+Tab从重载返回更多时显示清晰键盘焦点环")
+	_key(KEY_ENTER)
+	await _settle()
+	_check(menu.is_open() and menu._items[0].has_focus() and _focus_hint_visible(menu._items[0]), "键盘打开菜单后第一项显示可见焦点")
+	_key(KEY_TAB)
+	await _settle()
+	_check(menu._items[1].has_focus() and _focus_hint_visible(menu._items[1]), "Tab在菜单内移动并保留键盘焦点提示")
+	# 前一测试已建立真实撤销历史，若快捷键泄漏，文档签名会发生变化。
+	_check(undo_count > 0, "焦点回归使用可撤销的文档，确保快捷键穿透检查有效")
+	_key(KEY_Z, true)
+	_key(KEY_S, true)
+	_key(KEY_O, true)
+	await _settle()
+	_check(menu.is_open() and not editor._file_dialog.visible and not editor._dirty_dialog.visible and _signature(editor) == before and model._undo_stack.size() == undo_count and model.path == saved_path and _snapshot(_game.user_levels_directory) == levels_before, "菜单消费编辑快捷键，不撤销、保存或打开背后的地图")
+	_key(KEY_ESCAPE)
+	await _settle()
+	_check(not menu.is_open() and more.has_focus() and _focus_hint_visible(more), "Esc关闭后恢复入口的键盘焦点提示")
+	await _move_pointer(empty_header)
+	_check(more.has_focus() and not _focus_hint_visible(more), "从Esc改用鼠标后立即隐藏蓝框且保留焦点位置")
+	await _click_at(more.get_global_rect().get_center())
+	await create_timer(0.23).timeout
+	await _click_at(menu._items[2].get_global_rect().get_center())
+	_check(not menu.is_open() and editor._status.text.contains("校验通过") and more.has_focus() and not _focus_hint_visible(more), "鼠标执行真实校验后关闭菜单，入口不残留键盘描边")
+	await _click_at(more.get_global_rect().get_center())
+	# 选择已有地板，右键若穿透会将它擦除，避免在空白格上得到无效通过。
+	var cell := Vector2i.ZERO
+	for candidate: Vector2i in model.document.cells:
+		cell = candidate
+		break
+	var map_point := editor._canvas.get_global_transform_with_canvas() * ((Vector2(cell) + Vector2(0.5, 0.5)) * editor._canvas.cell_size)
+	_check(not model.document.get_tile_id(cell).is_empty() and not menu._panel.get_global_rect().has_point(map_point), "外点关闭用例命中菜单外已有地板，误穿透会产生可观测修改")
+	await _click_at(map_point, MOUSE_BUTTON_RIGHT)
+	_check(not menu.is_open() and more.has_focus() and not _focus_hint_visible(more), "鼠标外点关闭后归还入口焦点但不显示蓝框")
+	_check(_signature(editor) == before and model._undo_stack.size() == undo_count and model._redo_stack.size() == redo_count and model.path == saved_path, "焦点、悬停和菜单外点完整保留地图、路径与双向历史")
+
+
+## 弹窗统一使用浅色圆角外壳；元数据编辑框继续独立响应代码配色。
 func _test_dialog_appearance(editor: MapEditor) -> void:
 	for dimensions in [Vector2i(1280, 800), Vector2i(1000, 740)]:
 		root.size = dimensions
 		for locale in ["zh_CN", "en"]:
 			_game.settings.set_language(locale)
 			await _settle()
-			for index in [0, 2]:
+			for index in [1, 3]:
 				await _menu_item(editor, index)
 				await _settle()
-				var dialog: AcceptDialog = editor._file_dialog if index == 0 else editor._metadata_dialog
+				var dialog: AcceptDialog = editor._file_dialog if index == 1 else editor._metadata_dialog
 				var context := "%s %s %s" % [dimensions, locale, dialog.title]
 				_check(dialog.is_embedded() and dialog.transparent_bg and dialog.get_theme_stylebox("panel") is StyleBoxEmpty, "正文不再重复绘制圆角或留下不透明方角 " + context)
-				if index == 2:
+				if index == 3:
 					_check_metadata_geometry(editor, context)
 				var frame := dialog.get_theme_stylebox("embedded_border", "Window") as StyleBoxFlat
 				var icon := dialog.get_theme_icon("close")
@@ -180,7 +248,7 @@ func _test_dialog_appearance(editor: MapEditor) -> void:
 	_game.settings.set_language("zh_CN")
 	await _settle()
 	await _test_metadata_scrolling(editor)
-	await _menu_item(editor, 2)
+	await _menu_item(editor, 3)
 	await _settle()
 	var code := editor._metadata_text
 	var before := _signature(editor)
@@ -264,28 +332,36 @@ func _test_metadata_scrolling(editor: MapEditor) -> void:
 func _test_save_and_history(editor: MapEditor) -> void:
 	var original := FileAccess.get_file_as_bytes(MapEditor.DEFAULT_MAP_PATH)
 	var first := _temporary.path_join("maps/first.json")
-	await _menu_item(editor, 0)
+	await _menu_item(editor, 1)
 	_check(editor._file_dialog.visible and editor._file_dialog.file_mode == FileDialog.FILE_MODE_SAVE_FILE and editor.editor_document.path == MapEditor.DEFAULT_MAP_PATH, "另存为先选择路径且不提前改写当前文档路径")
 	_select_file(editor, first)
 	_check(FileAccess.file_exists(first) and editor.editor_document.path == first and not editor.editor_document.is_dirty(), "另存为成功后更新路径及保存点")
+	var first_bytes := FileAccess.get_file_as_bytes(first)
 	editor._name_field.grab_focus()
 	editor._name_field.text = "工具栏保存回归"
 	_press(editor._header.save_button)
-	var saved := MapCodec.load_file(first, editor.registry, false)
-	_check(saved.is_ok() and saved.value.display_name == "工具栏保存回归" and not editor.editor_document.is_dirty(), "保存图标提交尚未失焦的名称并写入当前路径")
+	var managed_path := editor.editor_document.path
+	var saved := MapCodec.load_file(managed_path, editor.registry, false)
+	_check(saved.is_ok() and saved.value.display_name == "工具栏保存回归" and not editor.editor_document.is_dirty() and not editor._file_dialog.visible and ProjectSettings.globalize_path(managed_path).get_base_dir() == ProjectSettings.globalize_path(_game.user_levels_directory), "保存图标提交尚未失焦名称并直接写入玩家目录")
+	_check(FileAccess.get_file_as_bytes(first) == first_bytes, "普通保存不会覆盖先前另存为的外部文件")
 	editor._name_field.release_focus()
 	var initial_limit := editor.editor_document.get_module_limit()
 	editor._module_limit_field.value = initial_limit + 1
 	_check(not editor._header.undo_button.disabled and editor._header.redo_button.disabled and editor.editor_document.is_dirty(), "编辑规则后撤销可用且重做禁用")
+	_check(editor._header.title_label.text.ends_with(" *"), "移除路径行后标题星号仍提示未保存修改")
 	_press(editor._header.undo_button)
 	_check(editor.editor_document.get_module_limit() == initial_limit and not editor.editor_document.is_dirty() and not editor._header.redo_button.disabled, "撤销恢复保存点、规则和未修改状态")
+	_check(not editor._header.title_label.text.ends_with(" *"), "撤销到保存点同步移除标题星号")
 	_press(editor._header.redo_button)
 	_check(editor.editor_document.get_module_limit() == initial_limit + 1 and editor.editor_document.is_dirty() and editor._header.redo_button.disabled, "重做恢复规则修改及未保存状态")
-	var first_bytes := FileAccess.get_file_as_bytes(first)
-	await _menu_item(editor, 0)
+	await _menu_item(editor, 1)
 	var second := _temporary.path_join("maps/second.json")
 	_select_file(editor, second)
 	_check(FileAccess.file_exists(second) and editor.editor_document.path == second and not editor.editor_document.is_dirty() and FileAccess.get_file_as_bytes(first) == first_bytes, "再次另存为保留原文件并建立新文件保存点")
+	var second_bytes := FileAccess.get_file_as_bytes(second)
+	editor.editor_document.set_identity(editor.editor_document.document.id, "导出后继续保存")
+	_press(editor._header.save_button)
+	_check(editor.editor_document.path == managed_path and not editor.editor_document.is_dirty() and FileAccess.get_file_as_bytes(second) == second_bytes and DirAccess.get_files_at(_game.user_levels_directory).size() == 1, "另存为后普通保存继续更新同一个玩家关卡，导出副本保持原样")
 	_check(FileAccess.get_file_as_bytes(MapEditor.DEFAULT_MAP_PATH) == original, "所有保存入口均未改动内置示例地图")
 
 
@@ -335,7 +411,7 @@ func _test_history_shortcuts(editor: MapEditor) -> void:
 	_key(KEY_Z, not mac, mac)
 	await _settle()
 	editor._header.more_button.grab_focus()
-	await _menu_item(editor, 2)
+	await _menu_item(editor, 3)
 	var code := editor._metadata_text
 	var json_before := code.text
 	code.grab_focus()
@@ -365,8 +441,8 @@ func _test_dirty_safety(editor: MapEditor) -> void:
 	_check(editor._dirty_dialog.visible and _signature(editor) == before, "新建图标先保护未保存文档")
 	_cancel_dirty(editor)
 	_check(editor.editor_document.path == saved_path and editor.editor_document._undo_stack.size() == undo_count and _signature(editor) == before, "取消新建完整保留路径、文档与历史")
-	_press(editor._file_label)
-	_check(editor._dirty_dialog.visible and not editor._file_dialog.visible, "路径打开入口不能绕过未保存保护")
+	await _menu_item(editor, 0)
+	_check(editor._dirty_dialog.visible and not editor._file_dialog.visible, "更多菜单的打开地图不能绕过未保存保护")
 	_cancel_dirty(editor)
 	await _settle()
 	editor._header.more_button.grab_focus()
@@ -381,10 +457,9 @@ func _test_dirty_safety(editor: MapEditor) -> void:
 	_press(editor._header.new_button)
 	_check(editor.editor_document.path.is_empty() and editor.editor_document.document.cells.is_empty() and editor._header.undo_button.disabled and editor._header.redo_button.disabled, "无修改时新建立即建立全void空文档及空历史")
 	_press(editor._header.save_button)
-	_check(editor._file_dialog.visible and editor._file_dialog.file_mode == FileDialog.FILE_MODE_SAVE_FILE, "空路径文档的保存图标仍要求选择文件")
-	editor._file_dialog.hide()
-	_press(editor._file_label)
-	_check(editor._file_dialog.visible and editor._file_dialog.file_mode == FileDialog.FILE_MODE_OPEN_FILE, "未修改地图可直接通过路径入口打开文件")
+	_check(not editor._file_dialog.visible and not editor.editor_document.is_dirty() and FileAccess.file_exists(editor.editor_document.path) and ProjectSettings.globalize_path(editor.editor_document.path).get_base_dir() == ProjectSettings.globalize_path(_game.user_levels_directory), "空路径文档的保存图标直接写入玩家目录且不要求选路径")
+	await _menu_item(editor, 0)
+	_check(editor._file_dialog.visible and editor._file_dialog.file_mode == FileDialog.FILE_MODE_OPEN_FILE, "未修改地图可直接从更多菜单打开文件")
 	_select_file(editor, saved_path)
 	editor._module_limit_field.value = editor.editor_document.get_module_limit() + 1
 	before = _signature(editor)
@@ -427,6 +502,9 @@ func _test_playtest(editor: MapEditor) -> void:
 	_game._save_timer.timeout.emit()
 	_game._back_button.pressed.emit()
 	await _settle()
+	_check(_game.page == GameShell.Page.ASSEMBLY, "试玩编程返回先进入模块组装")
+	_game._back_button.pressed.emit()
+	await _settle()
 	_check(_game.page == GameShell.Page.EDITOR and _game._editor == editor and editor.editor_document == model and _game.session == null, "试玩返回同一个编辑器模型并结束会话")
 	_check(_signature(editor) == before and model.path == path and model.is_dirty() and model._undo_stack.size() == undo_count and model._redo_stack.size() == redo_count, "试玩返回完整保留内容、路径、未保存标记和双向历史")
 	_check(_game._back_button == editor._header.back_button and editor._header.navigation.get_global_rect().is_equal_approx(navigation) and not _game._header.is_visible_in_tree(), "试玩返回恢复原工具栏及相同导航几何")
@@ -462,6 +540,39 @@ func _select_file(editor: MapEditor, path: String) -> void:
 func _cancel_dirty(editor: MapEditor) -> void:
 	editor._dirty_dialog.get_cancel_button().pressed.emit()
 	editor._dirty_dialog.hide()
+
+
+## 点击经过真实窗口输入，正确换算缩放坐标，并配对按下与抬起。
+func _click_at(point: Vector2, button: MouseButton = MOUSE_BUTTON_LEFT) -> void:
+	await _move_pointer(point)
+	var window_point := root.get_final_transform() * point
+	for pressed in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.position = window_point
+		event.global_position = window_point
+		event.button_index = button
+		event.button_mask = (MOUSE_BUTTON_MASK_LEFT if button == MOUSE_BUTTON_LEFT else MOUSE_BUTTON_MASK_RIGHT) if pressed else 0
+		event.pressed = pressed
+		Input.parse_input_event(event)
+		await process_frame
+	await _settle()
+
+
+## 更新实际鼠标状态，使悬停和输入模式检查不依赖直接触发信号。
+func _move_pointer(point: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = root.get_final_transform() * point
+	event.global_position = event.position
+	Input.parse_input_event(event)
+	await _settle()
+
+
+## 按钮须同时持有焦点并绘制非透明底色或描边，才算存在可见焦点提示。
+func _focus_hint_visible(button: Button) -> bool:
+	if not button.has_focus() or not button.is_visible_in_tree():
+		return false
+	var style := button.get_theme_stylebox("focus") as StyleBoxFlat
+	return style != null and ((style.draw_center and style.bg_color.a > 0.01) or (style.border_color.a > 0.01 and (style.border_width_left + style.border_width_top + style.border_width_right + style.border_width_bottom) > 0))
 
 
 ## 输入经过真实视口，覆盖菜单的输入优先级与编辑器快捷键路由。

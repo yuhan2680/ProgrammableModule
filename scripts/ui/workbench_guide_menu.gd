@@ -114,7 +114,7 @@ func _build_anchor_morph() -> void:
 	_panel.add_child(_morph_clip)
 	_title.reparent(_morph_clip)
 	_title.text = "装配规则"
-	_title.add_theme_font_size_override("font_size", 17)
+	GameTheme.font_size(_title, "font_size", 17)
 	_scroll.reparent(_morph_clip)
 	_collapse_button = Button.new()
 	_collapse_button.name = "WorkbenchGuideCollapseButton"
@@ -271,9 +271,12 @@ func _update_placement() -> void:
 	if expand_from_top_right:
 		_update_morph_placement(viewport_size)
 		return
+	var factor := GameTheme.sync_popup_scale(_overlay, _anchor)
+	viewport_size /= factor
 	var width := minf(clampf(viewport_size.x * 0.3, MIN_WIDTH, MAX_WIDTH), maxf(1, viewport_size.x - EDGE_MARGIN * 2))
 	_body.custom_minimum_size.x = maxf(1, width - 54)
 	var anchor_rect := _anchor.get_global_rect()
+	anchor_rect = Rect2(anchor_rect.position / factor, anchor_rect.size / factor)
 	var available_height := maxf(100, viewport_size.y - anchor_rect.end.y - ANCHOR_GAP - EDGE_MARGIN)
 	var height_limit := minf(MAX_HEIGHT, minf(available_height, maxf(1, viewport_size.y - EDGE_MARGIN * 2)))
 	var natural_height := _body.get_combined_minimum_size().y + 76.0

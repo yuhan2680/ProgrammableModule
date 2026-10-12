@@ -10,12 +10,16 @@ const ZOOM_STEP := 1.25
 const MIN_ZOOM := 0.25
 const MAX_ZOOM := 4.0
 const SCROLLBAR_SIZE := 16.0
+const EDGE_FADE_INSET := 10.0
+const EDGE_FADE_SHADER: Shader = preload("res://assets/ui/assembly_edge_fade.gdshader")
 
 var canvas: MapEditorCanvas = MapEditorCanvas.new()
 var zoom: float = 1.0
 var view_center: Vector2 = Vector2.ZERO
 var usable_rect := Rect2()
 var _content := Control.new()
+var _drawing_group := AlphaCanvasGroup.new()
+var _edge_fade := ShaderMaterial.new()
 var _h_scroll := HScrollBar.new()
 var _v_scroll := VScrollBar.new()
 var _map_dimensions := Vector2i.ZERO
@@ -31,8 +35,15 @@ func _ready() -> void:
 	_content.clip_contents = true
 	_content.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(_content)
+	# 合成层与视区共用原点，画布仍使用原坐标；一次淡出完整绘图，避免各层透明度相乘。
+	_drawing_group.name = "MapDrawingGroup"
+	_edge_fade.shader = EDGE_FADE_SHADER
+	_edge_fade.set_shader_parameter("fade_width", 64.0)
+	_edge_fade.set_shader_parameter("top_fade_width", 48.0)
+	_drawing_group.material = _edge_fade
+	_content.add_child(_drawing_group)
 	canvas.name = "MapCanvas"
-	_content.add_child(canvas)
+	_drawing_group.add_child(canvas)
 	# MapCanvas 的 ready 会设为 STOP，加入场景树后恢复滚轮事件向视图冒泡。
 	canvas.mouse_filter = Control.MOUSE_FILTER_PASS
 	_h_scroll.name = "MapHorizontalScroll"
@@ -43,11 +54,29 @@ func _ready() -> void:
 	_v_scroll.focus_mode = Control.FOCUS_NONE
 	add_child(_h_scroll)
 	add_child(_v_scroll)
+	_style_scrollbar(_h_scroll)
+	_style_scrollbar(_v_scroll)
+	SettingsScrollFade.attach_bar(_h_scroll)
+	SettingsScrollFade.attach_bar(_v_scroll)
 	_h_scroll.value_changed.connect(_on_scroll_changed)
 	_v_scroll.value_changed.connect(_on_scroll_changed)
 	resized.connect(_on_resized)
 	visibility_changed.connect(_on_visibility_changed)
 	refresh_map()
+
+
+# 用途：地图滚动条使用浅蓝灰轨道和滑块，保留原生占位、拖动区域与活动淡出。
+func _style_scrollbar(bar: ScrollBar) -> void:
+	for style_name: String in ["scroll", "scroll_focus", "grabber", "grabber_highlight", "grabber_pressed"]:
+		var style := StyleBoxFlat.new()
+		var opacity := 0.06 if style_name.begins_with("scroll") else 0.26
+		if style_name == "grabber_highlight":
+			opacity = 0.36
+		elif style_name == "grabber_pressed":
+			opacity = 0.46
+		style.bg_color = Color(0.50, 0.57, 0.66, opacity)
+		style.set_corner_radius_all(8)
+		bar.add_theme_stylebox_override(style_name, style)
 
 
 # 用途：内容变化时刷新绘图，仅在地图宽高改变时重新适配并居中。
@@ -136,6 +165,9 @@ func _input(event: InputEvent) -> void:
 		return
 	var pointer: Vector2 = get_global_transform_with_canvas().affine_inverse() * event.position
 	if not usable_rect.has_point(pointer) or not Rect2(canvas.position, canvas.size).has_point(pointer):
+		# 已松手的敌人选区必须保留，玩家需要把鼠标移出地图才能点击垃圾桶确认。
+		if canvas.paint_mode == MapEditorCanvas.PaintMode.ENEMY_SELECT and canvas.enemy_selection_area.has_area():
+			return
 		canvas.finish_stroke()
 
 
@@ -235,9 +267,8 @@ func _layout_canvas(refresh_contents: bool = true) -> void:
 	_v_scroll.visible = vertical
 	_h_scroll.position = Vector2(0.0, available.y)
 	_h_scroll.size = Vector2(available.x, SCROLLBAR_SIZE)
-	# 竖向轨道顶部留出工具入口的高度，避免与右上角问号和缩放按钮重叠。
-	_v_scroll.position = Vector2(available.x, VIEW_PADDING)
-	_v_scroll.size = Vector2(SCROLLBAR_SIZE, maxf(available.y - VIEW_PADDING, 1.0))
+	_v_scroll.position = Vector2(available.x, 0.0)
+	_v_scroll.size = Vector2(SCROLLBAR_SIZE, available.y)
 	_h_scroll.max_value = maxf(extent.x, available.x)
 	_h_scroll.page = available.x
 	_h_scroll.value = maxf(-canvas.position.x, 0.0)
@@ -245,3 +276,17 @@ func _layout_canvas(refresh_contents: bool = true) -> void:
 	_v_scroll.page = available.y
 	_v_scroll.value = maxf(-canvas.position.y, 0.0)
 	_syncing_scrollbars = false
+	_sync_edge_fade()
+
+
+# 用途：地图接近视区边缘时平滑启用透明渐隐，完整居中的小地图不受影响。
+func _sync_edge_fade() -> void:
+	_edge_fade.set_shader_parameter("viewport_size", usable_rect.size)
+	var map_rect := Rect2(canvas.position, canvas.size)
+	# 距边强度沿用装配图规则；渐隐宽度由视区逻辑像素决定，不随格子缩放。
+	_edge_fade.set_shader_parameter("edge_strength", Vector4(
+		1.0 - smoothstep(0.0, EDGE_FADE_INSET, map_rect.position.x),
+		1.0 - smoothstep(0.0, EDGE_FADE_INSET, map_rect.position.y),
+		1.0 - smoothstep(0.0, EDGE_FADE_INSET, usable_rect.size.x - map_rect.end.x),
+		1.0 - smoothstep(0.0, EDGE_FADE_INSET, usable_rect.size.y - map_rect.end.y)
+	))

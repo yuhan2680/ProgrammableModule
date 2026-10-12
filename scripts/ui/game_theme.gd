@@ -17,7 +17,7 @@ const VOID := Color("DCE3EC")
 const NAVIGATION_HEIGHT := 44.0
 const NAVIGATION_WIDTH := 88.0
 const CODE_LIGHT := {
-	"background": Color("F5F7FB"), "text": TEXT, "line_number": Color("8793A6"),
+	"background": Color.WHITE, "text": TEXT, "line_number": Color("8793A6"),
 	"selection": Color("D5E7FF"), "current_line": Color("EBF1FA"), "caret": ACCENT,
 	"focus": Color("A7CDFF"), "ghost": Color("9BA4B2"),
 	"error": Color("FBE5E8"), "execution": Color("E2EEFF"),
@@ -201,7 +201,7 @@ static func primary(control: Button) -> void:
 
 
 ## 仅覆盖单个代码编辑区的颜色；保留字号、提示边距及全部文本和编辑历史。
-static func style_code(edit: CodeEdit, mode: String = "light") -> void:
+static func style_code(edit: CodeEdit, mode: String = GameSettings.DEFAULT_CODE_COLOR_MODE) -> void:
 	var palette: Dictionary = CODE_DARK if mode == "dark" else CODE_LIGHT
 	edit.begin_bulk_theme_override()
 	for state in ["normal", "read_only", "focus"]:
@@ -228,8 +228,8 @@ static func style_code(edit: CodeEdit, mode: String = "light") -> void:
 	highlight_program(edit, mode)
 
 
-## 预览与游戏共用语法色盘，不接入解析器或改写源代码内容；旧调用默认浅色。
-static func highlight_program(edit: CodeEdit, mode: String = "light") -> void:
+## 预览与游戏共用语法色盘，不接入解析器或改写源代码内容；未传配色时沿用默认设置。
+static func highlight_program(edit: CodeEdit, mode: String = GameSettings.DEFAULT_CODE_COLOR_MODE) -> void:
 	var palette: Dictionary = CODE_DARK if mode == "dark" else CODE_LIGHT
 	var syntax := CodeHighlighter.new()
 	syntax.number_color = palette.number
@@ -257,11 +257,53 @@ static func button(parent: Node, caption: String, action: Callable) -> Button:
 	return result
 
 
+## 记录原字号后单独缩放文字；控件边距、图标、圆角与画布尺寸不参与百分比放大。
+static func font_size(control: Node, key: String, value: int) -> void:
+	enable_font_raster_scale(control)
+	control.set_meta("ui_font_base_" + key, value)
+	control.add_theme_font_size_override(key, maxi(1, roundi(value * font_scale(control))))
+
+
+## 保留字体轮廓与字号度量，支持的引擎按实际画布变换重新生成字形，避免放大旧位图。
+## 4.5/4.6 不具有此接口，动态调用保留旧版本加载能力；不修改共享 FontFile 的全局缓存策略。
+static func enable_font_raster_scale(node: Node) -> void:
+	if node is Window:
+		if not node is PopupMenu or node.has_meta("ui_font_raster_observer"):
+			return
+		var window_observer := preload("res://scripts/ui/game_font_raster_observer.gd").new()
+		node.set_meta("ui_font_raster_observer", weakref(window_observer))
+		node.add_child(window_observer, false, Node.INTERNAL_MODE_BACK)
+		# 嵌入原生弹层的字体采样不能只依赖内部 Control 的一倍变换。
+		node.size_changed.connect(window_observer.request_refresh)
+		node.visibility_changed.connect(window_observer.request_refresh)
+		return
+	if not node is CanvasItem or not node.has_method("set_oversampling_with_scale"):
+		return
+	var item := node as CanvasItem
+	if item.has_meta("ui_font_raster_observer"):
+		return
+	item.call("set_oversampling_with_scale", 2)
+	# Node2D 接收祖先变换通知，但不会成为 Container 的排版子控件。
+	var observer := preload("res://scripts/ui/game_font_raster_observer.gd").new()
+	item.set_meta("ui_font_raster_observer", weakref(observer))
+	item.add_child(observer, false, Node.INTERNAL_MODE_BACK)
+
+
+## 动态标题拟合和复制字号只取原值，防止重绘、重命名或提示层再次乘以缩放。
+static func base_font_size(control: Node, key: String) -> int:
+	return int(control.get_meta("ui_font_base_" + key, control.get_theme_font_size(key)))
+
+
+## 每个游戏子树由字体控制器注入自己的比例，独立面板及非 Windows 默认一倍。
+static func font_scale(control: Node) -> float:
+	return float(control.get_meta("ui_font_scale_percent", 100)) / 100.0
+
+
 ## 添加标签；字号和弱化颜色仅用于建立信息层次。
 static func label(parent: Node, caption: String, font_size: int = 16, muted: bool = false) -> Label:
 	var result := Label.new()
 	result.text = caption
-	result.add_theme_font_size_override("font_size", font_size)
+	GameTheme.font_size(result, "font_size", font_size)
 	if muted:
 		result.add_theme_color_override("font_color", MUTED)
 	parent.add_child(result)
@@ -320,3 +362,15 @@ static func navigation_pill(parent: Node, back_action: Callable, tooltip: String
 	separator.size = Vector2(1, 20)
 	panel.add_child(separator)
 	return panel
+
+
+## CanvasLayer 不继承入口的控件变换；浮层使用相同逻辑比例，遮挡与输入区域仍覆盖完整视口。
+static func sync_popup_scale(overlay: Control, anchor: Control) -> float:
+	var anchor_transform := anchor.get_global_transform()
+	var factor := maxf(0.01, minf(anchor_transform.x.length(), anchor_transform.y.length()))
+	# 独立画布层的全屏锚点会重新使用物理尺寸，因此改用显式逻辑矩形。
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	overlay.position = Vector2.ZERO
+	overlay.scale = Vector2.ONE * factor
+	overlay.size = overlay.get_viewport().get_visible_rect().size / factor
+	return factor

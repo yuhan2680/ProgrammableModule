@@ -21,6 +21,7 @@ func _run() -> void:
 	_test_placement_and_history()
 	_test_footprints()
 	_test_serialization()
+	_test_box_remove()
 	_cleanup(_temporary)
 	print("地图敌人文档回归完成：%d 项检查，%d 项失败。" % [_checks, _failures])
 	quit(0 if _failures == 0 else 1)
@@ -214,6 +215,34 @@ func _test_serialization() -> void:
 	restored.set_enemies_enabled(true)
 	_check(restored.undo() and not restored.is_dirty(), "撤销回保存的禁用状态恢复clean")
 	_check(restored.redo() and restored.is_dirty(), "重做回启用状态仍正常追踪dirty")
+
+
+## 部分模块命中仍整组删除，空框和贴边不修改文档，扩展与保存点可以完整恢复。
+func _test_box_remove() -> void:
+	var model := _model()
+	model.set_enemies_enabled(true)
+	model.set_enemy_template(_config(), _content)
+	for position: Vector2 in [Vector2(5.5, 4.5), Vector2(7.5, 5.5), Vector2(10.5, 9.5)]:
+		_check(model.place_enemy(position, _content).is_ok(), "框选删除夹具落点有效 " + str(position))
+	model.document.enemies[0]["author_extension"] = {"keep": [3, 7]}
+	model.document.extra["custom"] = {"keep": true}
+	model.replace_document(model.document)
+	var before := model.document.to_dict()
+	var area := Rect2i(6, 4, 2, 3)
+	_check(MapEditorEnemyTemplate.in_rectangle(model.document, area, _content).size() == 2, "框选只碰到第一组末件，仍选择第一及第二整组")
+	_check(not model.is_dirty() and not model.can_undo(), "只读命中不改变保存点与历史")
+	_check(model.remove_enemies_in_rectangle(Rect2i(4, 3, 1, 1), _content) == 0 and not model.can_undo(), "仅接触模块边界不删除敌人")
+	_check(model.remove_enemies_in_rectangle(Rect2i(-10, -10, 2, 2), _content) == 0 and before == model.document.to_dict(), "地图外选框不写盘或改变数据")
+	_check(model.remove_enemies_in_rectangle(area, _content) == 2 and model.document.enemies.size() == 1, "一次删除两个完整组合体，保留框外敌人")
+	var after := model.document.to_dict()
+	_check(after.tiles == before.tiles and after.objects == before.objects and after.player_spawn == before.player_spawn and after.properties == before.properties and after.custom == before.custom, "只删除敌人，地形机关玩家模板及扩展不变")
+	_check(model._undo_stack.size() == 1 and model.undo() and not model.is_dirty() and model.document.to_dict() == before, "一次撤销恢复所有敌人及扩展并回到保存点")
+	_check(model.redo() and model.document.to_dict() == after, "一次重做恢复整组批量删除")
+	DirAccess.make_dir_recursive_absolute(_temporary)
+	var path := _temporary.path_join("deleted-enemies.json")
+	_check(MapCodec.save_file(model.document, path, _content, false).is_ok(), "删除后的地图可保存")
+	var loaded := MapCodec.load_file(path, _content, false)
+	_check(loaded.is_ok() and loaded.value.enemies == model.document.enemies, "保存重载只保留框外完整敌人")
 
 
 ## 清理本测试创建的文件，不接触玩家的地图与设置。

@@ -54,7 +54,7 @@ func sections(registry: ContentRegistry, locale: String = "zh_CN") -> Array[Dict
 	var general_entries: Array[Dictionary] = []
 	var result: Array[Dictionary] = [{
 		"id": "general", "kind": "general", "title": localized({
-			"title": {"zh_CN": "编程基础", "zh_HK": "編程基礎", "en": "Programming Basics"},
+			"title": {"zh_CN": "编程基础", "zh_HK": "編程基礎", "en": "Programming Basics", "es": "Fundamentos de programación"},
 		}, "title", locale), "texture": "", "entries": general_entries,
 	}]
 	if registry != null:
@@ -198,6 +198,8 @@ static func localized(entry: Dictionary, field: String, locale: String = "zh_CN"
 ## 可用性只表示本关已开放的语法和模块能力；不检查是否已经装配，也不修改真实解析权限。
 static func is_available(entry: Dictionary, level: LevelDefinition, registry: ContentRegistry) -> bool:
 	if level == null:
+		return false
+	if level.has_command_policy and not str(entry.get("id", "")) in level.enabled_commands:
 		return false
 	var requirements: Variant = entry.get("requirements", {})
 	if not _valid_requirements(requirements):

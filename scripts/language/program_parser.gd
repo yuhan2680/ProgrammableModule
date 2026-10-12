@@ -40,7 +40,14 @@ var _statement_count: int = 0
 
 
 ## 将源代码静态编译为独立语法树；整个过程不会创建世界或提交移动指令。
-static func parse(source: String, allowed_calls: PackedStringArray = PackedStringArray(["move"]), allow_tick: bool = false, allow_named_calls: bool = false, allow_loops: bool = false, allow_conditionals: bool = false, allow_simultaneous: bool = false, allow_distance: bool = false, allow_functions: bool = false, allow_variables: bool = false, allow_radar: bool = false, allow_random: bool = false, allow_for: bool = false, allow_radar_events: bool = false) -> DataResult:
+static func parse(source: String, allowed_calls: PackedStringArray = PackedStringArray(["move"]), allow_tick: bool = false, allow_named_calls: bool = false, allow_loops: bool = false, allow_conditionals: bool = false, allow_simultaneous: bool = false, allow_distance: bool = false, allow_functions: bool = false, allow_variables: bool = false, allow_radar: bool = false, allow_random: bool = false, allow_for: bool = false, allow_radar_events: bool = false, enabled_commands: Variant = null) -> DataResult:
+	# 无新策略的旧关卡只经过原解析路径；显式策略必须完整有效，不能自动重新开启受限指令。
+	var policy_ids := PackedStringArray()
+	if enabled_commands != null:
+		var policy_checked := CommandPermissions.validate(Array(enabled_commands) if enabled_commands is PackedStringArray else enabled_commands)
+		if not policy_checked.is_ok():
+			return DataResult.failure("第 1 行，第 1 列：" + " ".join(policy_checked.errors))
+		policy_ids = policy_checked.value
 	var lexed := ProgramLexer.tokenize(source)
 	if not lexed.is_ok():
 		return lexed
@@ -68,7 +75,120 @@ static func parse(source: String, allowed_calls: PackedStringArray = PackedStrin
 	var bindings_checked := ProgramVariableValidation.validate(program)
 	if not bindings_checked.is_ok():
 		return bindings_checked
+	if enabled_commands != null:
+		return _validate_command_policy(program, policy_ids)
 	return DataResult.success(program)
+
+
+## 完整静态遍历所有源代码节点，未调用函数与尚未进入的分支也不能绕过地图指令策略。
+static func _validate_command_policy(program: ProgramAst.ProgramNode, enabled_commands: PackedStringArray) -> DataResult:
+	var enabled := {}
+	for identity in enabled_commands:
+		enabled[identity] = true
+	var pending: Array[ProgramAst.AstNode] = [program]
+	var first_restricted: ProgramAst.AstNode
+	var first_identity := ""
+	while not pending.is_empty():
+		var node: ProgramAst.AstNode = pending.pop_back()
+		for identity in _required_command_ids(node):
+			if enabled.has(identity):
+				continue
+			# 不以执行顺序或 AST 字段存储顺序决定报错，始终指向源代码中最早的受限位置。
+			if first_restricted == null or node.line < first_restricted.line or (node.line == first_restricted.line and node.column < first_restricted.column):
+				first_restricted = node
+				first_identity = identity
+		for child in _command_policy_children(node):
+			if child != null:
+				pending.append(child)
+	if first_restricted != null:
+		return DataResult.failure("第 %d 行，第 %d 列：本关限制使用指令“%s”。" % [first_restricted.line, first_restricted.column, first_identity])
+	return DataResult.success(program)
+
+
+## 指令形态按固定 ID 区分，具名动作不额外要求广播版本，表达式成员也逐项检查。
+static func _required_command_ids(node: ProgramAst.AstNode) -> PackedStringArray:
+	if node is ProgramAst.FunctionNode:
+		return PackedStringArray([node.name if node.name in ["main", "tick"] else "functions"])
+	if node is ProgramAst.UserCallNode:
+		return PackedStringArray(["functions"])
+	if node is ProgramAst.CallNode:
+		return PackedStringArray([node.callee]) if node.receiver.is_empty() else PackedStringArray(["named_calls", "named_" + node.callee])
+	if node is ProgramAst.DistanceNode:
+		return PackedStringArray(["distance"]) if node.receiver.is_empty() else PackedStringArray(["named_calls", "named_distance"])
+	if node is ProgramAst.ScanNode:
+		return PackedStringArray(["scan"]) if node.receiver.is_empty() else PackedStringArray(["named_calls", "named_scan"])
+	if node is ProgramAst.RandomNode:
+		return PackedStringArray(["random" if node.callee == "random" else "random_int"])
+	if node is ProgramAst.TargetMemberNode:
+		if node.member == "Angle":
+			return PackedStringArray(["radar_angle"])
+		if node.member == "Distance":
+			return PackedStringArray(["radar_distance"])
+		return PackedStringArray(["radar_position"])
+	if node is ProgramAst.DeclarationNode:
+		return PackedStringArray(["variables" if node.mutable else "constants"])
+	if node is ProgramAst.AssignmentNode:
+		return PackedStringArray(["variables"])
+	if node is ProgramAst.LoopNode:
+		return PackedStringArray(["loop"])
+	if node is ProgramAst.ForNode:
+		return PackedStringArray(["for_range"])
+	if node is ProgramAst.IfNode:
+		return PackedStringArray(["if_else"])
+	if node is ProgramAst.ReadyNode:
+		return PackedStringArray(["ready", "named_calls"])
+	if node is ProgramAst.SimultaneousNode:
+		return PackedStringArray(["simultaneously"])
+	if node is ProgramAst.RadarEventNode:
+		return PackedStringArray(["radar_event", "named_calls"])
+	return PackedStringArray()
+
+
+## 显式列出既有 AST 的子节点，条件、参数与全局初始化不因只遍历动作语句而漏检。
+static func _command_policy_children(node: ProgramAst.AstNode) -> Array[ProgramAst.AstNode]:
+	var children: Array[ProgramAst.AstNode] = []
+	if node is ProgramAst.ProgramNode:
+		children.append(node.main)
+		if node.tick != null:
+			children.append(node.tick)
+		for function in node.functions:
+			children.append(function)
+		for declaration in node.globals:
+			children.append(declaration)
+		for event in node.radar_events:
+			children.append(event)
+	elif node is ProgramAst.FunctionNode:
+		children.append(node.body)
+	elif node is ProgramAst.BlockNode:
+		for statement in node.statements:
+			children.append(statement)
+	elif node is ProgramAst.CallNode or node is ProgramAst.RandomNode:
+		for argument in node.arguments:
+			children.append(argument)
+	elif node is ProgramAst.DistanceNode:
+		children.append(node.angle)
+	elif node is ProgramAst.TargetMemberNode:
+		children.append(node.target)
+	elif node is ProgramAst.BinaryNode or node is ProgramAst.ComparisonNode:
+		children.append(node.left)
+		children.append(node.right)
+	elif node is ProgramAst.DeclarationNode:
+		children.append(node.initializer)
+	elif node is ProgramAst.AssignmentNode:
+		children.append(node.expression)
+	elif node is ProgramAst.ForNode:
+		children.append(node.start)
+		children.append(node.end)
+		if node.step != null:
+			children.append(node.step)
+		children.append(node.body)
+	elif node is ProgramAst.LoopNode or node is ProgramAst.SimultaneousNode:
+		children.append(node.body)
+	elif node is ProgramAst.IfNode:
+		children.append(node.condition)
+		children.append(node.then_body)
+		children.append(node.else_body)
+	return children
 
 
 ## 解析唯一 main、可选 tick、用户函数和顶层雷达绑定；事件不进入任何函数体。

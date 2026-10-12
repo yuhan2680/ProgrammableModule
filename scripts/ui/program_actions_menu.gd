@@ -86,7 +86,7 @@ func _add_item(node_name: String, caption: String, icon_path: String, index: int
 	item.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	item.add_theme_constant_override("h_separation", 12)
 	item.add_theme_constant_override("icon_max_width", 22)
-	item.add_theme_font_size_override("font_size", 16)
+	GameTheme.font_size(item, "font_size", 16)
 	for state in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_hover_pressed_color", "icon_focus_color", "icon_disabled_color"]:
 		item.add_theme_color_override(state, Color.WHITE)
 	if index == 3:

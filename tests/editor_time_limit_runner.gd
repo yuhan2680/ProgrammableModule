@@ -351,11 +351,10 @@ func _check_player_layout(editor: MapEditor, locale: String, size: Vector2i) -> 
 	_check(editing_heading.tr(editing_heading.text) == ("Scene Editing" if locale == "en" else "场景编辑") and gameplay_heading.tr(gameplay_heading.text) == ("Scene Gameplay & Behavior" if locale == "en" else "场景玩法与行为控制"), "新分类标题按当前语言翻译" + suffix)
 	for heading: Label in [editing_heading, gameplay_heading]:
 		_check(scroll.get_global_rect().encloses(heading.get_global_rect()) and heading.size.x >= heading.get_minimum_size().x, "分类标题完整位于可视范围内" + suffix)
-	# 敌人设置增加纵向内容，通过属性区滚动访问底部操作，窗口本身不被撑大。
+	# 敌人设置增加纵向内容，正文保持滚动，双按钮固定在属性卡片底部，窗口本身不被撑大。
 	var previous_scroll := scroll.scroll_vertical
-	scroll.ensure_control_visible(editor._play_button)
 	await _settle()
-	_check(editor._play_button.is_visible_in_tree() and scroll.get_global_rect().encloses(editor._play_button.get_global_rect()), "展开分类后可滚动到完整的开始测试按钮" + suffix)
+	_check(editor._play_button.is_visible_in_tree() and editor._properties_card.get_global_rect().encloses(editor._play_button.get_global_rect()), "展开分类后固定底部完整显示开始测试按钮" + suffix)
 	scroll.scroll_vertical = previous_scroll
 	await _settle()
 

@@ -35,7 +35,7 @@ func _run() -> void:
 	root.size = Vector2i(1280, 800)
 	root.content_scale_size = root.size
 	await _create_game()
-	_check(_game.settings.code_color_mode == "light", "新用户通过真实Shell载入默认浅色")
+	_check(_game.settings.code_color_mode == "dark", "新用户通过真实Shell载入默认深色")
 	_check(_game.settings.storage_path.begins_with(_temporary + "/") and _game.drafts.directory.begins_with(_temporary + "/") and _game.catalog.user_directory.begins_with(_temporary + "/"), "设置、草稿和导入目录全部注入本次独占测试路径")
 	_check(_game.drafts.save_draft("color_ui_saved_work", PLAYER_SOURCE, []).is_ok() and _game.drafts.mark_completed("color_ui_saved_work").is_ok(), "在测试目录准备已有玩家代码和通关记录")
 	var saved_work := _snapshot_files(_game.drafts.directory)
@@ -86,6 +86,8 @@ func _open_colors_from_main() -> bool:
 	if not _check(_game.page == GameShell.Page.MAIN and settings_button != null, "主菜单提供真实设置入口"):
 		return false
 	await _click(settings_button)
+	if not await _wait_settings_transition():
+		return false
 	return await _open_colors_from_settings()
 
 
@@ -118,11 +120,11 @@ func _test_default_previews_and_click() -> void:
 	var dark := panel._buttons["dark"] as Button
 	var light_preview := panel._previews["light"] as CodeEdit
 	var dark_preview := panel._previews["dark"] as CodeEdit
-	_check(light.button_pressed and not dark.button_pressed, "首次进入子页仅浅色预览被选中")
-	_check(_background(light_preview) == Color("F5F7FB") and _background(dark_preview) == Color("121314"), "两个只读缩略图分别展示原浅色与121314深色背景")
+	_check(dark.button_pressed and not light.button_pressed, "首次进入子页仅深色预览被选中")
+	_check(_background(light_preview) == Color.WHITE and _background(dark_preview) == Color("121314"), "两个只读缩略图分别展示纯白与121314深色背景")
 	var light_style := light_preview.get_theme_stylebox("read_only") as StyleBoxFlat
 	var dark_style := dark_preview.get_theme_stylebox("read_only") as StyleBoxFlat
-	_check(light_style.shadow_size > dark_style.shadow_size and light_style.border_color != dark_style.border_color, "选中状态由缩略图边缘高亮与阴影清楚区分")
+	_check(dark_style.shadow_size > light_style.shadow_size and light_style.border_color != dark_style.border_color, "选中状态由缩略图边缘高亮与阴影清楚区分")
 	for preview: CodeEdit in [light_preview, dark_preview]:
 		_check(not preview.editable and preview.focus_mode == Control.FOCUS_NONE and not preview.context_menu_enabled, "缩略代码不可编辑、不可聚焦且没有编辑菜单")
 		_check(not preview.text.contains("玩家作品") and preview.text == light_preview.text, "两个缩略图使用相同展示样例且不读取已保存玩家代码")
@@ -133,11 +135,12 @@ func _test_default_previews_and_click() -> void:
 	var before_light := light_preview.text
 	var before_dark := dark_preview.text
 	await _click(light_preview)
+	_check(panel.settings.code_color_mode == "light" and light.button_pressed and not dark.button_pressed, "点击浅色预览可覆盖默认深色并保持唯一选择")
 	await _type_character()
 	_check(light_preview.text == before_light and dark_preview.text == before_dark and not light_preview.has_focus() and not dark_preview.has_focus(), "点击缩略图后键入字符不会编辑任一预览")
 	await _click(dark_preview)
 	_check(panel.settings.code_color_mode == "dark" and dark.button_pressed and not light.button_pressed, "点击深色缩略图本身立即切换唯一选中项")
-	_check(_background(dark_preview) == Color("121314") and _background(light_preview) == Color("F5F7FB"), "选中变化保留两张缩略图各自的模式背景")
+	_check(_background(dark_preview) == Color("121314") and _background(light_preview) == Color.WHITE, "选中变化保留两张缩略图各自的模式背景")
 	light_style = light_preview.get_theme_stylebox("read_only") as StyleBoxFlat
 	dark_style = dark_preview.get_theme_stylebox("read_only") as StyleBoxFlat
 	_check(dark_style.shadow_size > light_style.shadow_size, "深色选择把高亮阴影从浅色移至深色缩略图")
@@ -204,7 +207,7 @@ func _test_scrollbar_fade() -> void:
 		var initial_width := column.size.x
 		var initial_left := column.global_position.x
 		var initial_bar := bar.get_global_rect()
-		_check(bar.global_position.x - column.get_global_rect().end.x >= 23.0, "滚动条与内容之间保留24像素右侧间距 " + context)
+		_check(bar.global_position.x - column.get_global_rect().end.x >= 18.2, "滚动条与内容的24逻辑像素右侧间距随80%缩放保留 " + context)
 		_move_mouse(bar.get_global_rect().get_center())
 		await _settle()
 		_check(bar.modulate.a == 0.0, "单纯悬停滚动条不会让它显示 " + context)
@@ -254,8 +257,8 @@ func _test_scroll_inputs(scroll: ScrollContainer) -> void:
 	bar.focus_mode = original_focus
 	scroll.scroll_vertical = 0
 	await _settle()
-	var start := bar.global_position + Vector2(bar.size.x * 0.5, bar.size.y * 0.15)
-	var finish := start + Vector2(0, bar.size.y * 0.2)
+	var start := bar.get_global_transform_with_canvas() * Vector2(bar.size.x * 0.5, bar.size.y * 0.15)
+	var finish := bar.get_global_transform_with_canvas() * Vector2(bar.size.x * 0.5, bar.size.y * 0.35)
 	_send_left_button(start, true)
 	_move_mouse(finish, MOUSE_BUTTON_MASK_LEFT, finish - start)
 	await _settle()
@@ -390,6 +393,15 @@ func _type_character() -> void:
 	event.pressed = false
 	root.push_input(event)
 	await _settle()
+
+
+## 只在真实主菜单设置入口等待有限时长，动画完成后再验证页面和可操作面板。
+func _wait_settings_transition() -> bool:
+	var deadline := Time.get_ticks_msec() + 3000
+	while _game._menu_transitioning and Time.get_ticks_msec() < deadline:
+		await process_frame
+	await _settle()
+	return _check(not _game._menu_transitioning and _game.page == GameShell.Page.SETTINGS and _game.settings_panel != null, "真实设置转场按时完成并进入可操作设置面板")
 
 
 ## 有界等待容器、翻译通知和页面释放完成，不添加依赖真实时间的长等待。
