@@ -208,7 +208,9 @@ func _build_ui() -> void:
 	for caption in ["无", "一般", "多"]:
 		_code_hints_option.add_item(caption)
 	_code_hints_option.item_selected.connect(_on_code_hints_selected)
+	_code_hints_option.get_popup().about_to_popup.connect(_fit_option_popup.bind(_code_hints_option).call_deferred)
 	hints_row.add_child(_code_hints_option)
+	_add_option_glass(_code_hints_option)
 	_add_section_gap()
 	var display := VBoxContainer.new()
 	display.add_theme_constant_override("separation", 12)
@@ -349,7 +351,7 @@ func _add_ui_scale_row(parent: Node) -> void:
 	_sync_ui_scale_availability()
 
 
-## 语言和显示选择器沿用原生菜单，将背景与滚动条换成同一毛玻璃呈现。
+## 设置选择器沿用原生菜单，统一勾选高亮、毛玻璃背景和活动滚动条。
 func _add_option_glass(option: OptionButton) -> void:
 	var glass := OPTION_GLASS.new()
 	glass.name = option.name + "Glass"

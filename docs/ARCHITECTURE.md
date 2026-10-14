@@ -511,3 +511,5 @@ LinkButton 只发 `link_requested`，GameShell 在设置页且弹窗打开时校
 语言选择器复用 `SettingsOptionGlass`，原生 PopupMenu 仍处理选择、滚轮和键盘；其右内距缩为 8 逻辑像素，实际 VScrollBar 两端内缩 6 逻辑像素，显示位置与命中位置一致。`SettingsOptionScrollbar` 复用 `SettingsScrollFade` 的活动淡出；关闭时清理拖动状态。分数缩放只差不足一像素时，在菜单最大高度内向上取整，避免完整短列表出现无意义滚动条。
 
 回归：`spanish_locale_runner.gd`、`hong_kong_locale_runner.gd`、`settings_option_scrollbar_runner.gd` 与既有设置、指令资料和玻璃菜单测试。
+
+设置的语言、分辨率、代码提示及可用的缩放选择器统一复用 `SettingsOptionGlass`：原生单选圆点仅在外观上替换为线条 SVG 勾号，未选项保留等宽空位。打开时聚焦已保存选项，原生焦点行使用蓝色圆角底、白字和白勾；鼠标或方向键移到其他行时，已保存项仍保留深色勾号，只有确认选择才提交设置。原生禁用项、滚动、Esc、外部点击关闭及选择信号不变；不增加独立选项列表或修改全局 PopupMenu 主题。组装和编程页的指令集合入口共用 `CommandBookButton`：合上与展开的 SVG 端点均居中，开合途中对矢量控制点补间，原生 Button 继续处理点击、键盘导航和悬停提示。`CommandReferenceMenu` 仅对这一书本入口启用向左下展开、反向收回的动画；页面离开立即取消动画，地图编辑器的指令管理加号入口保持原交互。

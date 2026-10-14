@@ -9,6 +9,8 @@ signal restore_requested
 signal help_requested
 signal commands_requested
 
+const COMMAND_BOOK_BUTTON = preload("res://scripts/ui/command_book_button.gd")
+
 const HEIGHT := 44.0
 const CONFIRM_SIZE := 40.0
 const ICON_SIZE := 24
@@ -62,7 +64,7 @@ func _ready() -> void:
 		separator.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_actions.add_child(separator)
 		_separators.append(separator)
-	book_button = _icon_button(self, "CommandReferenceButton", "res://assets/ui/assembly_book.svg", commands_requested.emit)
+	book_button = _icon_button(self, "CommandReferenceButton", "res://assets/ui/command_book_closed.svg", commands_requested.emit)
 	book_button.add_theme_stylebox_override("normal", _button_style(Color("EAEDF2")))
 	resized.connect(_layout_header)
 	configure(_returning_from_code, _playtest)
@@ -102,7 +104,7 @@ func _update_tooltips() -> void:
 
 ## 使用统一44像素命中区与SVG；工具提示为纯图标按钮提供本土化说明。
 func _icon_button(parent: Node, node_name: String, icon_path: String, action: Callable) -> Button:
-	var button := Button.new()
+	var button: Button = COMMAND_BOOK_BUTTON.new() if node_name.ends_with("CommandReferenceButton") else Button.new()
 	button.name = node_name
 	button.icon = load(icon_path)
 	button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER

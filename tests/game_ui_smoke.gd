@@ -1059,6 +1059,7 @@ func _menu_click(position: Vector2) -> void:
 		root.push_input(click)
 	await process_frame
 	await process_frame
+	await _wait_book_transition()
 
 
 ## 菜单键盘操作使用物理按键，覆盖焦点循环、取消及确认的实际事件链。
@@ -1071,6 +1072,7 @@ func _menu_key(keycode: Key) -> void:
 		root.push_input(key)
 	await process_frame
 	await process_frame
+	await _wait_book_transition()
 
 
 ## 只计算教学卡片的真实树可见性，隐藏节点和占位控件不计入数量。
@@ -1111,6 +1113,18 @@ func _activate_visible_button(button: Button, reason: String) -> void:
 	await process_frame
 	if opens_page and ancestor is GameShell:
 		await _wait_menu_transition(ancestor as GameShell)
+	await _wait_book_transition()
+
+
+## 普通交互检查等待书本窗口到达稳定状态；快速反向和过渡屏障由独立动画回归覆盖。
+func _wait_book_transition() -> void:
+	for node in root.find_children("CommandReferenceMenu", "", true, false):
+		if not node is CommandReferenceMenu or not node._motion_active:
+			continue
+		var deadline := Time.get_ticks_msec() + 1500
+		while is_instance_valid(node) and node._motion_active and Time.get_ticks_msec() < deadline:
+			await process_frame
+		_check(is_instance_valid(node) and not node._motion_active, "指令资料窗在限定时间内完成开合")
 
 
 ## 折叠中的后续关卡先通过展示更多露出入口，再经真实 GUI 输入进入空装配。

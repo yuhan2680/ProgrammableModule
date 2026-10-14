@@ -58,13 +58,17 @@ func _run() -> void:
 ## 真实空格打开菜单，方向键及 Esc 沿用 Godot 路由，不通过内部方法假造选择。
 func _check_option(node_name: String, context: String) -> void:
 	var option := _game.settings_panel.find_child(node_name, true, false) as OptionButton
+	var popup := option.get_popup()
+	var original_font_size := popup.get_theme_font_size("font_size")
+	# 紧凑菜单可容纳更多选项；溢出夹具主动放大字号，不依赖某个主题留白恰好产生滚动。
+	if context.ends_with("_scroll"):
+		popup.add_theme_font_size_override("font_size", maxi(original_font_size, 48))
 	var source_scroll: ScrollContainer = _game.settings_panel.get("_scroll")
 	source_scroll.ensure_control_visible(option)
 	await _settle(8)
 	option.grab_focus()
 	await _key(root, KEY_SPACE)
 	await _settle(12)
-	var popup := option.get_popup()
 	var glass: CanvasLayer = _game.settings_panel.get_node(node_name + "Glass")
 	if not _check(popup.visible and glass.visible, "原生菜单和玻璃同时出现 " + node_name + " " + context):
 		return
@@ -129,6 +133,8 @@ func _check_option(node_name: String, context: String) -> void:
 	await _settle(8)
 	_check(not popup.visible and not glass.visible and option.selected == original, "Esc 同时关闭原生弹层和玻璃且不改保存选择 " + context)
 	_check(glass.get("_backdrop") == null and glass.get("_pending_backdrop") == null and (glass.get("_native_content") as TextureRect).texture == null, "关闭后释放背景捕获和前景引用 " + context)
+	if context.ends_with("_scroll"):
+		popup.add_theme_font_size_override("font_size", original_font_size)
 
 
 ## 人为限制真实四语言菜单高度，验证原生滚动条的最终位置、活动显示和静止隐藏。

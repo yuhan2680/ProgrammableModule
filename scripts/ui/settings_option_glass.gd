@@ -4,7 +4,9 @@ extends CanvasLayer
 const SHADOW_PADDING := 14.0
 const GLASS_SHADER := preload("res://assets/ui/settings_option_glass.gdshader")
 const SCROLLBAR_HELPER := preload("res://scripts/ui/settings_option_scrollbar.gd")
-const SCROLLBAR_RIGHT_MARGIN := 8.0
+const MENU_PADDING := 8.0
+const MENU_CORNER_RADIUS := 14.0
+const CHECKMARK := preload("res://assets/ui/settings_option_check.svg")
 
 var option: OptionButton
 var _popup: PopupMenu
@@ -45,9 +47,11 @@ func _ready() -> void:
 	_original_style = _popup.get_theme_stylebox("panel")
 	_original_transparent = _popup.transparent_bg
 	_original_window_transparent = _popup.transparent
+	_style_selection()
 	_prepare_popup()
 	_popup.about_to_popup.connect(_capture_background)
 	_popup.about_to_popup.connect(_prepare_popup)
+	_popup.about_to_popup.connect(_prepare_selection)
 	_popup.about_to_popup.connect(_show_surface.call_deferred)
 	_popup.popup_hide.connect(_hide_surface)
 	get_viewport().size_changed.connect(_on_viewport_resized)
@@ -79,18 +83,54 @@ func _prepare_popup() -> void:
 	# 外部玻璃已经绘制阴影，原生透明阴影不能继续占据弹层内部的滚动条留白。
 	surface.shadow_size = 0
 	surface.shadow_offset = Vector2.ZERO
-	# 让原生容器本身延伸到右侧；不能只挪动画出来的滑块而留下旧命中位置。
-	surface.content_margin_right = minf(surface.get_margin(SIDE_RIGHT), SCROLLBAR_RIGHT_MARGIN)
+	# 菜单四边统一内缩；真实容器一起调整，滚动条的显示与命中位置保持一致。
+	surface.set_content_margin_all(MENU_PADDING)
+	surface.set_corner_radius_all(int(MENU_CORNER_RADIUS))
 	_popup.add_theme_stylebox_override("panel", surface)
 	_popup.transparent_bg = true
 	_popup.transparent = true
 	_style_scrollbars(_popup)
 
 
+## 保留原生单选状态，只把圆点图标换成勾号；未选项仍留等宽空位以对齐文字。
+func _style_selection() -> void:
+	var empty_image := Image.create(CHECKMARK.get_width(), CHECKMARK.get_height(), false, Image.FORMAT_RGBA8)
+	empty_image.fill(Color.TRANSPARENT)
+	var empty_icon := ImageTexture.create_from_image(empty_image)
+	for state in ["checked", "radio_checked", "checked_disabled", "radio_checked_disabled"]:
+		_popup.add_theme_icon_override(state, CHECKMARK)
+	for state in ["unchecked", "radio_unchecked", "unchecked_disabled", "radio_unchecked_disabled"]:
+		_popup.add_theme_icon_override(state, empty_icon)
+	var highlight := StyleBoxFlat.new()
+	highlight.bg_color = Color("3488FA")
+	highlight.set_corner_radius_all(7)
+	highlight.set_content_margin_all(0)
+	_popup.add_theme_stylebox_override("hover", highlight)
+	_popup.add_theme_color_override("font_hover_color", Color.WHITE)
+
+
+## 弹出时先突出已保存选项，之后完全由原生鼠标与键盘导航移动蓝色焦点行。
+func _prepare_selection() -> void:
+	if option.selected >= 0 and option.selected < _popup.item_count and not _popup.is_item_disabled(option.selected):
+		_popup.set_focused_item(option.selected)
+	_sync_checkmark_tint()
+	set_process(true)
+
+
+## 原生悬停或键盘焦点行使用白色勾号；移到其他行时，原选择仍以深色勾号明确标记。
+func _sync_checkmark_tint() -> void:
+	var focused := _popup.get_focused_item()
+	for index in _popup.item_count:
+		var color := _popup.get_theme_color("font_disabled_color") if _popup.is_item_disabled(index) else Color.WHITE if index == focused else _popup.get_theme_color("font_color")
+		if not _popup.get_item_icon_modulate(index).is_equal_approx(color):
+			_popup.set_item_icon_modulate(index, color)
+
+
 ## 延迟到原生位置计算完成再显示玻璃，透明目标须在菜单打开前准备而非首帧之后。
 func _show_surface() -> void:
 	if not is_instance_valid(_popup) or not _popup.visible or not is_instance_valid(option) or not option.is_visible_in_tree() or not _popup.is_embedded():
 		return
+	_prepare_selection()
 	_last_bounds = Rect2()
 	_native_content.texture = _popup.get_texture()
 	_update_surface()
@@ -129,7 +169,9 @@ func _process(_delta: float) -> void:
 			_popup.hide()
 		_hide_surface()
 		return
-	_update_surface()
+	_sync_checkmark_tint()
+	if _popup.is_embedded():
+		_update_surface()
 
 
 ## 将原生窗口客户区换算到主视口，阴影和圆角也使用实际显示像素。
@@ -147,7 +189,7 @@ func _update_surface() -> void:
 	_native_content.size = bounds.size
 	var glass_material := _glass.material as ShaderMaterial
 	glass_material.set_shader_parameter("panel_size", bounds.size)
-	glass_material.set_shader_parameter("corner_radius", 23.0 * layout_scale)
+	glass_material.set_shader_parameter("corner_radius", MENU_CORNER_RADIUS * layout_scale)
 	glass_material.set_shader_parameter("shadow_padding", padding)
 	glass_material.set_shader_parameter("blur_step", 3.2 * layout_scale)
 	_crop_backdrop(Rect2(_glass.position, _glass.size))

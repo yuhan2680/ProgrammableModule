@@ -3,6 +3,9 @@ extends CanvasLayer
 ## 宽幅指令资料窗口只读模块目录和 JSON；浏览、搜索与关闭都不修改玩家程序或装配。
 
 const LOCKED_TEXT := Color("939DAC")
+const BOOK_OPEN_SECONDS := 0.12
+const WINDOW_OPEN_SECONDS := 0.24
+const WINDOW_CLOSE_SECONDS := 0.20
 
 var catalog_directory: String = "res://data/commands"
 var catalog := CommandCatalog.new()
@@ -31,7 +34,16 @@ var _anchor: Control
 var _level: LevelDefinition
 var _registry: ContentRegistry
 var _open := false
+var _back_caption := "返回装配"
 var _tween: Tween
+var _book_motion := false
+var _motion_active := false
+var _motion_progress := 0.0
+var _motion_generation := 0
+var _rest_rect := Rect2()
+var _collapsed_rect := Rect2()
+var _last_anchor_rect := Rect2()
+var _swallowed_mouse_buttons: Dictionary = {}
 
 
 ## 左目录与右资料各自滚动，导航和搜索固定在资料列顶部，不挤占装配界面的布局。
@@ -83,6 +95,7 @@ func _ready() -> void:
 	_scroll.add_child(_list)
 	get_viewport().size_changed.connect(_update_placement)
 	set_process_input(false)
+	set_process(false)
 
 
 ## 灰色目录面只显示分组入口，模块贴图和名称直接来自当前游戏内容注册表。
@@ -105,47 +118,146 @@ func _build_directory() -> void:
 	_directory_scroll.add_child(_directory_list)
 
 
-## 每次打开重新扫描 JSON 和模块目录，重新进入时保留上次选择但清空搜索条件。
+## 每次打开重新扫描 JSON 和模块目录；书本先展开，再从入口向左下展开资料窗口。
 func popup_at(anchor: Control, level: LevelDefinition, registry: ContentRegistry, back_caption: String = "返回装配") -> void:
 	if _open:
 		close_menu()
 		return
 	if not is_instance_valid(anchor) or not anchor.is_visible_in_tree():
 		return
+	var continuing := _book_motion and _motion_active and _anchor == anchor
+	_cancel_motion()
+	_motion_active = false
+	if is_instance_valid(_anchor) and _anchor != anchor and _anchor.has_method("set_book_open"):
+		_anchor.call("set_book_open", false, false)
 	_anchor = anchor
+	_book_motion = anchor.has_method("set_book_open")
 	_level = level
 	_registry = registry
 	catalog.load_directory(catalog_directory)
 	_open = true
 	_overlay.show()
+	_back_caption = back_caption
 	header.set_back_caption(back_caption)
 	header.set_active(true)
 	header.set_search_open(false, false)
 	_rebuild_directory()
 	_rebuild_content()
+	if _book_motion:
+		if not continuing:
+			_motion_progress = 0.0
+		_panel.pivot_offset = Vector2.ZERO
 	_update_placement()
 	set_process_input(true)
-	_panel.pivot_offset = Vector2(_panel.size.x, 0)
-	_panel.scale = Vector2(0.99, 0.975)
-	_panel.modulate.a = 0
-	_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	_tween.tween_property(_panel, "scale", Vector2.ONE, 0.18)
-	_tween.tween_property(_panel, "modulate:a", 1.0, 0.14)
+	set_process(_book_motion)
+	if _book_motion:
+		_anchor.call("set_book_open", true)
+		_start_book_motion(true, not continuing)
+	else:
+		# 地图属性的指令管理继承本类，普通加号入口仍沿用原先的淡入与关闭语义。
+		_panel.pivot_offset = Vector2(_panel.size.x, 0)
+		_panel.scale = Vector2(0.99, 0.975)
+		_panel.modulate.a = 0
+		_tween = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		_tween.tween_property(_panel, "scale", Vector2.ONE, 0.18)
+		_tween.tween_property(_panel, "modulate:a", 1.0, 0.14)
 	header.back_button.grab_focus()
 
 
-## 关闭浮层并终止搜索动画，离开装配页面时不聚焦即将被释放的书本入口。
+## 普通关闭反向收回到书本；页面退出传入 false 时立即清理，避免旧浮层继续遮挡新页面。
 func close_menu(restore_focus: bool = true) -> void:
-	if not _open:
+	if not _open and (restore_focus or not _book_motion):
 		return
 	_open = false
-	set_process_input(false)
-	if _tween != null and _tween.is_valid():
-		_tween.kill()
-	header.set_active(false)
-	_overlay.hide()
+	var focus := get_viewport().gui_get_focus_owner()
+	if focus != null and _overlay.is_ancestor_of(focus):
+		focus.release_focus()
 	if restore_focus and is_instance_valid(_anchor) and _anchor.is_visible_in_tree():
 		_anchor.grab_focus()
+	if _book_motion and restore_focus and is_instance_valid(_anchor) and _anchor.is_visible_in_tree():
+		_start_book_motion(false)
+		return
+	_cancel_motion()
+	_motion_active = false
+	_motion_progress = 0.0
+	header.set_active(false)
+	_overlay.hide()
+	set_process(false)
+	set_process_input(false)
+	_swallowed_mouse_buttons.clear()
+	if _book_motion and is_instance_valid(_anchor):
+		_anchor.call("set_book_open", false, false)
+
+
+## 窗口固定最终排版，只改变显示变换；完成时恢复整倍缩放，避免文字模糊和逐帧重排。
+func _apply_book_motion(progress: float) -> void:
+	_motion_progress = clampf(progress, 0.0, 1.0)
+	var displayed_size := _collapsed_rect.size.lerp(_rest_rect.size, _motion_progress)
+	_panel.position = _collapsed_rect.position.lerp(_rest_rect.position, _motion_progress)
+	_panel.scale = displayed_size / _rest_rect.size.max(Vector2.ONE)
+	_panel.modulate.a = clampf(_motion_progress * 5.0, 0.0, 1.0)
+	if is_equal_approx(_motion_progress, 1.0):
+		_panel.position = _rest_rect.position
+		_panel.scale = Vector2.ONE
+		_panel.modulate.a = 1.0
+
+
+## 连续点击从当前进度反向播放；版本号使已取消动画的完成回调无法隐藏新打开的窗口。
+func _start_book_motion(opening: bool, wait_for_book: bool = false) -> void:
+	_cancel_motion()
+	_motion_active = true
+	set_process(true)
+	set_process_input(true)
+	var generation := _motion_generation
+	var destination := 1.0 if opening else 0.0
+	var duration := (WINDOW_OPEN_SECONDS if opening else WINDOW_CLOSE_SECONDS) * absf(destination - _motion_progress)
+	_tween = create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT if opening else Tween.EASE_IN_OUT)
+	if wait_for_book:
+		_tween.tween_interval(BOOK_OPEN_SECONDS)
+	_tween.tween_method(_apply_book_motion, _motion_progress, destination, maxf(0.01, duration))
+	_tween.tween_callback(_finish_book_motion.bind(opening, generation))
+
+
+## 收回完成后才合上图标；仍按住的外点保留抬起事件拦截，防止点击穿透到后方页面。
+func _finish_book_motion(opening: bool, generation: int) -> void:
+	if generation != _motion_generation or opening != _open:
+		return
+	_motion_active = false
+	_apply_book_motion(1.0 if opening else 0.0)
+	if opening:
+		return
+	header.set_active(false)
+	_overlay.hide()
+	set_process(false)
+	set_process_input(not _swallowed_mouse_buttons.is_empty())
+	if is_instance_valid(_anchor):
+		_anchor.call("set_book_open", false)
+
+
+## 中断旧补间并使其回调失效，重开、退出和释放页面共用同一清理入口。
+func _cancel_motion() -> void:
+	_motion_generation += 1
+	if _tween != null and _tween.is_valid():
+		_tween.kill()
+	_tween = null
+
+
+## 入口随高分屏布局移动时重新计算同一动画进度；隐藏或释放入口则立即清理浮层。
+func _process(_delta: float) -> void:
+	if not _book_motion or (not _open and not _motion_active):
+		return
+	if not is_instance_valid(_anchor) or not _anchor.is_visible_in_tree():
+		close_menu(false)
+		return
+	if _last_anchor_rect != _anchor.get_global_rect():
+		_update_placement()
+
+
+## 页面直接释放时也终止动画并复原仍有效的入口，不留下已展开的书本状态。
+func _exit_tree() -> void:
+	_cancel_motion()
+	if _book_motion and is_instance_valid(_anchor):
+		_anchor.call("set_book_open", false, false)
 
 
 ## 公开窗口状态，外层页面切换仍沿用已有的关闭流程。
@@ -314,7 +426,7 @@ func _add_command_card(entry: Dictionary, searching: bool) -> void:
 
 ## 目录和文字按当前窗口尺寸分配，书本入口留在窗口上方，可随时再次点击关闭。
 func _update_placement() -> void:
-	if not _open:
+	if not _open and not _motion_active:
 		return
 	if not is_instance_valid(_anchor) or not _anchor.is_visible_in_tree():
 		close_menu(false)
@@ -322,6 +434,7 @@ func _update_placement() -> void:
 	var factor := GameTheme.sync_popup_scale(_overlay, _anchor)
 	var viewport_size := get_viewport().get_visible_rect().size / factor
 	var anchor_rect := _anchor.get_global_rect()
+	_last_anchor_rect = anchor_rect
 	anchor_rect = Rect2(anchor_rect.position / factor, anchor_rect.size / factor)
 	var margin := 24.0
 	var top := anchor_rect.end.y + 8
@@ -344,17 +457,44 @@ func _update_placement() -> void:
 	header.size = Vector2(content_width, 44)
 	_scroll.position = Vector2(content_left, 82)
 	_scroll.size = Vector2(content_width, height - 102)
+	if _book_motion:
+		_rest_rect = Rect2(_panel.position, _panel.size)
+		var seed_size := Vector2.ONE * minf(24.0, minf(anchor_rect.size.x, anchor_rect.size.y) * 0.6)
+		_collapsed_rect = Rect2(anchor_rect.get_center() - seed_size * 0.5, seed_size)
+		_apply_book_motion(_motion_progress)
 
 
-## 外点只关闭窗口；输入框保留原生编辑行为，键盘焦点不会落到被遮住的装配控件。
+## 外点与过渡期输入均拦截，重复点击书本可以反向展开；正文静止时保留原生键盘与鼠标操作。
 func _input(event: InputEvent) -> void:
-	if not _open:
+	if _book_motion and is_instance_valid(_anchor) and _anchor.has_method("set_keyboard_focus_visible"):
+		if event is InputEventMouseButton or event is InputEventMouseMotion or event is InputEventScreenTouch:
+			_anchor.call("set_keyboard_focus_visible", false)
+		elif event is InputEventKey and event.pressed:
+			_anchor.call("set_keyboard_focus_visible", true)
+	if event is InputEventMouseButton and _swallowed_mouse_buttons.has(event.button_index) and not event.pressed:
+		_swallowed_mouse_buttons.erase(event.button_index)
+		get_viewport().set_input_as_handled()
+		if not _open and not _motion_active and _swallowed_mouse_buttons.is_empty():
+			set_process_input(false)
+		return
+	if not _open and not _motion_active:
 		return
 	if event is InputEventMouseButton:
-		if not _panel.get_global_rect().has_point(event.position):
+		var on_anchor := is_instance_valid(_anchor) and _anchor.get_global_rect().has_point(event.position)
+		var outside := not _panel.get_global_rect().has_point(event.position)
+		if outside or _motion_active:
 			get_viewport().set_input_as_handled()
 			if event.pressed and event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_RIGHT, MOUSE_BUTTON_MIDDLE]:
-				close_menu()
+				_swallowed_mouse_buttons[event.button_index] = true
+				if not _open and on_anchor and event.button_index == MOUSE_BUTTON_LEFT:
+					popup_at(_anchor, _level, _registry, _back_caption)
+				elif outside or on_anchor:
+					close_menu()
+		return
+	if _motion_active:
+		get_viewport().set_input_as_handled()
+		if event is InputEventKey and event.is_action_pressed("ui_cancel"):
+			close_menu()
 		return
 	if not event is InputEventKey or not event.pressed:
 		return
