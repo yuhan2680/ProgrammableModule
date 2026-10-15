@@ -189,7 +189,8 @@ func _test_statistics() -> void:
 	var mystery_row := _panel.find_child("PlayerMysteryRow", true, false) as MarginContainer
 	var longest_row := _panel.find_child("PlayerLongestRow", true, false) as Control
 	var mystery_caption := (mystery_row.get_child(0) as HBoxContainer).get_child(0) as Label
-	_check(time_row.get_index() == hint_row.get_index() + 2 and mystery_row.get_index() == longest_row.get_index() + 2, "游戏时间位于提示次数正下方，未知最高分位于最后一行")
+	var first_run_row := _panel.find_child("PlayerFirstRunRow", true, false) as MarginContainer
+	_check(time_row.get_index() == hint_row.get_index() + 2 and first_run_row.get_index() == longest_row.get_index() + 2 and mystery_row.get_index() == first_run_row.get_index() + 2, "游戏时间位于提示次数正下方，首次运行日期位于最长耗时与未知最高分之间")
 	_check(mystery_caption.text == "？？？" and mystery_caption.tooltip_text.is_empty() and _panel._mystery_value.tooltip_text.is_empty(), "未知栏标题与悬停均不暴露彩蛋名字")
 	_profile.record_failure("ui_failed", "none")
 	_profile.record_completion(75.0, "ui_75", "none", 9)

@@ -459,7 +459,7 @@ func _build_edit_panel(parent: Node) -> void:
 	_code_toolbar.add_child(_code_zoom)
 	_code_zoom.position = Vector2(12, 10)
 	_code_zoom.zoom_changed.connect(set_code_zoom_percent)
-	_code = CodeEdit.new()
+	_code = RestrictedCodeEdit.new() if session.level.restrict_code_paste else CodeEdit.new()
 	_code.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	_code.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_code.custom_minimum_size.y = 120
@@ -630,11 +630,11 @@ func _sync_hint_backdrop() -> void:
 		(glass.material as ShaderMaterial).set_shader_parameter("panel_size", button.size)
 
 
-## 教学身份以正式资源路径为准；编辑器试玩即使借用教学地图也不启用代码提示。
+## 正式教学与显式允许的玩家关卡共用提示档位；编辑器试玩始终不启用提示。
 func _hint_allowed() -> bool:
 	if not allow_draft_save or session == null or session.level == null:
 		return false
-	if session.level.source_path != "res://data/levels/%s.json" % session.level.id:
+	if not session.level.can_use_code_hints():
 		return false
 	var mode := settings.code_hints if settings != null else "normal"
 	return mode == "more" or (mode == "normal" and session.consecutive_failures >= 3)
@@ -819,7 +819,11 @@ func _sync_session() -> void:
 	_guide_button.disabled = transitioning
 	_preview_button.disabled = transitioning
 	_code_zoom.set_interaction_enabled(not transitioning and not _preview_layout.expanded)
-	_code.editable = not locked and not transitioning and not _preview_layout.expanded
+	var editing_enabled := not locked and not transitioning and not _preview_layout.expanded
+	if _code is RestrictedCodeEdit:
+		(_code as RestrictedCodeEdit).set_editing_enabled(editing_enabled)
+	else:
+		_code.editable = editing_enabled
 	_code.context_menu_enabled = _code.editable
 	if _completion != null:
 		_completion.refresh()

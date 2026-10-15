@@ -14,12 +14,17 @@ var _redo_stack: Array[MapDocument] = []
 var _action_depth: int = 0
 var _action_before: MapDocument
 var _action_signature: String = ""
+var _code_paste_policy_locked := false
+var _locked_code_paste_restricted := false
+var _locked_code_paste_present := false
 
 
 # 用途：替换当前文档，并以载入状态建立新的保存点和撤销历史。
 func replace_document(value: MapDocument, source_path: String = "") -> void:
 	document = value.duplicate_document()
 	path = source_path
+	_code_paste_policy_locked = not source_path.is_empty()
+	_capture_code_paste_policy()
 	_undo_stack.clear()
 	_redo_stack.clear()
 	_action_depth = 0
@@ -36,6 +41,8 @@ func is_dirty() -> bool:
 # 用途：在实际写盘成功后更新文件路径和保存点。
 func mark_saved(saved_path: String) -> void:
 	path = saved_path
+	_code_paste_policy_locked = true
+	_capture_code_paste_policy()
 	_saved_state = _signature()
 	changed.emit()
 
@@ -55,6 +62,7 @@ func end_action() -> void:
 	_action_depth -= 1
 	if _action_depth > 0:
 		return
+	_restore_locked_code_paste_policy(document)
 	if _signature() != _action_signature:
 		_undo_stack.append(_action_before)
 		if _undo_stack.size() > HISTORY_LIMIT:
@@ -664,6 +672,90 @@ func remove_timed_gate(identity: String) -> DataResult:
 	return DataResult.failure("所选限时闸门已不存在。")
 
 
+## 读取显式提示权限，旧玩家地图缺省关闭且只读查询不修改元数据。
+func get_allow_code_hints() -> bool:
+	var level: Variant = document.properties.get("level", {})
+	return level.get("allow_code_hints", false) == true if level is Dictionary else false
+
+
+## 提示权限始终可编辑，所有修改复用文档事务并保留作者扩展。
+func set_allow_code_hints(value: Variant) -> DataResult:
+	return _set_code_policy_flag("allow_code_hints", value)
+
+
+## 粘贴限制缺省关闭；载入与保存后的锁定状态独立于可撤销地图快照。
+func get_restrict_code_paste() -> bool:
+	var level: Variant = document.properties.get("level", {})
+	return level.get("restrict_code_paste", false) == true if level is Dictionary else false
+
+
+## 向表单暴露是否仍在首次创建阶段，不以文件是否被外部删除作为解锁依据。
+func is_code_paste_policy_locked() -> bool:
+	return _code_paste_policy_locked
+
+
+## 模型入口也拒绝改写锁定规则，不能通过禁用控件之外的回调绕过。
+func set_restrict_code_paste(value: Variant) -> DataResult:
+	return _set_code_policy_flag("restrict_code_paste", value)
+
+
+## 验证两个独立布尔规则后应用完整属性副本，失败不改变文档与历史。
+func _set_code_policy_flag(field: String, value: Variant) -> DataResult:
+	if not value is bool:
+		return DataResult.failure("关卡 %s 必须是布尔值。" % field)
+	var existing: Variant = document.properties.get("level", {})
+	if not existing is Dictionary:
+		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
+	var properties := document.properties.duplicate(true)
+	var level: Dictionary = existing.duplicate(true)
+	level[field] = value
+	properties["level"] = level
+	var checked := validate_code_policy_change({"properties": properties})
+	if not checked.is_ok():
+		return checked
+	if existing.get(field, false) == value:
+		return DataResult.success()
+	return apply_metadata({"properties": properties})
+
+
+## 元数据与保存边界共享锁校验，删除字段或整个 level 对象也不能解除已开启的限制。
+func validate_code_policy_change(data: Dictionary) -> DataResult:
+	var properties: Variant = data.get("properties", document.properties)
+	if not properties is Dictionary:
+		return DataResult.failure("properties 必须是对象。")
+	var level: Variant = properties.get("level", {})
+	if not level is Dictionary:
+		return DataResult.failure("properties.level 必须是对象，请先在元数据中修正。")
+	for field: String in ["allow_code_hints", "restrict_code_paste"]:
+		if level.has(field) and not level[field] is bool:
+			return DataResult.failure("关卡 %s 必须是布尔值。" % field)
+	if _code_paste_policy_locked and level.get("restrict_code_paste", false) != _locked_code_paste_restricted:
+		return DataResult.failure("已保存地图的代码粘贴限制不能更改。")
+	return DataResult.success()
+
+
+## 只在载入或成功写盘后记录最终粘贴规则，旧地图缺省字段保持原样。
+func _capture_code_paste_policy() -> void:
+	var level: Variant = document.properties.get("level", {})
+	_locked_code_paste_restricted = get_restrict_code_paste()
+	_locked_code_paste_present = level is Dictionary and level.has("restrict_code_paste")
+
+
+## 历史与嵌套事务恢复其余可编辑内容，但已落盘的粘贴规则不随历史倒退。
+func _restore_locked_code_paste_policy(target: MapDocument) -> void:
+	if not _code_paste_policy_locked:
+		return
+	var level: Variant = target.properties.get("level", {})
+	if not level is Dictionary:
+		return
+	if _locked_code_paste_present or _locked_code_paste_restricted:
+		level["restrict_code_paste"] = _locked_code_paste_restricted
+		if not target.properties.has("level"):
+			target.properties["level"] = level
+	else:
+		level.erase("restrict_code_paste")
+
+
 # 用途：提供可独立编辑的元数据副本，包含当前尚未实现玩法的扩展数据。
 func metadata_dict() -> Dictionary:
 	return {
@@ -677,7 +769,10 @@ func metadata_dict() -> Dictionary:
 
 
 # 用途：应用已由调用方校验的元数据；缺少的字段保持原值，避免意外清空。
-func apply_metadata(data: Dictionary) -> void:
+func apply_metadata(data: Dictionary) -> DataResult:
+	var checked := validate_code_policy_change(data)
+	if not checked.is_ok():
+		return checked
 	begin_action()
 	if data.has("player_spawn"):
 		document.player_spawn = data.player_spawn.duplicate(true) if data.player_spawn != null else null
@@ -685,6 +780,7 @@ func apply_metadata(data: Dictionary) -> void:
 		if data.has(key):
 			document.set(key, data[key].duplicate(true))
 	end_action()
+	return DataResult.success()
 
 
 # 用途：判断是否存在可撤销的完整修改事务。
@@ -703,6 +799,7 @@ func undo() -> bool:
 		return false
 	_redo_stack.append(document.duplicate_document())
 	document = _undo_stack.pop_back()
+	_restore_locked_code_paste_policy(document)
 	changed.emit()
 	return true
 
@@ -713,6 +810,7 @@ func redo() -> bool:
 		return false
 	_undo_stack.append(document.duplicate_document())
 	document = _redo_stack.pop_back()
+	_restore_locked_code_paste_policy(document)
 	changed.emit()
 	return true
 

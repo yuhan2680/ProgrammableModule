@@ -78,16 +78,21 @@ func _test_properties(editor: MapEditor) -> void:
 			_game.settings.set_language(locale)
 			await _settle()
 			var context := locale + " " + str(dimensions)
-			for field: Control in [editor._id_field, editor._name_field, editor._brush, editor._module_limit_field]:
+			for field: Control in [editor._id_field, editor._name_field, editor._brush, editor._module_limit_field, editor._allow_code_hints_switch, editor._restrict_code_paste_switch]:
+				# 玩法项增加后允许正文自然溢出；逐项滚入视口验证可达性，不能要求整张表同时显示。
+				scroll.ensure_control_visible(field)
+				await _settle()
 				var label := field.get_parent().get_child(0) as Label
 				_check(absf(label.get_global_rect().get_center().y - field.get_global_rect().get_center().y) < 1.0 and label.get_global_rect().end.x < field.global_position.x, "属性标签与输入框同行且不重叠 " + context)
-				_check(field.size.y <= 34.0 and scroll.get_global_rect().encloses(field.get_global_rect()), "紧凑输入控件完整显示 " + context)
+				_check(field.size.y <= 34.0 and scroll.get_global_rect().encloses(field.get_global_rect()), "紧凑输入控件滚入后完整显示 " + str(field.name) + " " + context)
 			_check(absf(editor._width_field.global_position.y - editor._height_field.global_position.y) < 1.0 and editor._width_field.get_global_rect().end.x < editor._height_field.global_position.x, "宽高在同一行且可分别输入 " + context)
 			# 新增敌人表单允许纵向滚动；底部按钮固定可见，正文仍可独立纵向滚动。
 			var original_scroll := scroll.scroll_vertical
 			await _settle()
 			_check(card.get_global_rect().encloses(editor._play_button.get_global_rect()) and editor._play_button.size.y <= 34.0, "最小窗口完整显示固定的紧凑测试按钮 " + context)
 			scroll.scroll_vertical = original_scroll
+			await _settle()
+			scroll.ensure_control_visible(editor._brush)
 			await _settle()
 			var before := card.get_global_rect()
 			var choice := editor._brush.selected

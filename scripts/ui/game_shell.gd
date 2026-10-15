@@ -1103,6 +1103,9 @@ func _go_back() -> void:
 	if _about_dialog.is_open():
 		_about_dialog.close_dialog()
 		return
+	if is_instance_valid(player_profile_panel) and player_profile_panel.is_statistics_about_open():
+		player_profile_panel.close_statistics_about()
+		return
 	if _editor_exit_save_pending or _editor_discard_dialog.visible:
 		return
 	if _clear_progress_dialog.is_open() or (is_instance_valid(_profile_reset_dialog) and _profile_reset_dialog.is_open()):
@@ -1852,8 +1855,8 @@ func _enter_level(definition: LevelDefinition) -> void:
 	_profile_tracker.begin_level(_application_active and not _application_suspended)
 	_profile_hint_mode = "none"
 	_remember_profile_hint_mode()
-	if definition.source_path == "res://data/levels/%s.json" % definition.id:
-		session.consecutive_failures = drafts.get_failure_streak(definition.id)
+	if definition.can_use_code_hints():
+		session.consecutive_failures = drafts.get_failure_streak(_hint_progress_key())
 		session.attempt_failed.connect(_on_attempt_failed)
 	_show_assembly_page()
 	# Godot 同一窗口只能拥有一个独占弹窗；恢复提示优先，关卡说明仍可从页头查看。
@@ -2110,11 +2113,20 @@ func _save_current_draft(force: bool = false) -> bool:
 	return true
 
 
-## 仅教学关卡保存连续失败次数，导入关卡与编辑器试玩不参与提示记录。
+## 教学沿用旧进度键，玩家与其他来源的提示门槛独立保存，避免同名地图互相污染。
+func _hint_progress_key() -> String:
+	if session == null:
+		return ""
+	if session.level.source_path == "res://data/levels/%s.json" % session.level.id:
+		return session.level.id
+	return "hints:" + _profile_level_key()
+
+
+## 正式教学与允许提示的玩家关卡保存连续失败次数，编辑器试玩始终隔离。
 func _on_attempt_failed() -> void:
-	if _editor_playtest or session == null or session.level.source_path != "res://data/levels/%s.json" % session.level.id:
+	if _editor_playtest or session == null or not session.level.can_use_code_hints():
 		return
-	var saved := drafts.save_failure_streak(session.level.id, session.consecutive_failures)
+	var saved := drafts.save_failure_streak(_hint_progress_key(), session.consecutive_failures)
 	if not saved.is_ok():
 		_save_label.text = tr("提示记录保存失败") + "：" + GameI18n.translate_errors(saved.errors)
 		_save_label.show()
@@ -2208,8 +2220,10 @@ func _profile_level_key() -> String:
 	return domain + ":" + session.level.id
 
 
-## 会话内始终保留见过的最高帮助档，临时写盘失败后切回低档也不能丢失辅助记录。
+## 只统计本关允许使用的帮助档，且会话内保留最高档，避免切低设置或写盘失败丢失记录。
 func _profile_current_hint_mode() -> String:
+	if session == null or not session.level.can_use_code_hints():
+		return _profile_hint_mode
 	var modes := ["none", "normal", "more"]
 	if settings != null and modes.find(settings.code_hints) > modes.find(_profile_hint_mode):
 		_profile_hint_mode = settings.code_hints
@@ -2264,6 +2278,11 @@ func _on_level_completed() -> void:
 	var marked := drafts.mark_completed(session.level.id)
 	if not marked.is_ok():
 		_show_message("通关记录保存失败", "你已完成关卡，但进度未能写入磁盘。\n" + "\n".join(marked.errors))
+	if session.level.can_use_code_hints() and _hint_progress_key() != session.level.id:
+		var hint_saved := drafts.save_failure_streak(_hint_progress_key(), 0)
+		if not hint_saved.is_ok():
+			_save_label.text = tr("提示记录保存失败") + "：" + GameI18n.translate_errors(hint_saved.errors)
+			_save_label.show()
 	if statistics_result != null:
 		_show_profile_save_error(statistics_result)
 
@@ -2531,6 +2550,8 @@ func _show_code_colors_page() -> void:
 ## 玩家档案作为设置子页共用白卡、渐隐和导航，数据只读注入的独立模型。
 func _show_player_profile_page() -> void:
 	_clear_page(false, true)
+	# 每次进入按当前版本实际可用目录计算教学进度，新增关卡不需要迁移玩家档案。
+	catalog.refresh(registry)
 	page = Page.PLAYER_PROFILE
 	_ensure_menu_card()
 	_main_background.set_active(true)
@@ -2545,6 +2566,8 @@ func _show_player_profile_page() -> void:
 	player_profile_panel = PlayerProfilePanel.new()
 	player_profile_panel.name = "PlayerProfilePanel"
 	player_profile_panel.profile = profile
+	player_profile_panel.catalog = catalog
+	player_profile_panel.drafts = drafts
 	player_profile_panel.card_boundary = _menu_card
 	player_profile_panel.navigation_title = _title
 	player_profile_panel.reset_requested.connect(_request_profile_reset)

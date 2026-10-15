@@ -35,6 +35,7 @@ func _run() -> void:
 	_test_assembly_free_zoom_setting()
 	_test_error_localization()
 	await _test_live_translation_and_panel()
+	await _test_navigation_row_corners()
 	await _test_completion_switch()
 	await _test_assembly_free_zoom_switch()
 	await _test_code_hint_selector()
@@ -192,6 +193,87 @@ func _test_live_translation_and_panel() -> void:
 	panel.queue_free()
 	native.queue_free()
 	await process_frame
+
+
+## 单行导航卡在长按、拖出与释放时保留完整圆角，多行分组内部仍为平直边界。
+func _test_navigation_row_corners() -> void:
+	var original_size := root.size
+	root.size = Vector2i(800, 600)
+	var settings := GameSettings.new(_test_root.path_join("navigation_panel.json"))
+	settings.load_settings()
+	var panel := SettingsPanel.new()
+	panel.settings = settings
+	panel.size = Vector2(800, 600)
+	var opened: Array[bool] = []
+	panel.player_profile_requested.connect(func() -> void: opened.append(true))
+	root.add_child(panel)
+	for frame in range(4):
+		await process_frame
+	var profile := panel.find_child("PlayerProfileButton", true, false) as Button
+	var group := panel.find_child("BasicSettingsGroup", true, false) as PanelContainer
+	_check(profile != null and group != null, "玩家与统计信息保持独立单行卡片")
+	if profile != null and group != null:
+		var outer := group.get_theme_stylebox("panel") as StyleBoxFlat
+		_check_navigation_corners(profile, outer.corner_radius_top_left, outer.corner_radius_bottom_left)
+		var center := profile.get_global_rect().get_center()
+		var outside := Vector2(8, center.y)
+		_move_navigation_pointer(center, false)
+		await process_frame
+		_check(profile.get_draw_mode() == BaseButton.DRAW_HOVER, "鼠标进入单行卡片采用悬停状态")
+		_press_navigation_pointer(center, true)
+		for frame in range(12):
+			await process_frame
+		_check(profile.get_draw_mode() in [BaseButton.DRAW_PRESSED, BaseButton.DRAW_HOVER_PRESSED] and opened.is_empty(), "持续按住保持按下样式且不提前导航")
+		_move_navigation_pointer(outside, true)
+		await process_frame
+		_check(profile.get_draw_mode() == BaseButton.DRAW_NORMAL and profile.has_focus(), "按住拖出恢复普通背景并保留同形焦点背景")
+		_press_navigation_pointer(outside, false)
+		await process_frame
+		_check(opened.is_empty() and profile.get_draw_mode() == BaseButton.DRAW_NORMAL, "卡片外松开取消导航并保持圆角背景")
+		_move_navigation_pointer(center, false)
+		_press_navigation_pointer(center, true)
+		_move_navigation_pointer(outside, true)
+		_move_navigation_pointer(center, true)
+		await process_frame
+		_check(profile.get_draw_mode() in [BaseButton.DRAW_PRESSED, BaseButton.DRAW_HOVER_PRESSED], "按住移回卡片恢复相同圆角按下状态")
+		_press_navigation_pointer(center, false)
+		await process_frame
+		_check(opened.size() == 1 and profile.get_draw_mode() == BaseButton.DRAW_HOVER, "卡片内松开仅打开一次玩家统计并恢复悬停样式")
+		_check_navigation_corners(profile, outer.corner_radius_top_left, outer.corner_radius_bottom_left)
+	for node_name: String in ["AboutButton", "CodeColorsButton", "PlayerLevelListButton"]:
+		var row := panel.find_child(node_name, true, false) as Button
+		_check(row != null, "其他分组导航行存在：" + node_name)
+		if row != null:
+			_check_navigation_corners(row, 14 if node_name == "AboutButton" else 0, 0)
+	panel.queue_free()
+	await process_frame
+	root.size = original_size
+
+
+## 校验每种可见背景和焦点叠层的四角，避免按压状态矩形覆盖外层卡片。
+func _check_navigation_corners(button: Button, top: int, bottom: int) -> void:
+	for state: String in ["normal", "hover", "pressed", "hover_pressed", "focus"]:
+		var style := button.get_theme_stylebox(state) as StyleBoxFlat
+		_check(style != null and style.corner_radius_top_left == top and style.corner_radius_top_right == top and style.corner_radius_bottom_left == bottom and style.corner_radius_bottom_right == bottom, "%s 的 %s 状态遵循分组首尾圆角" % [button.name, state])
+
+
+## 发送真实指针移动，覆盖按住时离开与重新进入按钮的原生绘制状态。
+func _move_navigation_pointer(point: Vector2, pressed: bool) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = point
+	motion.global_position = point
+	motion.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	root.push_input(motion, true)
+
+
+## 发送真实按下或释放，不直接触发导航信号，确保外部松开正确取消点击。
+func _press_navigation_pointer(point: Vector2, pressed: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = point
+	event.global_position = point
+	event.pressed = pressed
+	root.push_input(event, true)
 
 
 ## 使用真实鼠标和空格输入验证矢量开关、设置持久化和窄窗口滚动可达性。

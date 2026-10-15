@@ -37,6 +37,9 @@ static func check(data: Dictionary, registry: ContentRegistry, require_spawn: bo
 			return DataResult.failure("关卡 player_max_health 必须为大于 0 且不超过 1000000000 的有限数字。")
 	if level is Dictionary and level.has("enemies_enabled") and not level.enemies_enabled is bool:
 		return DataResult.failure("关卡 enemies_enabled 必须是布尔值。")
+	for field: String in ["allow_code_hints", "restrict_code_paste"]:
+		if level is Dictionary and level.has(field) and not level[field] is bool:
+			return DataResult.failure("关卡 %s 必须是布尔值。" % field)
 	if level is Dictionary and level.has("restricted_modules"):
 		var restrictions := check_restricted_modules(level.restricted_modules, registry)
 		if not restrictions.is_ok():

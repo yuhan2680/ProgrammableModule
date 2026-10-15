@@ -1,14 +1,17 @@
 class_name PlayerProfilePanel
 extends Control
-## 玩家资料只绑定独立档案模型；关卡、模拟与删除确认由游戏外壳负责。
+## 玩家资料绑定档案模型，并只读当前教学目录与通关标记；模拟与删除确认由游戏外壳负责。
 
 signal reset_requested
 
 const TOP_FADE_WIDTH := SettingsContentFade.TOP_FADE_WIDTH
 const CONTENT_TOP_GAP := SettingsContentFade.CONTENT_TOP_GAP
 const DELETE_COLOR := Color("9d1414")
+const TUTORIAL_COMPLETE_COLOR := Color("ff2020")
 
 var profile: PlayerProfileStore
+var catalog: LevelCatalog
+var drafts: GameDraftStore
 var card_boundary: Control
 var top_boundary: Control
 var navigation_title: Label
@@ -21,6 +24,8 @@ var _scroll_content: MarginContainer
 var _username_field: LineEdit
 var _uid_field: LineEdit
 var _uid_menu: PlayerUidContextMenu
+var _tutorial_progress_value: Label
+var _tutorial_complete_font: FontVariation
 var _hint_value: Label
 var _play_time_value: Label
 var _mystery_value: Label
@@ -29,6 +34,9 @@ var _mystery_divider: Control
 var _rate_value: Label
 var _fastest_value: Label
 var _longest_value: Label
+var _first_run_value: Label
+var _statistics_help_button: Button
+var _statistics_about_dialog: StatisticsAboutDialog
 var _delete_button: Button
 var _status: Label
 var _last_result: DataResult
@@ -101,6 +109,8 @@ func _build_ui() -> void:
 	var statistics_title := GameTheme.label(_column, "统计信息", 16)
 	statistics_title.name = "PlayerStatisticsTitle"
 	var statistics := _make_group("PlayerStatisticsGroup")
+	_tutorial_progress_value = _make_value(_make_row(statistics, "PlayerTutorialProgressRow", "教学关卡完成进度"), "PlayerTutorialProgress")
+	_add_divider(statistics)
 	_hint_value = _make_value(_make_row(statistics, "PlayerHintsRow", "累积使用“代码提示”的次数"), "PlayerCodeHintUses")
 	_add_divider(statistics)
 	_play_time_value = _make_value(_make_row(statistics, "PlayerPlayTimeRow", "累积游戏时间"), "PlayerPlayTime")
@@ -113,6 +123,8 @@ func _build_ui() -> void:
 	_longest_value = _make_value(_make_row(statistics, "PlayerLongestRow", "最长关卡耗时时间"), "PlayerLongestTime")
 	for value in [_fastest_value, _longest_value]:
 		value.tooltip_text = "从进入装配到成功通关累计耗时，修改装配和代码继续计时；暂停、后台与退出关卡不计时。"
+	_add_divider(statistics)
+	_first_run_value = _make_value(_make_row(statistics, "PlayerFirstRunRow", "首次运行游戏时间"), "PlayerFirstRunDate")
 	_mystery_divider = _add_divider(statistics)
 	_mystery_divider.name = "PlayerMysteryDivider"
 	var mystery_row := _make_row(statistics, "PlayerMysteryRow", "？？？")
@@ -135,6 +147,7 @@ func _build_ui() -> void:
 			fill = Color("d3d8e0")
 		_delete_button.add_theme_stylebox_override(state, GameTheme.box(fill, Color.TRANSPARENT, 14))
 	_delete_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_build_statistics_help()
 	_status = GameTheme.label(_column, "", 14)
 	_status.name = "PlayerProfileStatus"
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -142,6 +155,55 @@ func _build_ui() -> void:
 	_status.hide()
 	resized.connect(_layout_card)
 	_layout_card.call_deferred()
+
+
+## 删除按钮下方右对齐问号入口；独立画布弹窗不进入正文渐隐组。
+func _build_statistics_help() -> void:
+	var help_row := HBoxContainer.new()
+	help_row.name = "PlayerStatisticsHelpRow"
+	help_row.alignment = BoxContainer.ALIGNMENT_END
+	_column.add_child(help_row)
+	_statistics_help_button = GameTheme.button(help_row, "", _open_statistics_about)
+	_statistics_help_button.name = "PlayerStatisticsHelpButton"
+	_statistics_help_button.icon = load("res://assets/ui/statistics_help.svg")
+	_statistics_help_button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_statistics_help_button.tooltip_text = "关于统计"
+	_statistics_help_button.custom_minimum_size = Vector2(32, 32)
+	_statistics_help_button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	for state in ["normal", "hover", "pressed", "hover_pressed"]:
+		var fill := Color("e8ebf0") if state == "normal" else Color("dce1e8")
+		if state in ["pressed", "hover_pressed"]:
+			fill = Color("cfd6e0")
+		var surface := GameTheme.box(fill, Color.TRANSPARENT, 16)
+		surface.set_content_margin_all(0)
+		_statistics_help_button.add_theme_stylebox_override(state, surface)
+	_statistics_help_button.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_statistics_about_dialog = StatisticsAboutDialog.new()
+	_statistics_about_dialog.name = "StatisticsAboutDialog"
+	add_child(_statistics_about_dialog)
+	visibility_changed.connect(_sync_statistics_about_visibility)
+
+
+## 问号仅打开本地说明，正在编辑的用户名仍按原失焦流程提交。
+func _open_statistics_about() -> void:
+	_statistics_about_dialog.popup_dialog(_statistics_help_button)
+
+
+## 外壳统一返回逻辑通过此接口优先关闭统计说明。
+func is_statistics_about_open() -> bool:
+	return is_instance_valid(_statistics_about_dialog) and _statistics_about_dialog.is_open()
+
+
+## 页面返回或其他模态接管时可直接收起说明，不销毁统计面板。
+func close_statistics_about(restore_focus: bool = true) -> void:
+	if is_instance_valid(_statistics_about_dialog):
+		_statistics_about_dialog.close_dialog(restore_focus)
+
+
+## CanvasLayer 不继承控件可见性，因此面板隐藏时显式关闭说明浮层。
+func _sync_statistics_about_visibility() -> void:
+	if not is_visible_in_tree():
+		close_statistics_about(false)
 
 
 ## 每组只由唯一圆角面板绘制灰底，分隔处不叠加独立卡片。
@@ -312,6 +374,7 @@ func _sync_controls() -> void:
 	if not _username_dirty or _committing:
 		_username_field.text = profile.get_username()
 	_uid_field.text = profile.get_uid()
+	refresh_tutorial_progress()
 	var stats := profile.get_statistics()
 	_hint_value.text = str(stats.get("code_hint_uses", 0))
 	_play_time_value.text = tr("%s小时") % ("%.1f" % (float(stats.get("play_seconds", 0.0)) / 3600.0))
@@ -324,10 +387,45 @@ func _sync_controls() -> void:
 	_rate_value.text = (("%.1f" % (rate * 100.0)).trim_suffix(".0") + "%") if rate >= 0.0 else "—"
 	_fastest_value.text = _format_duration(float(stats.get("fastest_seconds", -1.0))) if successes > 0 else "—"
 	_longest_value.text = _format_duration(float(stats.get("longest_seconds", -1.0))) if successes > 0 else "—"
+	var first_run_date := profile.get_first_run_date()
+	_first_run_value.text = first_run_date if not first_run_date.is_empty() else "—"
 	_status.visible = _last_result != null and not _last_result.is_ok()
 	_status.text = GameI18n.translate_errors(_last_result.errors) if _status.visible else ""
 	_syncing = false
 	_layout_card.call_deferred()
+
+
+## 只统计当前教学目录的唯一 ID，与选关页共用通关标记，不缓存版本总数或混入加权通过率。
+func refresh_tutorial_progress() -> void:
+	if not is_instance_valid(_tutorial_progress_value):
+		return
+	var complete := false
+	_tutorial_progress_value.text = "—"
+	if catalog != null and drafts != null:
+		var tutorial_ids: Dictionary = {}
+		var completed := 0
+		for definition in catalog.levels:
+			if definition == null or not definition.source_path.begins_with("res://data/levels/") or tutorial_ids.has(definition.id):
+				continue
+			tutorial_ids[definition.id] = true
+			if drafts.is_completed(definition.id):
+				completed += 1
+		var total := tutorial_ids.size()
+		complete = total > 0 and completed == total
+		var percentage := 100.0 * completed / total if total > 0 else 0.0
+		# 大目录即使四舍五入接近百分之百，也不能在仍有未通关项目时显示 100%。
+		if not complete:
+			percentage = minf(percentage, 99.9)
+		_tutorial_progress_value.text = ("%.1f" % percentage).trim_suffix(".0") + "%"
+	if complete:
+		if _tutorial_complete_font == null:
+			_tutorial_complete_font = GameTheme.body_font().duplicate() as FontVariation
+			_tutorial_complete_font.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): 700.0}
+		_tutorial_progress_value.add_theme_font_override("font", _tutorial_complete_font)
+		_tutorial_progress_value.add_theme_color_override("font_color", TUTORIAL_COMPLETE_COLOR)
+	else:
+		_tutorial_progress_value.remove_theme_font_override("font")
+		_tutorial_progress_value.remove_theme_color_override("font_color")
 
 
 ## 耗时按真实秒数显示，尚无成功记录使用横线，不伪造零秒通关。

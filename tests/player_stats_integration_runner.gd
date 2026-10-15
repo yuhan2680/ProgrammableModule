@@ -50,6 +50,7 @@ func _run() -> void:
 	await _test_weighted_identity_and_help(lesson)
 	await _test_editor_isolation(lesson)
 	await _test_actual_hints(lesson)
+	await _test_player_hint_policy(lesson)
 	await _test_settings_identity_and_reset(lesson)
 	await _finish()
 
@@ -224,6 +225,8 @@ func _test_weighted_identity_and_help(lesson: LevelDefinition) -> void:
 	moved_bench._run_program()
 	_check(is_equal_approx(_game.profile.get_weighted_pass_rate(), rate), "移动或改名玩家文件仍按同一map ID冻结已首通通过率")
 	var ceiling := _copy_level(lesson, "profile_hint_ceiling", _temporary.path_join("levels/ceiling.json"))
+	ceiling.allow_code_hints = true
+	ceiling.document.properties.level.allow_code_hints = true
 	var bench := await _enter_program(ceiling)
 	var storage_path := _game.profile.storage_path
 	# 暂时不可写的档案位置使设置变化无法持久化，之后恢复原档案再完成真实关卡。
@@ -330,6 +333,60 @@ func _test_actual_hints(lesson: LevelDefinition) -> void:
 	bench._hint_button.pressed.emit()
 	await _settle()
 	_check(_game.profile.get_statistics().code_hint_uses == before.code_hint_uses + 1, "隐藏提示入口的旧信号不计使用")
+
+
+## 玩家地图的权限控制实际按钮、失败门槛、提示计数和加权首通，不凭全局设置扣减禁用关卡。
+func _test_player_hint_policy(lesson: LevelDefinition) -> void:
+	_game.settings.set_code_hints("more")
+	var blocked := _copy_level(lesson, "profile_hints_disabled", _temporary.path_join("levels/hints_disabled.json"))
+	var bench := await _enter_program(blocked)
+	_check(not bench._hint_button.visible and _game._profile_current_hint_mode() == "none", "玩家关卡缺省不允许提示，全局多档不额外降低权重")
+	await _set_source(bench, SOLUTION)
+	bench._run_program()
+	_advance_to_terminal(_game.session)
+	var record: Dictionary = _game.profile.get_statistics().level_ledger["player:profile_hints_disabled"]
+	_check(record.completed and record.hint_mode == "none" and is_equal_approx(float(record.success_weight), 0.4), "未开放提示的零敌人玩家关卡首通权重为40%")
+	var enabled := _copy_level(lesson, "profile_hints_enabled", _temporary.path_join("levels/hints_enabled.json"))
+	enabled.allow_code_hints = true
+	enabled.document.properties.level.allow_code_hints = true
+	enabled.restrict_code_paste = true
+	enabled.document.properties.level.restrict_code_paste = true
+	_game.settings.set_code_hints("normal")
+	bench = await _enter_program(enabled)
+	_check(not bench._hint_button.visible, "玩家地图一般档同样先等待三次实际失败")
+	for unused in 3:
+		await _set_source(bench, "main(){missing()}")
+		bench._run_program()
+	_check(bench._hint_button.visible and _game.drafts.get_failure_streak("hints:player:" + enabled.id) == 3, "三次失败解锁玩家地图提示并持久保存门槛")
+	bench = await _enter_program(enabled)
+	_check(bench._hint_button.visible and _game.session.consecutive_failures == 3, "重新进入玩家关卡恢复失败门槛")
+	_game.settings.set_code_hints("more")
+	await _set_source(bench, "main(){}")
+	var before := _game.profile.get_statistics()
+	bench._hint_button.pressed.emit()
+	await _settle()
+	_check(bench._code.text.contains("move(") and _game.profile.get_statistics().code_hint_uses == before.code_hint_uses + 1, "禁粘贴关卡仍允许真正应用自动推导的一步提示并计数")
+	_check(_game.profile.get_statistics().failures == before.failures, "自动规划的独立模拟不产生玩家失败统计")
+	await _set_source(bench, SOLUTION)
+	bench._run_program()
+	_advance_to_terminal(_game.session)
+	record = _game.profile.get_statistics().level_ledger["player:profile_hints_enabled"]
+	_check(record.completed and record.failures == 3 and record.hint_mode == "more" and is_equal_approx(float(record.success_weight), 0.12), "玩家提示多档与零敌人叠加为12%成功权重，保留此前三次失败")
+	_check(_game.drafts.get_failure_streak("hints:player:" + enabled.id) == 0, "玩家关卡实际成功清零持久提示门槛")
+	var rate := _game.profile.get_weighted_pass_rate()
+	bench._run_program()
+	_advance_to_terminal(_game.session)
+	_check(is_equal_approx(_game.profile.get_weighted_pass_rate(), rate), "允许提示的玩家关卡也只能结算一次首通权重")
+	var tutorial_streak := _game.drafts.get_failure_streak(lesson.id)
+	var same_id := _copy_level(lesson, lesson.id, _temporary.path_join("levels/hint_name_collision.json"))
+	same_id.allow_code_hints = true
+	same_id.document.properties.level.allow_code_hints = true
+	bench = await _enter_program(same_id)
+	await _set_source(bench, "main(){missing()}")
+	bench._run_program()
+	_check(_game.drafts.get_failure_streak("hints:player:" + lesson.id) == 1 and _game.drafts.get_failure_streak(lesson.id) == tutorial_streak, "显式允许提示的同ID玩家地图仅更新自己的失败门槛")
+	bench = await _enter_program(lesson)
+	_check(_game.session.consecutive_failures == tutorial_streak, "再次进入同名教学关卡恢复原有门槛，不读玩家地图的计数")
 
 
 ## 设置入口、默认署名与系统确认联动；重置只替换档案，保留用户全部关卡文件。

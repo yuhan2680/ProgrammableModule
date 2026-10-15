@@ -120,7 +120,7 @@ func _check_profile_route(context: String, percentage: int) -> void:
 	var uid_width := uid.get_theme_font("font").get_string_size(uid.text, HORIZONTAL_ALIGNMENT_RIGHT, -1, uid.get_theme_font_size("font_size")).x
 	_check(not uid.editable and uid_width <= uid.size.x - uid.get_theme_stylebox("read_only").get_minimum_size().x + 1.0, "完整 13 位 UID 可读且不能编辑 " + context)
 	_check(panel._username_field.text == _game.profile.get_username() and panel._username_field.caret_blink, "姓名显示原文并保留闪烁光标 " + context)
-	for row_name: String in ["PlayerHintsRow", "PlayerPlayTimeRow", "PlayerPassRateRow", "PlayerFastestRow", "PlayerLongestRow", "PlayerMysteryRow"]:
+	for row_name: String in ["PlayerTutorialProgressRow", "PlayerHintsRow", "PlayerPlayTimeRow", "PlayerPassRateRow", "PlayerFastestRow", "PlayerLongestRow", "PlayerMysteryRow"]:
 		var row := panel.find_child(row_name, true, false) as MarginContainer
 		var body := row.get_child(0) as HBoxContainer
 		var caption := body.get_child(0) as Label

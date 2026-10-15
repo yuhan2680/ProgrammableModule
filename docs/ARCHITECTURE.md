@@ -201,6 +201,8 @@ func start_example(document: MapDocument, content: ContentRegistry) -> DataResul
 
 彩蛋最高分保存为同一档案的可选 `statistics.shark_best_score`，旧档案默认零。实际结束、活着退出、暂停后重新开始及正常关闭应用都保留最高分，较低成绩不覆盖；重新进入或重启应用恢复该值。统计页默认隐藏该行及分隔线，成功进入彩蛋后保存可选布尔值 `statistics.shark_discovered` 并显示「？？？」和分数（包括零分），不通过标题或提示暴露名称。入口取消不解锁；重启保留，旧档案缺失该字段且已有非零最高分时视为已触发。删除档案成功后同时清空累计时间、最高分、已触发状态、Shell 缓存与未保存区间，旧 UID 的待存数据不可流入新档案。
 
+`GameShell._show_player_profile_page()` 在进入时刷新 `LevelCatalog`，向 `PlayerProfilePanel` 注入目录和 `GameDraftStore`。统计首行只读当前教学来源的唯一 ID 及现有通关标记，动态计算完成比例；不使用加权通过率的逐关账本，也不缓存版本总数。全通时单独应用红色粗体，低于全通时移除本地字体与颜色覆盖，继续继承默认主题。详见 [教学完成进度](PLAYER_STATISTICS.md#教学关卡完成进度)。
+
 「设置 → 基本 → 玩家与统计信息」使用共享菜单白卡、八成正文比例和上下渐隐。姓名用原生右对齐 LineEdit、闪烁光标及 Unicode 过滤；姓名与 UID 均不绘制焦点边框。UID 禁用内建编辑菜单，`PlayerUidContextMenu` 使用既有玻璃着色器只显示「复制 UID」，复制当前完整值，外部点击与 Esc 收起且不穿透背景。其余只读文本显示栏禁用内建右键菜单，临时只读控件解锁后恢复原编辑菜单。用户姓名不翻译。新地图通过 `MapEditor.default_creator` 注入当前玩家名；打开已有地图保留其原署名，不批量改写已保存关卡。统计下方的「删除玩家档案」使用 `#9d1414` 字色，由 `PlayerProfileResetDialog` 优先调用 macOS / Windows 的 `DisplayServer.dialog_show`；取消为默认按钮，系统不支持或调用失败时使用可取消的后备询问；后备复用 `GameTheme.style_guide_dialog()`，正文透明，仅由外框绘制完整圆角卡片。明确确认后才原子替换整个档案为默认用户名、零统计及新 UID；关卡、进度、草稿和设置文件保持不变。代数、页面及 UID 快照共同防止重复或迟到回调；失败保留旧档案。系统回调可注入，隔离测试不操作真实玩家档案。
 
 `GameSettings` 默认读写 `user://settings.json`，可注入独立测试路径。`set_volume()` 接受线性 `0..1` 数值，应用到 Master 总线，零值单独静音；`set_language()` 接受 `zh_CN` 或 `en`，通过翻译服务即时更新语言。`set_tab_completion()` 和 `set_assembly_free_zoom()` 接受布尔值，后者独立保存到 `interface.assembly_free_zoom`，缺省为 false；`set_code_hints()` 接受 `none`、`normal` 或 `more`。这些入口立即应用有效值并尝试保存，使用 `DataResult` 和 `last_error` 报告写盘失败。缺失配置使用默认设置，旧文件缺少新字段时 Tab 补全默认开启、装配图自由缩放默认关闭、代码提示默认一般；损坏配置不会部分载入字段。
@@ -513,3 +515,10 @@ LinkButton 只发 `link_requested`，GameShell 在设置页且弹窗打开时校
 回归：`spanish_locale_runner.gd`、`hong_kong_locale_runner.gd`、`settings_option_scrollbar_runner.gd` 与既有设置、指令资料和玻璃菜单测试。
 
 设置的语言、分辨率、代码提示及可用的缩放选择器统一复用 `SettingsOptionGlass`：原生单选圆点仅在外观上替换为线条 SVG 勾号，未选项保留等宽空位。打开时聚焦已保存选项，原生焦点行使用蓝色圆角底、白字和白勾；鼠标或方向键移到其他行时，已保存项仍保留深色勾号，只有确认选择才提交设置。原生禁用项、滚动、Esc、外部点击关闭及选择信号不变；不增加独立选项列表或修改全局 PopupMenu 主题。组装和编程页的指令集合入口共用 `CommandBookButton`：合上与展开的 SVG 端点均居中，开合途中对矢量控制点补间，原生 Button 继续处理点击、键盘导航和悬停提示。`CommandReferenceMenu` 仅对这一书本入口启用向左下展开、反向收回的动画；页面离开立即取消动画，地图编辑器的指令管理加号入口保持原交互。
+
+
+## 2026-10-14：逐关代码权限
+
+`MapValidation` 在载入、草稿保存及运行入口统一验证 `properties.level.allow_code_hints` / `restrict_code_paste` 的布尔类型；`LevelDefinition` 携带规则并用 `can_use_code_hints()` 汇总正式教学和显式开启的玩家关卡权限。`MapEditorDocument` 维护独立于撤销快照的粘贴限制锁定状态；首次成功保存及已有文件载入建立锁，事务、元数据和历史恢复共同维护锁值。`MapEditor` 把两个 `SettingsSwitch` 放在玩法分类，锁定时同步文字与滑块禁用外观。
+
+`GameWorkbench` 按关卡选择受限的原生 `CodeEdit` 子类；粘贴虚方法与拖放入口使用同一规则，保留原生编辑、补全和提示插入。`CodeHintService` 保留正式教学资料路径，显式开启的玩家关卡交给独立有界规划器，成功候选经过真实模拟才逐行应用。`GameShell` 按实际权限恢复和保存提示门槛，并将玩家门槛放入来源独立的键；权重只记有效提示档位，独立搜索不会连接正式统计信号。

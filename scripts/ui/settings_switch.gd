@@ -44,12 +44,13 @@ func _draw() -> void:
 	if is_hovered():
 		tint = tint.lightened(0.06)
 	if disabled:
+		tint = Color("BCC2CC")
 		tint.a = 0.45
 	var track := GameTheme.box(tint, Color.TRANSPARENT, 16)
 	draw_style_box(track, track_rect)
 	var diameter := track_rect.size.y - 6.0
 	var thumb_x := track_rect.end.x - diameter - 3.0 if button_pressed else track_rect.position.x + 3.0
-	var thumb := GameTheme.box(Color.WHITE, Color(1, 1, 1, 0.7), 16)
+	var thumb := GameTheme.box(Color("E7E9ED") if disabled else Color.WHITE, Color(1, 1, 1, 0.7), 16)
 	thumb.shadow_color = Color(0.05, 0.10, 0.20, 0.13)
 	thumb.shadow_size = 2
 	thumb.shadow_offset = Vector2(0, 1)

@@ -59,6 +59,9 @@ var _restriction_choice: ModuleRestrictionChoice
 var _restriction_picker: ModuleRestrictionPicker
 var _command_button: Button
 var _command_menu: CommandRestrictionMenu
+var _allow_code_hints_switch: SettingsSwitch
+var _restrict_code_paste_switch: SettingsSwitch
+var _restrict_code_paste_label: Label
 var _player_health_field: LineEdit
 var _player_health_text := "1"
 var _player_health_baseline := "1"
@@ -638,9 +641,76 @@ func _build_scene_controls(parent: Node) -> void:
 		button.custom_minimum_size.x = 92
 		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color", "font_focus_color"]:
 			button.add_theme_color_override(state, Color("dd1d1d"))
+	_build_code_policy_controls(body)
 	_build_module_restrictions(body)
 	_build_command_restrictions(body)
 	_build_player_limits(body)
+
+
+## 提示和粘贴规则属于玩法控制，开关与同行标签不混入地形绘制分类。
+func _build_code_policy_controls(parent: Control) -> void:
+	var hints_row := HBoxContainer.new()
+	hints_row.name = "MapEditorCodeHintsRow"
+	hints_row.add_theme_constant_override("separation", 12)
+	parent.add_child(hints_row)
+	var hints_label := _scene_label(hints_row, "是否启用“代码提示”", "MapEditorCodeHintsLabel")
+	hints_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_allow_code_hints_switch = SettingsSwitch.new()
+	_allow_code_hints_switch.name = "MapEditorCodeHintsSwitch"
+	_allow_code_hints_switch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	hints_row.add_child(_allow_code_hints_switch)
+	_allow_code_hints_switch.toggled.connect(_on_allow_code_hints_toggled)
+	var paste_row := HBoxContainer.new()
+	paste_row.name = "MapEditorRestrictCodePasteRow"
+	paste_row.add_theme_constant_override("separation", 12)
+	parent.add_child(paste_row)
+	_restrict_code_paste_label = _scene_label(paste_row, "限制代码区域粘贴", "MapEditorRestrictCodePasteLabel")
+	_restrict_code_paste_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restrict_code_paste_switch = SettingsSwitch.new()
+	_restrict_code_paste_switch.name = "MapEditorRestrictCodePasteSwitch"
+	_restrict_code_paste_switch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	paste_row.add_child(_restrict_code_paste_switch)
+	_restrict_code_paste_switch.toggled.connect(_on_restrict_code_paste_toggled)
+
+
+## 提示开关通过模型事务写入地图；变更失败时表单立即恢复原状态。
+func _on_allow_code_hints_toggled(enabled: bool) -> void:
+	if _syncing_fields:
+		return
+	var result := editor_document.set_allow_code_hints(enabled)
+	_sync_code_policy_controls()
+	if not result.is_ok():
+		_show_errors("无法更新代码规则", result.errors)
+
+
+## 粘贴限制由模型判定是否仍可修改，伪造开关信号也不能改变已有地图。
+func _on_restrict_code_paste_toggled(enabled: bool) -> void:
+	if _syncing_fields:
+		return
+	var result := editor_document.set_restrict_code_paste(enabled)
+	_sync_code_policy_controls()
+	if not result.is_ok():
+		_show_errors("无法更新代码规则", result.errors)
+
+
+## 历史、载入和保存后共同刷新权限；锁定时整项变灰并保留原来的开关位置。
+func _sync_code_policy_controls() -> void:
+	if _allow_code_hints_switch == null or _restrict_code_paste_switch == null:
+		return
+	_allow_code_hints_switch.set_pressed_no_signal(editor_document.get_allow_code_hints())
+	_restrict_code_paste_switch.set_pressed_no_signal(editor_document.get_restrict_code_paste())
+	var locked := editor_document.is_code_paste_policy_locked()
+	_restrict_code_paste_switch.disabled = locked
+	_restrict_code_paste_switch.mouse_default_cursor_shape = Control.CURSOR_ARROW if locked else Control.CURSOR_POINTING_HAND
+	if locked:
+		_restrict_code_paste_label.add_theme_color_override("font_color", Color("A1A7B0"))
+	else:
+		_restrict_code_paste_label.remove_theme_color_override("font_color")
+	var explanation := "粘贴限制仅可在首次创建地图时设置，保存后无法更改。" if locked else ""
+	_restrict_code_paste_label.tooltip_text = explanation
+	_restrict_code_paste_switch.tooltip_text = explanation
+	_restrict_code_paste_switch.queue_redraw()
+	_allow_code_hints_switch.queue_redraw()
 
 
 ## 禁止模块多选位于限时下方，长正文在固定药丸内走字而不扩宽属性面板。
@@ -1721,6 +1791,7 @@ func _on_document_changed() -> void:
 	_dimension_texts[_width_field] = str(editor_document.document.width)
 	_dimension_texts[_height_field] = str(editor_document.document.height)
 	_module_limit_field.value = editor_document.get_module_limit()
+	_sync_code_policy_controls()
 	_sync_module_restrictions()
 	_sync_command_restrictions()
 	if not _player_health_field.has_focus():
@@ -1971,7 +2042,7 @@ func _new_document() -> void:
 	document.display_name = "新地图"
 	document.width = 16
 	document.height = 12
-	document.properties = {"level": {"max_ticks": 600, "completion_mode": "reach_or_clear", "player_max_health": 1.0, "restricted_modules": []}}
+	document.properties = {"level": {"max_ticks": 600, "completion_mode": "reach_or_clear", "player_max_health": 1.0, "restricted_modules": [], "allow_code_hints": false, "restrict_code_paste": false}}
 	if not default_creator.is_empty() and DataValidation.is_creator(default_creator) and default_creator.length() <= DataValidation.MAX_EDITOR_CREATOR_LENGTH:
 		document.properties.level["creator"] = default_creator
 	_managed_save_path = ""
@@ -2029,6 +2100,11 @@ func _player_level_store() -> PlayerLevelStore:
 
 ## 写盘成功后才更新身份与保存点，不替换编辑模型或清空撤销历史。
 func _save_player_level() -> void:
+	var policy := editor_document.validate_code_policy_change({})
+	if not policy.is_ok():
+		_show_errors("无法保存地图", policy.errors)
+		save_finished.emit(false)
+		return
 	var store := _player_level_store()
 	var preferred := _managed_save_path
 	if preferred.is_empty():
@@ -2068,6 +2144,11 @@ func _on_file_canceled() -> void:
 
 # 用途：另存为使用统一原子写盘；外部导出不改变普通保存已经绑定的玩家关卡。
 func _write_document(path: String) -> void:
+	var policy := editor_document.validate_code_policy_change({})
+	if not policy.is_ok():
+		_show_errors("无法保存地图", policy.errors)
+		save_finished.emit(false)
+		return
 	_commit_gate_timer()
 	_commit_time_limit()
 	_commit_module_limit()
@@ -2142,6 +2223,10 @@ func _apply_metadata() -> void:
 		shape_errors.append("player_spawn 必须是对象或 null。")
 	if not shape_errors.is_empty():
 		_show_errors("元数据无效", shape_errors)
+		return
+	var policy := editor_document.validate_code_policy_change(data)
+	if not policy.is_ok():
+		_show_errors("元数据校验失败", policy.errors)
 		return
 	var candidate := MapEditorDocument.new()
 	candidate.replace_document(editor_document.document)

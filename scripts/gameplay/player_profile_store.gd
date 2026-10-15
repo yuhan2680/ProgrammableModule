@@ -25,7 +25,7 @@ func _init(path: String = "user://player_profile.json") -> void:
 	storage_path = path
 
 
-## 初次载入生成并落盘 UID；损坏或新版文件原样保留，普通修改不能覆盖它。
+## 初次载入生成 UID 与本机日期；旧档首次升级补写日期，损坏或新版文件原样保留。
 func load_profile() -> DataResult:
 	var checked := _validate_path()
 	if not checked.is_ok():
@@ -44,6 +44,13 @@ func load_profile() -> DataResult:
 	_fingerprint = FileAccess.get_sha256(storage_path)
 	_loaded = true
 	_writable = true
+	if not _config.has("first_run_date"):
+		var upgraded := _config.duplicate(true)
+		upgraded["first_run_date"] = _current_local_date()
+		var migrated := _commit(upgraded)
+		if not migrated.is_ok():
+			_writable = false
+		return migrated
 	changed.emit()
 	return _remember_result(DataResult.success(self))
 
@@ -56,6 +63,17 @@ func get_username() -> String:
 ## UID 只通过载入或确认重置产生，界面不提供写入入口。
 func get_uid() -> String:
 	return str(_config.get("uid", ""))
+
+
+## 日期仅在已成功载入或落盘后显示；去掉月日补零，不受语言和后续改名影响。
+func get_first_run_date() -> String:
+	if not _loaded or not _writable:
+		return ""
+	var value: Variant = _config.get("first_run_date")
+	if not _is_first_run_date(value):
+		return ""
+	var parts: PackedStringArray = value.split("-")
+	return "%d-%d-%d" % [int(parts[0]), int(parts[1]), int(parts[2])]
 
 
 ## 返回深拷贝，外部展示和计算不能直接修改持久统计。
@@ -274,9 +292,20 @@ func record_shark_score(score: int) -> DataResult:
 	return _commit(next)
 
 
-## 仅在系统确认后调用：替换整个玩家档案并生成新 UID，不触及地图、进度或草稿。
+## 仅在系统确认后重置身份和统计；本机首次运行日期保留，不触及地图、进度或草稿。
 func reset_profile() -> DataResult:
-	var fresh := _new_profile(get_uid())
+	var checked := _validate_path()
+	if not checked.is_ok():
+		return _remember_result(checked)
+	var first_date: String = str(_config.get("first_run_date", ""))
+	# 新实例也可以直接确认重置，必须先从有效旧档取回日期，不能当成首次安装。
+	if FileAccess.file_exists(storage_path):
+		var previous := _read_profile()
+		if previous.is_ok() and previous.value.has("first_run_date"):
+			first_date = previous.value["first_run_date"]
+	if not _is_first_run_date(first_date):
+		first_date = _current_local_date()
+	var fresh := _new_profile(get_uid(), first_date)
 	if not fresh.is_ok():
 		return _remember_result(fresh)
 	return _commit(fresh.value, true)
@@ -319,7 +348,10 @@ static func _is_username_character(character: String) -> bool:
 
 
 ## 首次使用和重置生成相同格式的新档案，独立随机源不影响游戏随机行为。
-func _new_profile(previous_uid: String) -> DataResult:
+func _new_profile(previous_uid: String, first_date: String = "") -> DataResult:
+	var date := _current_local_date() if first_date.is_empty() else first_date
+	if not _is_first_run_date(date):
+		return DataResult.failure("玩家首次运行日期无效，原文件保持不变。")
 	var random := RandomNumberGenerator.new()
 	random.randomize()
 	for _attempt in range(32):
@@ -327,8 +359,31 @@ func _new_profile(previous_uid: String) -> DataResult:
 		for _digit in range(12):
 			uid += str(random.randi_range(0, 9))
 		if uid != previous_uid:
-			return DataResult.success({"format_version": 1, "uid": uid, "username": DEFAULT_USERNAME, "statistics": _empty_statistics()})
+			return DataResult.success({"format_version": 1, "uid": uid, "username": DEFAULT_USERNAME, "first_run_date": date, "statistics": _empty_statistics()})
 	return DataResult.failure("无法生成新的玩家 UID，原档案保持不变。")
+
+
+## 读取本机日历日期而非 UTC 或文件时间；独立方法便于验证升级与重置跨日边界。
+func _current_local_date() -> String:
+	return Time.get_date_string_from_system(false)
+
+
+## 只接收规范公历日期；逐位检查避免宽松整数转换接受伪日期，闰年按世纪规则计算。
+static func _is_first_run_date(value: Variant) -> bool:
+	if not value is String or value.length() != 10 or value[4] != "-" or value[7] != "-":
+		return false
+	for index in range(10):
+		if index != 4 and index != 7 and not value[index] in "0123456789":
+			return false
+	var year := int(value.substr(0, 4))
+	var month := int(value.substr(5, 2))
+	var day := int(value.substr(8, 2))
+	if year < 1 or month < 1 or month > 12 or day < 1:
+		return false
+	var days := [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+	if year % 400 == 0 or (year % 4 == 0 and year % 100 != 0):
+		days[1] = 29
+	return day <= days[month - 1]
 
 
 ## 没有成功完成记录时耗时为零，由显示层转换为空记录提示。
@@ -388,6 +443,8 @@ func _validate_config(data: Dictionary) -> DataResult:
 		return DataResult.failure("玩家档案版本或 JSON 内容无效，原文件保持不变。")
 	if not is_uid(data.get("uid")) or not is_username(data.get("username")) or not data.get("statistics") is Dictionary:
 		return DataResult.failure("玩家档案身份信息无效，原文件保持不变。")
+	if data.has("first_run_date") and not _is_first_run_date(data["first_run_date"]):
+		return DataResult.failure("玩家首次运行日期无效，原文件保持不变。")
 	var statistics: Dictionary = data["statistics"]
 	for key: String in ["code_hint_uses", "successes", "failures"]:
 		if not DataValidation.is_integer(statistics.get(key), 0, MAX_COUNTER):

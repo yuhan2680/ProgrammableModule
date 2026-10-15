@@ -33,6 +33,9 @@ var allow_radar: bool = false
 var allow_radar_events: bool = false
 var allow_random: bool = false
 var allow_for: bool = false
+# 玩家地图显式开放提示；粘贴规则与语言权限独立，旧地图继续允许粘贴。
+var allow_code_hints: bool = false
+var restrict_code_paste: bool = false
 # 新字段缺省时仅投影旧权限，解析器仍接收 null 并保留原有行为。
 var has_command_policy: bool = false
 var enabled_commands := PackedStringArray()
@@ -62,6 +65,8 @@ static func from_document(map_document: MapDocument, content: ContentRegistry, p
 	# 可选副标题只用于编程页标题下的小字；缺省时继续显示既有目标说明。
 	level.subtitle = metadata.get("subtitle", "")
 	level.source_path = path
+	level.allow_code_hints = metadata.get("allow_code_hints", false)
+	level.restrict_code_paste = metadata.get("restrict_code_paste", false)
 	var limit: Variant = metadata.get("module_limit", maxi(map_document.player_spawn["modules"].size(), 1))
 	if not DataValidation.is_integer(limit, 1, 256):
 		return DataResult.failure("关卡 module_limit 必须为 1..256 的整数。")
@@ -160,6 +165,11 @@ static func from_document(map_document: MapDocument, content: ContentRegistry, p
 	if not goal_result.is_ok():
 		return goal_result
 	return DataResult.success(level)
+
+
+## 正式教学按完整资源路径识别；玩家关卡只有作者明确允许时才开放代码提示。
+func can_use_code_hints() -> bool:
+	return not source_path.is_empty() and (allow_code_hints or (not id.is_empty() and source_path == "res://data/levels/%s.json" % id))
 
 
 ## 显式禁止列表从当前目录扣除；没有新字段的旧图继续沿用允许列表或出生模板。

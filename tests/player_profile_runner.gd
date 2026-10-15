@@ -11,6 +11,20 @@ class FailingProfile:
 			return ERR_CANT_CREATE
 		return super._rename_file(source, destination)
 
+class DateProfile:
+	extends FailingProfile
+	var local_date := "2026-09-14"
+	var external_source := ""
+
+	## 注入本机日期或读后外部变更，不修改操作系统时钟或真实玩家文件。
+	func _current_local_date() -> String:
+		if not external_source.is_empty():
+			var file := FileAccess.open(storage_path, FileAccess.WRITE)
+			file.store_string(external_source)
+			file.close()
+			external_source = ""
+		return local_date
+
 var _checks: int = 0
 var _failures: int = 0
 var _directory: String = ""
@@ -28,6 +42,9 @@ func _run() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_directory))
 	_test_username_and_uid()
 	_test_persistence()
+	_test_first_run_date()
+	_test_first_run_migration()
+	_test_first_run_date_failures()
 	_test_weighted_rate()
 	_test_weighted_migration_and_limits()
 	_test_weighted_namespace_and_rollback()
@@ -109,6 +126,103 @@ func _test_persistence() -> void:
 	_check(store.reset_profile().is_ok() and store.get_uid() != uid and PlayerProfileStore.is_uid(store.get_uid()), "确认重置创建新 UID")
 	_check(store.get_username() == "Player" and store.get_statistics().successes == 0 and store.get_statistics().failures == 0 and store.get_statistics().code_hint_uses == 0 and not JSON.parse_string(FileAccess.get_file_as_string(path)).has("extension"), "重置清除姓名、全部统计与旧档案扩展")
 	_check(FileAccess.get_file_as_bytes(map_path) == map_bytes, "删除玩家档案不删除或修改关卡")
+
+
+## 首次日期按本机日历持久化，改名、统计、跨日重启及删除档案都不重新计日。
+func _test_first_run_date() -> void:
+	var path := _directory.path_join("first_run.json")
+	var store := DateProfile.new(path)
+	_check(store.get_first_run_date().is_empty(), "未载入档案的首次日期安全显示为空")
+	_check(store.load_profile().is_ok() and store.get_first_run_date() == "2026-9-14", "首次运行显示不补零的本机年月日")
+	_check(JSON.parse_string(FileAccess.get_file_as_string(path)).first_run_date == "2026-09-14", "首次日期以规范 YYYY-MM-DD 落盘")
+	var uid := store.get_uid()
+	store.local_date = "2026-12-31"
+	_check(store.set_username("FirstDay").is_ok() and store.record_hint_use().is_ok() and store.record_completion(15.0).is_ok() and store.get_first_run_date() == "2026-9-14", "改名和统计不会将首次日期更新成当前日期")
+	var restarted := DateProfile.new(path)
+	restarted.local_date = "2027-01-01"
+	var bytes := FileAccess.get_file_as_bytes(path)
+	_check(restarted.load_profile().is_ok() and restarted.get_first_run_date() == "2026-9-14" and FileAccess.get_file_as_bytes(path) == bytes, "跨日重启恢复已保存日期且不会重写已完整档案")
+	_check(restarted.reset_profile().is_ok() and restarted.get_uid() != uid and restarted.get_first_run_date() == "2026-9-14" and restarted.get_statistics().successes == 0, "删除玩家档案更换身份并清空统计但保留本机首次日期")
+	var direct_reset := DateProfile.new(path)
+	direct_reset.local_date = "2030-02-01"
+	_check(direct_reset.reset_profile().is_ok() and direct_reset.get_first_run_date() == "2026-9-14", "未先载入就确认重置也从旧档保留首次日期")
+	for good: String in ["0001-01-01", "2000-02-29", "2024-02-29", "2400-02-29", "9999-12-31"]:
+		_check(PlayerProfileStore._is_first_run_date(good), "合法公历日期接受：" + good)
+	for bad: Variant in [null, 20260914, true, [], {}, "", "2026-9-14", "2026-09-1", "0000-01-01", "2026-00-01", "2026-13-01", "2026-01-00", "2026-01-32", "2026-04-31", "2026-02-29", "1900-02-29", "2100-02-29", "２０２６-09-14", "2026-09-14T00:00:00", "2026-09-14 ", " 026-09-14"]:
+		_check(not PlayerProfileStore._is_first_run_date(bad), "首次日期拒绝错误类型、非规范格式和不存在的日期")
+
+
+## 老档案以首次升级启动当天补写日期，只新增字段并完整保留旧身份、统计和未知扩展。
+func _test_first_run_migration() -> void:
+	var path := _directory.path_join("first_run_legacy.json")
+	var generator := DateProfile.new(path)
+	var legacy: Dictionary = generator._new_profile("").value
+	legacy.erase("first_run_date")
+	legacy.username = "Legacy"
+	legacy.statistics.code_hint_uses = 17
+	legacy.statistics.future_stat = {"saved": [1, true, "future"]}
+	legacy.future_root = {"preserve": "unchanged"}
+	_write(path, JSON.stringify(legacy))
+	var store := DateProfile.new(path)
+	store.local_date = "2026-10-15"
+	store.changed.connect(_on_changed)
+	var before_events := _changes
+	_check(store.load_profile().is_ok() and store.get_first_run_date() == "2026-10-15", "缺少首次日期的旧档案按升级后首次启动日记录")
+	_check(_changes == before_events + 1, "迁移只在原子落盘成功后通知一次")
+	var migrated: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	_check(migrated.first_run_date == "2026-10-15" and migrated.uid == legacy.uid and migrated.username == "Legacy", "升级仅增加日期而不更换 UID 或姓名")
+	migrated.erase("first_run_date")
+	_check(migrated == JSON.parse_string(JSON.stringify(legacy)), "迁移保留原有全部统计和未知扩展")
+	var bytes := FileAccess.get_file_as_bytes(path)
+	store.local_date = "2026-11-01"
+	_check(store.load_profile().is_ok() and store.get_first_run_date() == "2026-10-15" and FileAccess.get_file_as_bytes(path) == bytes, "升级后的第二次启动不覆盖首次升级日期")
+	store.local_date = "2026-11-30"
+	_check(store.reset_profile().is_ok() and store.get_first_run_date() == "2026-10-15", "升级后再删除档案仍保留首次升级日期")
+
+
+## 日期迁移写盘失败、磁盘变更和坏日期均不覆盖有效原件，也不能把未落盘日期当作成功显示。
+func _test_first_run_date_failures() -> void:
+	var path := _directory.path_join("first_run_failure.json")
+	var fresh := DateProfile.new(path)
+	fresh.fail_replace = true
+	_check(not fresh.load_profile().is_ok() and fresh.get_first_run_date().is_empty() and not FileAccess.file_exists(path), "首次创建落盘失败不显示尚未保存的日期")
+	var legacy: Dictionary = fresh._new_profile("").value
+	legacy.erase("first_run_date")
+	legacy.username = "Before"
+	_write(path, JSON.stringify(legacy))
+	var bytes := FileAccess.get_file_as_bytes(path)
+	var store := DateProfile.new(path)
+	store.fail_replace = true
+	store.changed.connect(_on_changed)
+	var before_events := _changes
+	_check(not store.load_profile().is_ok() and store.get_first_run_date().is_empty() and FileAccess.get_file_as_bytes(path) == bytes and _changes == before_events, "旧档迁移失败完整恢复原文、不显示伪日期、不发成功信号")
+	_check(not store.record_hint_use().is_ok() and FileAccess.get_file_as_bytes(path) == bytes, "迁移未完成时普通统计不能绕过失败保护")
+	store.fail_replace = false
+	store.local_date = "2026-10-16"
+	_check(store.load_profile().is_ok() and store.get_first_run_date() == "2026-10-16" and store.get_username() == "Before", "迁移故障解除后以首次成功记录日期继续")
+	bytes = FileAccess.get_file_as_bytes(path)
+	store.fail_replace = true
+	store.local_date = "2035-01-01"
+	_check(not store.reset_profile().is_ok() and store.get_first_run_date() == "2026-10-16" and FileAccess.get_file_as_bytes(path) == bytes, "删除档案写入失败继续保留原首次日期和文件")
+	_write(path, JSON.stringify(legacy))
+	var conflict := DateProfile.new(path)
+	var external := legacy.duplicate(true)
+	external.username = "External"
+	conflict.external_source = JSON.stringify(external)
+	_check(not conflict.load_profile().is_ok() and conflict.get_first_run_date().is_empty() and JSON.parse_string(FileAccess.get_file_as_string(path)).username == "External" and not JSON.parse_string(FileAccess.get_file_as_string(path)).has("first_run_date"), "读取旧档后发生外部写入时迁移不能覆盖外部档案")
+	for bad: Variant in [null, true, 20260914, "2026-02-29", "2026-9-14", "2026-99-01"]:
+		var invalid := legacy.duplicate(true)
+		invalid.first_run_date = bad
+		_write(path, JSON.stringify(invalid))
+		bytes = FileAccess.get_file_as_bytes(path)
+		var broken := DateProfile.new(path)
+		_check(not broken.load_profile().is_ok() and broken.get_first_run_date().is_empty() and not broken.record_hint_use().is_ok() and FileAccess.get_file_as_bytes(path) == bytes, "已存在的坏日期拒绝载入和普通改写")
+	var folder := DirAccess.open(_directory)
+	var leftovers: Array[String] = []
+	for name: String in folder.get_files():
+		if name.begins_with("first_run_failure.json."):
+			leftovers.append(name)
+	_check(leftovers.is_empty(), "日期迁移成功、失败和冲突均不遗留临时文件")
 
 
 ## 权重覆盖所有档位和敌人数边界，失败只影响首通前的分母，重复挑战不改变该关账本。

@@ -1,6 +1,6 @@
 class_name CodeHintService
 extends RefCounted
-## JSON 教学方案先用独立会话通关验证，再返回一次可撤销的小步源码修改。
+## 教学 JSON 或玩家地图自动规划先用独立会话通关验证，再返回可撤销的小步源码修改。
 ## 不持有 UI、不写存档，也不改变传入会话的源码、装配、世界或状态。
 
 const HINT_DIRECTORY := "res://data/hints"
@@ -20,6 +20,8 @@ static func next_hint(session: GameSession) -> DataResult:
 		return DataResult.failure("这一关已经完成，无需继续补充提示。")
 	if session.source.to_utf8_buffer().size() > MAX_SOURCE_BYTES:
 		return DataResult.failure("代码超过提示处理范围，请先缩短到 64 KiB 以内。")
+	if session.level.source_path != "res://data/levels/%s.json" % session.level.id and session.level.can_use_code_hints():
+		return _next_custom_hint(session)
 	var data_result := _load_hint(session)
 	if not data_result.is_ok():
 		return data_result
@@ -43,6 +45,19 @@ static func next_hint(session: GameSession) -> DataResult:
 	if Time.get_ticks_usec() >= deadline:
 		return DataResult.failure("本次提示验证已达到时间上限，请稍后重试。")
 	return _next_patch(session.source, target)
+
+
+## 玩家地图明确允许后才自动推导；真实验证与已有正确源码检查共用一个墙钟预算。
+static func _next_custom_hint(session: GameSession) -> DataResult:
+	var deadline := Time.get_ticks_usec() + MAX_CHECK_USEC
+	var target := CustomCodeHintPlanner.find_source(session, deadline)
+	if not target.is_ok():
+		return target
+	if not session.source.strip_edges().is_empty() and _wins(session, session.source, MAX_STEPS, deadline):
+		return DataResult.failure("当前程序已经能够完成关卡，无需继续补充提示。")
+	if Time.get_ticks_usec() >= deadline:
+		return DataResult.failure("本次提示验证已达到时间上限，请稍后重试。")
+	return _next_patch(session.source, target.value)
 
 
 ## 严格限定正式教学来源及完整地图内容；导入副本与编辑器快照不凭相同 ID 获得提示。
@@ -122,7 +137,7 @@ static func _bind_source(data: Dictionary, session: GameSession) -> DataResult:
 static func _wins(session: GameSession, source: String, max_steps: int, deadline: int) -> bool:
 	# 本关没有环境自动击毁机制；完全没有动作的半成品不可能清波。
 	# 避免为反复 scan 的未完成 loop 跑满调度预算，阻塞下一条教学提示。
-	if session.level.id in ["level_013", "level_014", "level_015"]:
+	if session.level.source_path == "res://data/levels/%s.json" % session.level.id and session.level.id in ["level_013", "level_014", "level_015"]:
 		var action := RegEx.new()
 		action.compile("\\b(move|attack|shoot)\\s*\\(")
 		if action.search(_without_comments(source)) == null:

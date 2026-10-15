@@ -126,7 +126,7 @@ func _build_ui() -> void:
 	basic_surface.set_content_margin_all(0)
 	basic_group.add_theme_stylebox_override("panel", basic_surface)
 	basic.add_child(basic_group)
-	_add_navigation_row(basic_group, "PlayerProfileButton", "玩家与统计信息", player_profile_requested.emit, true)
+	_add_navigation_row(basic_group, "PlayerProfileButton", "玩家与统计信息", player_profile_requested.emit, true, true)
 	_add_section_gap()
 	var sound := VBoxContainer.new()
 	sound.add_theme_constant_override("separation", 12)
@@ -765,8 +765,8 @@ func _add_colors_row(parent: Node) -> void:
 	_add_navigation_row(parent, "CodeColorsButton", "颜色与显示", code_colors_requested.emit)
 
 
-## 导航行与设置分组共享外观，首行悬停背景保持外框上角而不溢出圆角。
-func _add_navigation_row(parent: Node, node_name: String, caption: String, action: Callable, first_row: bool = false) -> void:
+## 导航行按首尾位置保留分组外框圆角，单行卡所有交互状态都保持四角圆润。
+func _add_navigation_row(parent: Node, node_name: String, caption: String, action: Callable, first_row: bool = false, last_row: bool = false) -> void:
 	var button := Button.new()
 	button.name = node_name
 	button.text = caption
@@ -783,6 +783,9 @@ func _add_navigation_row(parent: Node, node_name: String, caption: String, actio
 		if first_row:
 			surface.corner_radius_top_left = 14
 			surface.corner_radius_top_right = 14
+		if last_row:
+			surface.corner_radius_bottom_left = 14
+			surface.corner_radius_bottom_right = 14
 		surface.content_margin_left = 20
 		surface.content_margin_right = 24
 		button.add_theme_stylebox_override(state, surface)
