@@ -24,6 +24,14 @@ const SPANISH_ERRORS := {
 	"启动场景缺少必要的界面。": "Falta una interfaz necesaria en la escena de inicio.",
 	"重试": "Reintentar",
 }
+const JAPANESE_ERRORS := {
+	"找不到启动资源。": "起動用リソースが見つかりません。",
+	"无法读取启动资源。": "起動用リソースを読み取れません。",
+	"启动资源加载失败。": "起動用リソースの読み込みに失敗しました。",
+	"启动场景格式不正确。": "起動シーンの形式が正しくありません。",
+	"启动场景缺少必要的界面。": "起動シーンに必要なインターフェースがありません。",
+	"重试": "再試行",
+}
 const WARM_RESOURCES := [
 	"res://assets/fonts/NotoSansSC.ttf",
 	"res://assets/fonts/JetBrainsMono.ttf",
@@ -277,6 +285,8 @@ func _localized(chinese: String, english: String) -> String:
 	var locale := _failure_locale()
 	if locale in ["zh_HK", "zh_Hant_HK"]:
 		return HONG_KONG_ERRORS.get(chinese, chinese)
+	if locale.begins_with("ja"):
+		return JAPANESE_ERRORS.get(chinese, english)
 	if locale.begins_with("es"):
 		return SPANISH_ERRORS.get(chinese, english)
 	return chinese if locale.begins_with("zh") else english
@@ -293,7 +303,7 @@ func _failure_locale() -> String:
 					var config: Dictionary = parser.data
 					if config.get("format_version") == 1 and config.get("interface") is Dictionary:
 						var locale: Variant = config["interface"].get("language")
-						if locale is String and locale in ["zh_CN", "zh_HK", "es", "en"]:
+						if locale is String and locale in ["zh_CN", "zh_HK", "es", "en", "ja"]:
 							file.close()
 							return locale
 			file.close()

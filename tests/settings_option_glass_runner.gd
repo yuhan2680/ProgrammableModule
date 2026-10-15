@@ -156,7 +156,7 @@ func _check_constrained_language() -> void:
 	var bar := _find_vscroll(popup)
 	var scroll := bar.get_parent() as ScrollContainer
 	_check(bar.visible and bar.max_value > bar.page, "受限高度语言菜单保留全部四项与真实溢出")
-	_check(popup.item_count == 4 and popup.get_item_text(2) == "Español", "受限高度菜单不移除语言选项")
+	_check(popup.item_count == 5 and popup.get_item_text(2) == "Español" and popup.get_item_text(4) == "日本語", "受限高度菜单不移除语言选项")
 	var native_right := float(popup.size.x) / popup.content_scale_factor
 	print("受限菜单诊断：popup=%s visible=%s content=%s scale=%s scroll=%s bar=%s actualright=%s" % [popup.size, popup.get_visible_rect(), popup.get_contents_minimum_size(), popup.content_scale_factor, scroll.get_global_rect(), bar.get_global_rect(), native_right - bar.get_global_rect().end.x])
 	_check(absf(native_right - bar.get_global_rect().end.x - 8.0) < 1.1, "受限语言菜单实际条右边缘留白为 8 像素")

@@ -7,19 +7,22 @@
     "zh_CN": "动作指令",
     "zh_HK": "動作指令",
     "en": "Actions",
-    "es": "Acciones"
+    "es": "Acciones",
+    "ja": "動作命令"
   },
   "title": {
     "zh_CN": "具名模块调用",
     "zh_HK": "具名模組呼叫",
     "en": "Named Module Calls",
-    "es": "Llamadas a módulos por nombre"
+    "es": "Llamadas a módulos por nombre",
+    "ja": "名前を指定したモジュール呼び出し"
   },
   "description": {
     "zh_CN": "把 module 替换成你在组装页设置的模块名称，只调用这个模块的对应能力。名称区分大小写，须以英文字母或下划线开头，后续可用英文字母、数字、下划线，且不能使用保留字。指定移动模块时仍移动整台机器人，但只使用该驱动的速度。",
     "zh_HK": "把 module 換成你在組裝頁設定的模組名稱，只呼叫該模組的對應能力。名稱區分大小寫，須以英文字母或底線開頭，其後可用英文字母、數字、底線，而且不能使用保留字。指定移動模組時仍會移動整台機械人，但只使用該驅動模組的速度。",
     "en": "Replace module with the name assigned in assembly to call only that module’s matching ability. Names are case-sensitive, start with an English letter or underscore, and then use letters, digits, or underscores; reserved words are not allowed. A named move still moves the whole robot, using only the selected drive’s speed.",
-    "es": "Sustituye module por el nombre asignado en el montaje para llamar solo a la capacidad correspondiente de ese módulo. Los nombres distinguen mayúsculas y minúsculas, deben empezar por una letra inglesa o un guion bajo y pueden continuar con letras inglesas, números o guiones bajos; no se permiten palabras reservadas. Una llamada move con nombre sigue moviendo todo el robot, pero usa solo la velocidad del módulo elegido."
+    "es": "Sustituye module por el nombre asignado en el montaje para llamar solo a la capacidad correspondiente de ese módulo. Los nombres distinguen mayúsculas y minúsculas, deben empezar por una letra inglesa o un guion bajo y pueden continuar con letras inglesas, números o guiones bajos; no se permiten palabras reservadas. Una llamada move con nombre sigue moviendo todo el robot, pero usa solo la velocidad del módulo elegido.",
+    "ja": "module を組み立て画面で設定したモジュール名に置き換えると、そのモジュールだけの能力を呼び出します。名前は大文字と小文字を区別します。先頭は英字かアンダースコア、以降は英数字かアンダースコアを使い、予約語は使えません。移動モジュールを指定した場合もロボット全体が移動しますが、その駆動部の速度だけを使います。"
   },
   "syntax": "module.move(angle, distance)\nmodule.attack(angle)\nmodule.shoot(angle)",
   "requirements": {

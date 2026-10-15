@@ -7,19 +7,22 @@
     "zh_CN": "程序结构",
     "zh_HK": "程式結構",
     "en": "Program Structure",
-    "es": "Estructura del programa"
+    "es": "Estructura del programa",
+    "ja": "プログラム構造"
   },
   "title": {
     "zh_CN": "循环",
     "zh_HK": "循環",
     "en": "Loop",
-    "es": "Bucle"
+    "es": "Bucle",
+    "ja": "ループ"
   },
   "description": {
     "zh_CN": "在 main() 内无限重复花括号中的指令，仍按顺序等待每个动作完成。loop 不写括号或次数，循环体不能留空，也不能放进 tick()。到达关卡目标、失败或停止运行时结束；暂停保留当前位置。当前没有 break 或 continue；有限范围遍历使用另行解锁的 for。",
     "zh_HK": "在 main() 內無限重複大括號中的指令，仍會依次等待每個動作完成。loop 不寫括號或次數，循環內容不能留空，也不能放進 tick()。達成關卡目標、失敗或停止執行時結束；暫停會保留目前的執行位置。目前沒有 break 或 continue；有限範圍遍歷使用另行解鎖的 for。",
     "en": "Repeat the instructions inside braces indefinitely within main(), still waiting for each action in order. loop has no parentheses or count, cannot be empty, and cannot appear in tick(). It ends when the level succeeds, fails, or is stopped; pausing preserves progress. break and continue are not supported; use the separately unlocked for loop for a finite range.",
-    "es": "Repite indefinidamente las instrucciones entre llaves dentro de main(), esperando a que termine cada acción en orden. loop no lleva paréntesis ni un número de repeticiones, no puede estar vacío ni aparecer dentro de tick(). Termina al completar el nivel, fallar o detener la ejecución; la pausa conserva el punto de ejecución. No se admiten break ni continue; para recorrer un intervalo finito, usa for cuando lo desbloquees."
+    "es": "Repite indefinidamente las instrucciones entre llaves dentro de main(), esperando a que termine cada acción en orden. loop no lleva paréntesis ni un número de repeticiones, no puede estar vacío ni aparecer dentro de tick(). Termina al completar el nivel, fallar o detener la ejecución; la pausa conserva el punto de ejecución. No se admiten break ni continue; para recorrer un intervalo finito, usa for cuando lo desbloquees.",
+    "ja": "main() 内で波括弧の中の命令を無限に繰り返し、各動作が終わるのを順番に待ちます。loop に丸括弧や回数は付けません。中身を空にしたり、tick() 内に置いたりすることはできません。ステージ目標の達成、失敗、実行停止で終了し、一時停止では現在の位置を保持します。現在 break と continue は使えません。有限範囲の反復には、別途解放される for を使います。"
   },
   "syntax": "loop {\n    ...\n}",
   "requirements": {

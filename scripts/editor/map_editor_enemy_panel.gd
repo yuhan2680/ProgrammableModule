@@ -40,7 +40,7 @@ func _ready() -> void:
 	var card_body := VBoxContainer.new()
 	card_body.add_theme_constant_override("separation", 8)
 	card.add_child(card_body)
-	var toggle_row := HBoxContainer.new()
+	var toggle_row := ResponsivePropertyRow.new()
 	card_body.add_child(toggle_row)
 	var caption := GameTheme.label(toggle_row, "是否启用敌人", 12)
 	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -57,15 +57,16 @@ func _ready() -> void:
 	_settings_body = VBoxContainer.new()
 	_settings_body.add_theme_constant_override("separation", 14)
 	add_child(_settings_body)
-	var limits := HBoxContainer.new()
+	var limits := ResponsivePropertyRow.new()
 	limits.name = "MapEditorEnemyLimits"
+	limits.group_sizes = [1, 1]
 	limits.add_theme_constant_override("separation", 10)
 	_settings_body.add_child(limits)
 	limit_field = _number_field(limits, "敌人模块数量限制", "MapEditorEnemyLimit")
 	limit_field.tooltip_text = "每组敌人最多包含 1～256 个模块。"
 	health_field = _number_field(limits, "敌人耐久度上限", "MapEditorEnemyHealth")
 	health_field.tooltip_text = "每个敌人模块的耐久，支持 0.01～1000000 的数值。"
-	GameTheme.label(_settings_body, "自定义敌人的模块组合：", 11)
+	GameTheme.label(_settings_body, "自定义敌人的模块组合：", 11).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var combinations := VBoxContainer.new()
 	combinations.name = "MapEditorEnemyCombination"
 	combinations.add_theme_constant_override("separation", 6)
@@ -134,7 +135,7 @@ func configure(model: MapEditorDocument, content: ContentRegistry) -> void:
 
 ## 普通数字输入保留闪烁光标；提交时按数据层范围验证，避免箭头占用紧凑布局。
 func _number_field(parent: Control, caption: String, node_name: String) -> LineEdit:
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 5)
 	parent.add_child(row)

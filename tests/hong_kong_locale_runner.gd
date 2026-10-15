@@ -1,8 +1,8 @@
 extends SceneTree
 ## 香港繁体回归：覆盖真实设置、静态词典、指令资料和原生控件，仅写本次独占目录。
 
-const LOCALES: Array[String] = ["zh_CN", "zh_HK", "es", "en"]
-const LANGUAGE_CAPTIONS: Array[String] = ["简体中文", "繁體中文", "Español", "English"]
+const LOCALES: Array[String] = ["zh_CN", "zh_HK", "es", "en", "ja"]
+const LANGUAGE_CAPTIONS: Array[String] = ["简体中文", "繁體中文", "Español", "English", "日本語"]
 
 var _checks := 0
 var _failures := 0
@@ -102,7 +102,7 @@ func _test_settings_round_trip() -> void:
 	var settings := GameSettings.new(path)
 	_check(settings.load_settings().is_ok() and settings.language == "en", "旧 en 配置仍按英文加载")
 	_check(FileAccess.get_file_as_bytes(path) == before, "读取旧英文配置不自动迁移或改写文件")
-	_check(GameSettings.SUPPORTED_LANGUAGES == LOCALES, "地区选择固定为简体第一、香港繁体第二、西语第三、英语第四")
+	_check(GameSettings.SUPPORTED_LANGUAGES == LOCALES, "地区选择固定为简体第一、香港繁体第二、西语第三、英语第四、日语第五")
 	for locale: String in ["zh_HK", "en", "zh_CN", "zh_HK"]:
 		_check(settings.set_language(locale).is_ok(), "有效地区设置立即保存：" + locale)
 		_check(TranslationServer.get_locale() == locale, "地区选择立即更新引擎：" + locale)
@@ -190,10 +190,10 @@ func _test_startup_failure_locale() -> void:
 			await process_frame
 		_check(startup.get("phase") == "failed", "缺失启动场景进入可重试故障页：" + locale)
 		var retry := startup.find_child("StartupRetry", true, false) as Button
-		var expected_retry: String = {"zh_CN": "重试", "zh_HK": "重試", "es": "Reintentar", "en": "Retry"}[locale]
+		var expected_retry: String = {"zh_CN": "重试", "zh_HK": "重試", "es": "Reintentar", "en": "Retry", "ja": "再試行"}[locale]
 		_check(retry != null and retry.text == expected_retry, "早期失败重试按钮使用已保存地区：" + locale)
 		var label: Label = startup.get("_message")
-		var expected_message: String = {"zh_CN": "找不到启动资源。", "zh_HK": "找不到啟動資源。", "es": "No se ha encontrado un recurso de inicio.", "en": "A startup resource could not be found."}[locale]
+		var expected_message: String = {"zh_CN": "找不到启动资源。", "zh_HK": "找不到啟動資源。", "es": "No se ha encontrado un recurso de inicio.", "en": "A startup resource could not be found.", "ja": "起動用リソースが見つかりません。"}[locale]
 		_check(label != null and label.text == expected_message, "启动资源错误使用已保存地区：" + locale)
 		_check(FileAccess.get_file_as_bytes(path) == before, "启动故障仅读取语言且不改写设置")
 		startup.queue_free()
@@ -217,7 +217,7 @@ func _test_settings_panel() -> void:
 	var scroll := panel.find_child("SettingsScroll", true, false) as ScrollContainer
 	_check(option != null and row != null and card != null and scroll != null, "最小窗口建立实际设置选择器")
 	if option != null and row != null and card != null and scroll != null:
-		_check(option.item_count == 4, "显示语言包含四个地区选项")
+		_check(option.item_count == 5, "显示语言包含五个地区选项")
 		var labels := row.find_children("*", "Label", true, false)
 		var label := labels[0] as Label if not labels.is_empty() else null
 		for locale: String in ["zh_HK", "en", "zh_CN", "zh_HK"]:

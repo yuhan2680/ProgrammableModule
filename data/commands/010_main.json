@@ -7,19 +7,22 @@
     "zh_CN": "程序结构",
     "zh_HK": "程式結構",
     "en": "Program Structure",
-    "es": "Estructura del programa"
+    "es": "Estructura del programa",
+    "ja": "プログラム構造"
   },
   "title": {
     "zh_CN": "程序入口",
     "zh_HK": "程式入口",
     "en": "Program Entry",
-    "es": "Punto de entrada"
+    "es": "Punto de entrada",
+    "ja": "プログラムの入口"
   },
   "description": {
     "zh_CN": "程序必须包含且只包含一个 main()。花括号内的动作按顺序执行，上一条动作完成后才开始下一条；一行一条指令，不写分号。省略号表示需要自行填写的内容，不能直接作为代码运行。",
     "zh_HK": "程式必須包含且只包含一個 main()。大括號內的動作會依次執行，上一個動作完成後才開始下一個；每行寫一條指令，不寫分號。省略號代表需要自行填寫的內容，不能直接當作程式碼執行。",
     "en": "Every program needs exactly one main(). Actions inside its braces run in order; each action finishes before the next begins. Write one instruction per line without semicolons. The ellipsis is a placeholder to replace, not executable code.",
-    "es": "Todo programa debe contener exactamente un main(). Las acciones entre sus llaves se ejecutan en orden: cada una termina antes de empezar la siguiente. Escribe una instrucción por línea, sin punto y coma. Los puntos suspensivos indican contenido que debes completar; no son código ejecutable."
+    "es": "Todo programa debe contener exactamente un main(). Las acciones entre sus llaves se ejecutan en orden: cada una termina antes de empezar la siguiente. Escribe una instrucción por línea, sin punto y coma. Los puntos suspensivos indican contenido que debes completar; no son código ejecutable.",
+    "ja": "プログラムには main() を必ず1つだけ記述します。波括弧内の動作は順番に実行され、前の動作が完了してから次の動作が始まります。命令は1行に1つ記述し、セミコロンは付けません。省略記号は自分で入力する部分を示しており、そのままコードとして実行できません。"
   },
   "syntax": "main() {\n    ...\n}",
   "requirements": {}

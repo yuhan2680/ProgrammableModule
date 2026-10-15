@@ -3,14 +3,30 @@
   "id": "named_move",
   "order": 61,
   "category": "action",
-  "category_title": {"zh_CN": "动作指令", "zh_HK": "動作指令", "en": "Actions", "es": "Acciones"},
-  "title": {"zh_CN": "具名移动", "zh_HK": "具名移動", "en": "Named Move", "es": "Movimiento por nombre"},
+  "category_title": {
+    "zh_CN": "动作指令",
+    "zh_HK": "動作指令",
+    "en": "Actions",
+    "es": "Acciones",
+    "ja": "動作命令"
+  },
+  "title": {
+    "zh_CN": "具名移动",
+    "zh_HK": "具名移動",
+    "en": "Named Move",
+    "es": "Movimiento por nombre",
+    "ja": "名前を指定した移動"
+  },
   "description": {
     "zh_CN": "用组装页设置的移动模块名称替换 module。整台机器人仍一起移动，但只使用这个驱动的速度，不叠加其他移动模块。角度和距离规则与 move 相同；本指令只能放在 main() 的动作流程中，不能放在 tick() 中。需要本关开放具名调用。",
     "zh_HK": "用組裝頁設定的移動模組名稱取代 module。整台機械人仍會一起移動，但只使用該驅動模組的速度，不會加上其他移動模組的速度。角度和距離規則與 move 相同；本指令只能放在 main() 的動作流程中，不能放在 tick() 中。需要本關開放具名呼叫。",
     "en": "Replace module with the movement module name assigned in assembly. The whole robot moves, using only this drive's speed without adding other drives. Angle and distance follow the same rules as move. Use it in the main() action flow, never in tick(). Named calls must be unlocked for this level.",
-    "es": "Sustituye module por el nombre del módulo de movimiento asignado en el montaje. Todo el robot se mueve, pero solo con la velocidad de este módulo, sin sumar la de los demás. El ángulo y la distancia siguen las mismas reglas que move. Úsalo dentro del flujo de acciones de main(), nunca en tick(). Las llamadas por nombre deben estar desbloqueadas en este nivel."
+    "es": "Sustituye module por el nombre del módulo de movimiento asignado en el montaje. Todo el robot se mueve, pero solo con la velocidad de este módulo, sin sumar la de los demás. El ángulo y la distancia siguen las mismas reglas que move. Úsalo dentro del flujo de acciones de main(), nunca en tick(). Las llamadas por nombre deben estar desbloqueadas en este nivel.",
+    "ja": "module を組み立て画面で設定した移動モジュール名に置き換えます。ロボット全体が一緒に移動しますが、この駆動部の速度だけを使い、ほかの移動モジュールの速度は加算しません。角度と距離の規則は move と同じです。main() の動作の流れに記述し、tick() 内には記述できません。このステージで名前付き呼び出しが解放されている必要があります。"
   },
   "syntax": "module.move(angle, distance)",
-  "requirements": {"allow_named_calls": true, "module_behavior": "MovementModule"}
+  "requirements": {
+    "allow_named_calls": true,
+    "module_behavior": "MovementModule"
+  }
 }

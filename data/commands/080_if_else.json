@@ -7,19 +7,22 @@
     "zh_CN": "程序结构",
     "zh_HK": "程式結構",
     "en": "Program Structure",
-    "es": "Estructura del programa"
+    "es": "Estructura del programa",
+    "ja": "プログラム構造"
   },
   "title": {
     "zh_CN": "条件分支",
     "zh_HK": "條件分支",
     "en": "Conditional Branches",
-    "es": "Ramas condicionales"
+    "es": "Ramas condicionales",
+    "ja": "条件分岐"
   },
   "description": {
     "zh_CN": "根据条件选择 if 或 else 中的一段动作。if 中必须填写动作；else 可以省略，省略时条件为假就继续后续指令。显式写出的 else 也不能留空。第七关可用具名射击模块的 ready() 查询；第九关解锁测距后，还可比较 distance(角度) 的读数与数字，支持 <、<=、>、>=、==、!=。进入分支时检查一次条件，完成该分支后才继续执行；常变量与赋值需另行解锁；不支持逻辑组合。",
     "zh_HK": "根據條件選擇 if 或 else 中的一組動作。if 中必須填寫動作；else 可以省略，省略時若條件為假，就會繼續執行後續指令。明確寫出的 else 也不能留空。第七關可用具名射擊模組的 ready() 查詢；第九關解鎖測距後，還可比較 distance(角度) 的讀數與數字，支援 <、<=、>、>=、==、!=。進入分支時會檢查一次條件，完成該分支後才繼續執行；常數、變數與賦值須另行解鎖；不支援邏輯組合。",
     "en": "Choose the if or else actions according to a condition. The if body must contain actions. else is optional: a false condition then continues with the next instruction. An explicit else body must not be empty. Level 7 supports a named shooting module’s ready() query. After rangefinding unlocks in Level 9, distance(angle) readings can also be compared with numbers using <, <=, >, >=, ==, or !=. Check the condition once when entering, then finish the selected branch. Constants, variables, and assignment require their own unlock; logical combinations are not supported.",
-    "es": "Elige las acciones de if o else según una condición. El cuerpo de if debe contener acciones. else es opcional: si se omite y la condición es falsa, se continúa con la siguiente instrucción. Un else explícito tampoco puede estar vacío. El nivel 7 admite la consulta ready() de un módulo de disparo con nombre. Tras desbloquear la medición de distancia en el nivel 9, también puedes comparar distance(angle) con números usando <, <=, >, >=, == o !=. La condición se comprueba una vez al entrar y la rama elegida se completa antes de continuar. Las constantes, las variables y la asignación se desbloquean por separado; no se admiten combinaciones lógicas."
+    "es": "Elige las acciones de if o else según una condición. El cuerpo de if debe contener acciones. else es opcional: si se omite y la condición es falsa, se continúa con la siguiente instrucción. Un else explícito tampoco puede estar vacío. El nivel 7 admite la consulta ready() de un módulo de disparo con nombre. Tras desbloquear la medición de distancia en el nivel 9, también puedes comparar distance(angle) con números usando <, <=, >, >=, == o !=. La condición se comprueba una vez al entrar y la rama elegida se completa antes de continuar. Las constantes, las variables y la asignación se desbloquean por separado; no se admiten combinaciones lógicas.",
+    "ja": "条件に応じて if または else 内の動作を選びます。if には動作が必要です。else は省略でき、その場合は条件が偽なら後続の命令へ進みます。else を記述する場合も中身を空にはできません。ステージ7では名前を指定した射撃モジュールの ready() を使えます。ステージ9で測距が解放されると、distance(角度) と数値を <、<=、>、>=、==、!= で比較できます。条件は分岐に入るときに1回だけ判定し、選んだ分岐を終えてから先へ進みます。定数、変数、代入は別途解放が必要です。論理条件の組み合わせには対応していません。"
   },
   "syntax": "if (module.ready()) {\n    ...\n} else {\n    ...\n}",
   "requirements": {

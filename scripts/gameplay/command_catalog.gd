@@ -54,7 +54,7 @@ func sections(registry: ContentRegistry, locale: String = "zh_CN") -> Array[Dict
 	var general_entries: Array[Dictionary] = []
 	var result: Array[Dictionary] = [{
 		"id": "general", "kind": "general", "title": localized({
-			"title": {"zh_CN": "编程基础", "zh_HK": "編程基礎", "en": "Programming Basics", "es": "Fundamentos de programación"},
+			"title": {"zh_CN": "编程基础", "zh_HK": "編程基礎", "en": "Programming Basics", "es": "Fundamentos de programación", "ja": "プログラミングの基礎"},
 		}, "title", locale), "texture": "", "entries": general_entries,
 	}]
 	if registry != null:

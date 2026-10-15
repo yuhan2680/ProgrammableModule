@@ -7,19 +7,22 @@
     "zh_CN": "程序结构",
     "zh_HK": "程式結構",
     "en": "Program Structure",
-    "es": "Estructura del programa"
+    "es": "Estructura del programa",
+    "ja": "プログラム構造"
   },
   "title": {
     "zh_CN": "常量",
     "zh_HK": "常數",
     "en": "Constants",
-    "es": "Constantes"
+    "es": "Constantes",
+    "ja": "定数"
   },
   "description": {
     "zh_CN": "用 constant 名称 = 数值表达式 声明一个只读数值；value 是 constant 的同义写法。常量可以在后面的动作参数、加减表达式和数值比较中引用，但不能重新赋值。顶层声明按源码顺序初始化，main 和各函数可读取全部全局名称。函数与代码块中的常量仅在各自词法作用域内可见；初始化后不会随 distance 读数自动改变。tick() 与 simultaneously 块内可读取已有常量，不能声明新常量。",
     "zh_HK": "用 constant 名稱 = 數值運算式 宣告一個唯讀數值；value 是 constant 的同義寫法。常數可以在後續動作的參數、加減運算式和數值比較中引用，但不能重新賦值。頂層宣告會按原始碼順序初始化，main 和各函數可讀取所有全域名稱。函數與程式碼區塊中的常數只在各自的詞法作用域內可見；初始化後不會隨 distance 讀數自動改變。tick() 與 simultaneously 區塊內可讀取已有常數，但不能宣告新常數。",
     "en": "Declare a read-only number with constant name = expression; value is an alias for constant. Use it in later action arguments, addition, subtraction, or numeric comparisons, but do not reassign it. Top-level declarations initialize in source order; main and each function can read all global names. Constants declared inside a function or block are visible only in their lexical scope. The stored value does not automatically follow changing distance readings. tick() and simultaneously blocks may read existing constants, but cannot declare new ones.",
-    "es": "Declara un número de solo lectura con constant name = expression; value es un sinónimo de constant. Puedes usarlo en argumentos de acciones posteriores, sumas, restas o comparaciones numéricas, pero no reasignarlo. Las declaraciones de nivel superior se inicializan en el orden del código; main y cada función pueden leer todos los nombres globales. Las constantes declaradas dentro de una función o un bloque solo son visibles en su ámbito léxico. El valor guardado no sigue automáticamente los cambios en las lecturas de distance. Los bloques tick() y simultaneously pueden leer constantes existentes, pero no declarar otras nuevas."
+    "es": "Declara un número de solo lectura con constant name = expression; value es un sinónimo de constant. Puedes usarlo en argumentos de acciones posteriores, sumas, restas o comparaciones numéricas, pero no reasignarlo. Las declaraciones de nivel superior se inicializan en el orden del código; main y cada función pueden leer todos los nombres globales. Las constantes declaradas dentro de una función o un bloque solo son visibles en su ámbito léxico. El valor guardado no sigue automáticamente los cambios en las lecturas de distance. Los bloques tick() y simultaneously pueden leer constantes existentes, pero no declarar otras nuevas.",
+    "ja": "constant 名前 = 数値式 で読み取り専用の数値を宣言します。value は constant と同じ意味です。定数は後続の動作引数、加減算、数値比較から参照できますが、再代入はできません。トップレベルの宣言はコード順に初期化され、main と各関数からすべてのグローバル名を参照できます。関数やブロック内の定数はそれぞれの字句スコープ内でだけ有効です。初期化後に distance の測定値が変わっても自動更新されません。tick() と simultaneously 内では既存の定数を読めますが、新しい定数は宣言できません。"
   },
   "syntax": "constant threshold = 2.5",
   "requirements": {

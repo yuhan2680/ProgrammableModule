@@ -1106,7 +1106,7 @@ const ENGLISH: Dictionary = {
 	"音量为 0 时静音。": "Set the volume to 0 to mute.",
 	"切换语言后立即生效，无需重启。": "Language changes apply immediately. No restart is needed.",
 	"主音量必须是 0..1 的有限数字。": "Master volume must be a finite number between 0 and 1.",
-	"语言必须为简体中文（zh_CN）、繁體中文（zh_HK）、Español（es）或 English（en）。": "Language must be Simplified Chinese (zh_CN), Traditional Chinese (zh_HK), Español (es), or English (en).",
+	"语言必须为简体中文（zh_CN）、繁體中文（zh_HK）、Español（es）、English（en）或日本語（ja）。": "Language must be Simplified Chinese (zh_CN), Traditional Chinese (zh_HK), Español (es), English (en), or 日本語 (ja).",
 	"设置文件损坏，已使用默认设置。": "The settings file is damaged. Default settings are now in use.",
 	"设置文件版本不受支持，已使用默认设置。": "The settings version is unsupported. Default settings are now in use.",
 	"设置文件超过 64 KiB，已使用默认设置。": "The settings file exceeds 64 KiB. Default settings are now in use.",
@@ -1315,7 +1315,7 @@ static func localize_text_edit_menu(editor: TextEdit) -> void:
 	editor.get_menu().auto_translate_mode = Node.AUTO_TRANSLATE_MODE_ALWAYS
 
 
-## 注册四种界面语言；简体使用恒等映射，其他语种只读取内置静态词典。
+## 注册五种界面语言；简体使用恒等映射，其他语种只读取内置静态词典。
 static func install() -> void:
 	if _installed:
 		return
@@ -1328,18 +1328,22 @@ static func install() -> void:
 		hong_kong.locale = "zh_HK"
 		var spanish := Translation.new()
 		spanish.locale = "es"
+		var japanese := Translation.new()
+		japanese.locale = "ja"
 		for source: String in ENGLISH:
 			english.add_message(source, ENGLISH[source])
 			chinese.add_message(source, source)
 			hong_kong.add_message(source, GameI18nHK.MESSAGES.get(source, source))
 			spanish.add_message(source, GameI18nES.MESSAGES.get(source, source))
+			japanese.add_message(source, GameI18nJA.MESSAGES.get(source, source))
 		for source: String in NATIVE_MENU_CHINESE:
 			# 英文也显式保留源串，切换语言时不依赖操作系统的语言或回退设置。
 			english.add_message(source, source)
 			chinese.add_message(source, NATIVE_MENU_CHINESE[source])
 			hong_kong.add_message(source, GameI18nHK.NATIVE_MENU.get(source, NATIVE_MENU_CHINESE[source]))
 			spanish.add_message(source, GameI18nES.NATIVE_MENU.get(source, source))
-		_translations = [english, chinese, hong_kong, spanish]
+			japanese.add_message(source, GameI18nJA.NATIVE_MENU.get(source, source))
+		_translations = [english, chinese, hong_kong, spanish, japanese]
 	for translation in _translations:
 		# 相同 locale 可以有多个翻译包，不能用其它包的存在替代本项目资源。
 		TranslationServer.add_translation(translation)

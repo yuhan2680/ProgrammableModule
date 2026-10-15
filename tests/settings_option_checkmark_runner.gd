@@ -59,7 +59,7 @@ func _check_selected_menu(node_name: String, context: String) -> void:
 	_check(popup.get_focused_item() == original, "重新打开焦点定位到当前设置 " + node_name + " " + context)
 	await _check_blue_selection(popup, node_name + " " + context)
 	await _capture("checkmark_" + context + "_" + node_name)
-	if popup.item_count <= 4:
+	if popup.item_count <= 5:
 		await _hover_menu(popup, popup.get_visible_rect().get_center())
 		_check(popup.get_focused_item() >= 0 and option.selected == original, "鼠标悬停不提交菜单选项 " + node_name)
 		_check_checked(popup, original, node_name + " 鼠标悬停")

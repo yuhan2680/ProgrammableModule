@@ -1214,7 +1214,7 @@ const MESSAGES: Dictionary = {
 	"无法开始测试": "No se puede iniciar la prueba",
 	"编辑模式": "Modo de edición",
 	"未知错误": "Error desconocido",
-	"语言必须为简体中文（zh_CN）、繁體中文（zh_HK）、Español（es）或 English（en）。": "El idioma debe ser 简体中文 (zh_CN), 繁體中文 (zh_HK), Español (es) o English (en).",
+	"语言必须为简体中文（zh_CN）、繁體中文（zh_HK）、Español（es）、English（en）或日本語（ja）。": "El idioma debe ser chino simplificado (zh_CN), chino tradicional (zh_HK), Español (es), English (en) o 日本語 (ja).",
 }
 
 const NATIVE_MENU: Dictionary = {

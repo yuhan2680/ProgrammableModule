@@ -5,7 +5,8 @@
     "zh_CN": "状态查询",
     "zh_HK": "狀態查詢",
     "en": "Queries",
-    "es": "Consultas"
+    "es": "Consultas",
+    "ja": "状態照会"
   },
   "id": "named_scan",
   "order": 151,
@@ -13,13 +14,15 @@
     "zh_CN": "具名雷达扫描",
     "zh_HK": "具名雷達掃描",
     "en": "Named Radar Scan",
-    "es": "Escaneo de radar por nombre"
+    "es": "Escaneo de radar por nombre",
+    "ja": "名前を指定したレーダースキャン"
   },
   "description": {
     "zh_CN": "将 module 替换为组装页中雷达模块的名称，从该雷达的实际位置扫描。名称区分大小写；必须安装并保持该雷达可用。返回值与 scan() 相同，可保存为常量或变量，再读取目标角度、位置和距离。",
     "zh_HK": "把 module 換成組裝頁中雷達模組的名稱，從該雷達的實際位置掃描。名稱區分大小寫；必須安裝該雷達並保持可用。傳回值與 scan() 相同，可保存為常數或變數，再讀取目標的角度、位置和距離。",
     "en": "Replace module with the radar module name assigned in assembly to scan from that radar’s actual position. Names are case-sensitive; the radar must be installed and available. The result matches scan(): store it in a constant or variable, then read the target’s angle, position, and distance.",
-    "es": "Sustituye module por el nombre del módulo de radar asignado en el montaje para escanear desde su posición real. Los nombres distinguen mayúsculas y minúsculas; el radar debe estar instalado y disponible. El resultado es el mismo que el de scan(): guárdalo en una constante o variable y lee después el ángulo, la posición y la distancia del objetivo."
+    "es": "Sustituye module por el nombre del módulo de radar asignado en el montaje para escanear desde su posición real. Los nombres distinguen mayúsculas y minúsculas; el radar debe estar instalado y disponible. El resultado es el mismo que el de scan(): guárdalo en una constante o variable y lee después el ángulo, la posición y la distancia del objetivo.",
+    "ja": "module を組み立て画面で設定したレーダーモジュール名に置き換え、そのレーダーの実際の位置からスキャンします。名前は大文字と小文字を区別し、そのレーダーが装着され使用可能である必要があります。戻り値は scan() と同じです。定数や変数に保存してから、対象の角度、位置、距離を読み取れます。"
   },
   "syntax": "module.scan()",
   "requirements": {

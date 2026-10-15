@@ -7,19 +7,22 @@
     "zh_CN": "动作指令",
     "zh_HK": "動作指令",
     "en": "Actions",
-    "es": "Acciones"
+    "es": "Acciones",
+    "ja": "動作命令"
   },
   "title": {
     "zh_CN": "近战攻击",
     "zh_HK": "近戰攻擊",
     "en": "Melee Attack",
-    "es": "Ataque cuerpo a cuerpo"
+    "es": "Ataque cuerpo a cuerpo",
+    "ja": "近接攻撃"
   },
   "description": {
     "zh_CN": "沿指定角度近战攻击，角度方向与 move 相同。从近战模块的实际中心检测射程内第一个可命中的目标；射程与伤害来自模块配置，默认射程为 2 格。挥空也会消耗一个逻辑 tick。需要近战模块。",
     "zh_HK": "沿指定角度進行近戰攻擊，角度方向與 move 相同。從近戰模組的實際中心偵測射程內第一個可命中的目標；射程與傷害由模組設定決定，預設射程為 2 格。揮空也會消耗一個邏輯 tick。需要近戰模組。",
     "en": "Attack in the given direction, using the same angle convention as move. The first hittable target is checked from the melee module’s actual center. Range and damage come from its configuration; the default range is 2 cells. A miss still takes one logic tick. A melee module is required.",
-    "es": "Ataca cuerpo a cuerpo en la dirección indicada, con la misma convención de ángulos que move. Desde el centro real del módulo se detecta el primer objetivo alcanzable dentro de su alcance. El alcance y el daño dependen de la configuración del módulo; el alcance predeterminado es de 2 casillas. Fallar el golpe también consume un tick lógico. Se requiere un módulo de cuerpo a cuerpo."
+    "es": "Ataca cuerpo a cuerpo en la dirección indicada, con la misma convención de ángulos que move. Desde el centro real del módulo se detecta el primer objetivo alcanzable dentro de su alcance. El alcance y el daño dependen de la configuración del módulo; el alcance predeterminado es de 2 casillas. Fallar el golpe también consume un tick lógico. Se requiere un módulo de cuerpo a cuerpo.",
+    "ja": "指定した角度に近接攻撃を行います。角度の向きは move と同じです。近接攻撃モジュールの実際の中心から射程内にある最初の攻撃可能な対象を調べます。射程とダメージはモジュールの設定に従い、標準の射程は2マスです。空振りでも論理 tick を1回消費します。近接攻撃モジュールが必要です。"
   },
   "syntax": "attack(angle)",
   "requirements": {

@@ -97,6 +97,7 @@ var _syncing_fields: bool = false
 var _metadata_color_mode := ""
 var _properties_card: PanelContainer
 var _presentation_scale := 1.0
+var _properties_workspace: Control
 
 
 # 用途：先载入内容目录，再打开外层指定草稿；普通入口仍使用示例地图。
@@ -258,8 +259,10 @@ func _property_focus_blocked(include_menus: bool = true) -> bool:
 	return include_menus and (_actions_menu.is_open() or _guide_menu.is_open() or _restriction_picker.is_open() or _command_menu.is_open() or _enemy_panel._picker.is_open() or _brush.get_popup().visible)
 
 
-## 属性使用紧凑横向表单；滚动条独占右侧留白，不与输入框或数字箭头重叠。
+## 属性宽度由工作区约束，表单按文字和控件需要纵向重排，滚动条保留独立留白。
 func _build_properties(workspace: Control) -> void:
+	_properties_workspace = workspace
+	workspace.resized.connect(_layout_properties_width)
 	var card := PanelContainer.new()
 	_properties_card = card
 	card.name = "MapEditorPropertiesCard"
@@ -304,7 +307,7 @@ func _build_properties(workspace: Control) -> void:
 	fields.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fields.add_theme_constant_override("separation", 8)
 	gutter.add_child(fields)
-	GameTheme.label(fields, "地图属性", 16)
+	GameTheme.label(fields, "地图属性", 16).autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	# 右侧包含卡片内边距、滚动条和留白；在名称行左侧补齐相同的总距离。
 	var identity_inset := 10 + 18 + scroll.get_v_scroll_bar().get_combined_minimum_size().x - 18
 	_build_identity_fields(fields, identity_inset)
@@ -323,8 +326,10 @@ func _build_properties(workspace: Control) -> void:
 	_test_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_test_feedback.add_theme_color_override("font_color", Color("bb3434"))
 	_test_feedback.hide()
-	var actions := HBoxContainer.new()
+	var actions := ResponsivePropertyRow.new()
 	actions.name = "MapEditorFooterActions"
+	actions.group_sizes = [1, 1]
+	actions.equal_width = true
 	actions.add_theme_constant_override("separation", 16)
 	layout.add_child(actions)
 	_play_button = _add_button(actions, "开始测试", _start_playtest)
@@ -340,6 +345,16 @@ func _build_properties(workspace: Control) -> void:
 			var style := _compact_field_style(button.get_theme_stylebox(state)) as StyleBoxFlat
 			style.set_corner_radius_all(surface.corner_radius_bottom_right - footer_inset)
 			button.add_theme_stylebox_override(state, style)
+	_layout_properties_width.call_deferred()
+
+
+## 属性卡优先保留地图画幅，长翻译和字号只增加内部行高，不改变可用横向预算。
+func _layout_properties_width() -> void:
+	if not is_instance_valid(_properties_card) or not is_instance_valid(_properties_workspace):
+		return
+	var available := _properties_workspace.size.x
+	var width := minf(clampf(available * 0.36, 340.0, 460.0), maxf(240.0, available - 372.0))
+	_properties_card.custom_minimum_size.x = floorf(width)
 
 
 ## 名称和 ID 共用一行及等宽输入框，缩小字号和高度，整行相对卡片左右对称。
@@ -348,10 +363,10 @@ func _build_identity_fields(parent: Node, leading_inset: float) -> void:
 	margin.name = "MapEditorIdentityMargin"
 	margin.add_theme_constant_override("margin_left", maxi(0, roundi(leading_inset)))
 	parent.add_child(margin)
-	var identity := GridContainer.new()
+	var identity := ResponsivePropertyRow.new()
 	identity.name = "MapEditorIdentityRow"
-	identity.columns = 4
-	identity.add_theme_constant_override("h_separation", 6)
+	identity.group_sizes = [2, 2]
+	identity.add_theme_constant_override("separation", 6)
 	margin.add_child(identity)
 	for caption: String in ["名称", "ID"]:
 		var label := GameTheme.label(identity, caption, 12)
@@ -399,7 +414,7 @@ func _build_subtitle_field(parent: Node, leading_inset: float) -> void:
 	margin.name = "MapEditorSubtitleMargin"
 	margin.add_theme_constant_override("margin_left", maxi(0, roundi(leading_inset)))
 	parent.add_child(margin)
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorSubtitleRow"
 	row.add_theme_constant_override("separation", 6)
 	margin.add_child(row)
@@ -441,8 +456,9 @@ func _build_creator_field(parent: Node, leading_inset: float) -> void:
 	margin.name = "MapEditorCreatorMargin"
 	margin.add_theme_constant_override("margin_left", maxi(0, roundi(leading_inset)))
 	parent.add_child(margin)
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorCreatorRow"
+	row.group_sizes = [2, 2]
 	row.add_theme_constant_override("separation", 6)
 	margin.add_child(row)
 	var caption := GameTheme.label(row, "创作者", 12)
@@ -493,8 +509,9 @@ func _build_dimensions(parent: Node) -> void:
 	body.add_theme_constant_override("separation", 14)
 	_build_section_heading(group, "场景编辑", body, "MapEditorSizeCollapse")
 	group.add_child(body)
-	var dimensions := HBoxContainer.new()
+	var dimensions := ResponsivePropertyRow.new()
 	dimensions.name = "MapEditorDimensions"
+	dimensions.group_sizes = [1, 1, 1]
 	dimensions.alignment = BoxContainer.ALIGNMENT_CENTER
 	dimensions.add_theme_constant_override("separation", 10)
 	body.add_child(dimensions)
@@ -548,11 +565,12 @@ func _on_dimension_value_changed(value: float, field: SpinBox) -> void:
 
 ## 画笔样式与绘制项目并排：样式控制手势，项目只决定写入哪一种地块。
 func _build_paint_tools(parent: Node) -> void:
-	var toolbar := HBoxContainer.new()
+	var toolbar := ResponsivePropertyRow.new()
 	toolbar.name = "MapEditorPaintTools"
+	toolbar.group_sizes = [1, 1]
 	toolbar.add_theme_constant_override("separation", 10)
 	parent.add_child(toolbar)
-	var modes := HBoxContainer.new()
+	var modes := ResponsivePropertyRow.new()
 	modes.add_theme_constant_override("separation", 6)
 	toolbar.add_child(modes)
 	var mode_label := GameTheme.label(modes, "画笔样式", 12)
@@ -573,7 +591,7 @@ func _build_paint_tools(parent: Node) -> void:
 	_paint_button.set_pressed_no_signal(true)
 	_paint_button.tooltip_text = "画笔"
 	_rectangle_button.tooltip_text = "框选"
-	var drawing := HBoxContainer.new()
+	var drawing := ResponsivePropertyRow.new()
 	drawing.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	drawing.add_theme_constant_override("separation", 6)
 	toolbar.add_child(drawing)
@@ -604,14 +622,16 @@ func _build_scene_controls(parent: Node) -> void:
 	body.add_theme_constant_override("separation", 12)
 	_build_section_heading(section, "场景玩法与行为控制", body, "MapEditorSceneCollapse")
 	section.add_child(body)
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
+	row.name = "MapEditorPointAndResetRows"
+	row.group_sizes = [1, 1]
 	row.add_theme_constant_override("separation", 12)
 	body.add_child(row)
 	var placement_column := VBoxContainer.new()
 	placement_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	placement_column.add_theme_constant_override("separation", 10)
 	row.add_child(placement_column)
-	var placement := HBoxContainer.new()
+	var placement := ResponsivePropertyRow.new()
 	placement.name = "MapEditorPointTools"
 	placement.add_theme_constant_override("separation", 6)
 	placement_column.add_child(placement)
@@ -649,7 +669,7 @@ func _build_scene_controls(parent: Node) -> void:
 
 ## 提示和粘贴规则属于玩法控制，开关与同行标签不混入地形绘制分类。
 func _build_code_policy_controls(parent: Control) -> void:
-	var hints_row := HBoxContainer.new()
+	var hints_row := ResponsivePropertyRow.new()
 	hints_row.name = "MapEditorCodeHintsRow"
 	hints_row.add_theme_constant_override("separation", 12)
 	parent.add_child(hints_row)
@@ -660,7 +680,7 @@ func _build_code_policy_controls(parent: Control) -> void:
 	_allow_code_hints_switch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hints_row.add_child(_allow_code_hints_switch)
 	_allow_code_hints_switch.toggled.connect(_on_allow_code_hints_toggled)
-	var paste_row := HBoxContainer.new()
+	var paste_row := ResponsivePropertyRow.new()
 	paste_row.name = "MapEditorRestrictCodePasteRow"
 	paste_row.add_theme_constant_override("separation", 12)
 	parent.add_child(paste_row)
@@ -715,7 +735,7 @@ func _sync_code_policy_controls() -> void:
 
 ## 禁止模块多选位于限时下方，长正文在固定药丸内走字而不扩宽属性面板。
 func _build_module_restrictions(parent: Control) -> void:
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorModuleRestrictions"
 	row.add_theme_constant_override("separation", 10)
 	parent.add_child(row)
@@ -750,7 +770,7 @@ func _on_module_restrictions_changed(ids: Array) -> void:
 
 ## 指令管理文字与圆形加号作为一组居中，沿用上下表单的紧凑字号与间隔。
 func _build_command_restrictions(parent: Control) -> void:
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorCommandManagement"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 8)
@@ -839,11 +859,12 @@ func _scene_label(parent: Control, caption: String, node_name: String = "") -> L
 
 ## 两项玩家上限并排显示，输入框保持紧凑，长数值仍可直接编辑。
 func _build_player_limits(parent: Control) -> void:
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorPlayerLimits"
+	row.group_sizes = [1, 1]
 	row.add_theme_constant_override("separation", 10)
 	parent.add_child(row)
-	var modules := HBoxContainer.new()
+	var modules := ResponsivePropertyRow.new()
 	modules.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	modules.add_theme_constant_override("separation", 6)
 	row.add_child(modules)
@@ -853,7 +874,7 @@ func _build_player_limits(parent: Control) -> void:
 	_module_limit_field.get_line_edit().add_theme_constant_override("minimum_character_width", 0)
 	_module_limit_field.tooltip_text = "组装时允许安装的模块总数（1..256）。"
 	_module_limit_field.value_changed.connect(_on_module_limit_changed)
-	var health := HBoxContainer.new()
+	var health := ResponsivePropertyRow.new()
 	health.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	health.add_theme_constant_override("separation", 6)
 	row.add_child(health)
@@ -877,7 +898,7 @@ func _build_player_limits(parent: Control) -> void:
 
 ## 标题旁提供独立SVG折叠按钮，只控制该分类内容的可见性。
 func _build_section_heading(parent: Control, caption: String, content: Control, button_name: String) -> void:
-	var header := HBoxContainer.new()
+	var header := ResponsivePropertyRow.new()
 	header.add_theme_constant_override("separation", 4)
 	parent.add_child(header)
 	var label := GameTheme.label(header, caption, 14)
@@ -919,7 +940,7 @@ func _toggle_section(content: Control, button: Button) -> void:
 func _build_time_limit(parent: Control, point_pill: Control) -> void:
 	var inset := MarginContainer.new()
 	parent.add_child(inset)
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorTimeLimitRow"
 	row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	row.add_theme_constant_override("separation", 5)
@@ -975,8 +996,14 @@ func _build_time_limit(parent: Control, point_pill: Control) -> void:
 
 ## 以起终点药丸为中心对齐，时间药丸左右伸出同样距离，单位不计入对齐宽度。
 func _align_time_limit(point_pill: Control, timer_pill: Control, caption: Label, inset: MarginContainer) -> void:
-	var offset := point_pill.position.x + (point_pill.size.x - timer_pill.size.x) * 0.5 - caption.size.x - 5.0
-	inset.add_theme_constant_override("margin_left", maxi(0, roundi(offset)))
+	var font_size := roundi(GameTheme.base_font_size(caption, "font_size") * GameTheme.font_scale(caption))
+	var caption_width := caption.get_theme_font("font").get_string_size(caption.atr(caption.text), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var row := caption.get_parent() as ResponsivePropertyRow
+	var available := maxf(0.0, inset.size.x - row.preferred_width())
+	var offset := point_pill.position.x + (point_pill.size.x - timer_pill.size.x) * 0.5 - caption_width - 5.0
+	var margin := roundi(clampf(offset, 0.0, available))
+	if inset.get_theme_constant("margin_left") != margin:
+		inset.add_theme_constant_override("margin_left", margin)
 
 
 ## 仅接受正十进制秒数，最多一位小数，以对应0.1秒的模拟精度。
@@ -1045,8 +1072,9 @@ func _set_paint_mode(mode: MapEditorCanvas.PaintMode) -> void:
 
 ## 场景编辑中的两只圆形工具与秒表药丸；工具只改变交互，不提前修改地图。
 func _build_timed_gate_controls(parent: Control) -> void:
-	var row := HBoxContainer.new()
+	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorTimedGateRow"
+	row.group_sizes = [3, 2]
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 8)
 	parent.add_child(row)
@@ -1383,8 +1411,8 @@ func _on_drawing_item_selected(_index: int) -> void:
 
 
 ## 标签与输入控件处于同一行，常用短标签统一对齐，宽高和模块上限按文字自然占位。
-func _property_row(parent: Node, caption: String, label_width: float = 40.0) -> HBoxContainer:
-	var row := HBoxContainer.new()
+func _property_row(parent: Node, caption: String, label_width: float = 40.0) -> ResponsivePropertyRow:
+	var row := ResponsivePropertyRow.new()
 	row.add_theme_constant_override("separation", 8)
 	parent.add_child(row)
 	var label := _add_label(row, caption)

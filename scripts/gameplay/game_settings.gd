@@ -31,8 +31,8 @@ const MAX_CUSTOM_BACKGROUNDS: int = 256
 const SUPPORTED_CODE_HINTS: Array[String] = ["none", "normal", "more"]
 const SUPPORTED_CODE_COLOR_MODES: Array[String] = ["light", "dark"]
 # 保留旧存档的 en 语言代码；语言自名只负责显示，不触发配置迁移。
-const SUPPORTED_LANGUAGES: Array[String] = ["zh_CN", "zh_HK", "es", "en"]
-const LANGUAGE_LABELS: Array[String] = ["简体中文", "繁體中文", "Español", "English"]
+const SUPPORTED_LANGUAGES: Array[String] = ["zh_CN", "zh_HK", "es", "en", "ja"]
+const LANGUAGE_LABELS: Array[String] = ["简体中文", "繁體中文", "Español", "English", "日本語"]
 const MAX_CONFIG_BYTES: int = 65536
 
 var storage_path: String = "user://settings.json"
@@ -577,7 +577,7 @@ func _validate_values(volume_value: Variant, language_value: Variant, completion
 	if not DataValidation.is_number(system_sound_value) or float(system_sound_value) < 0.0 or float(system_sound_value) > 1.0:
 		return DataResult.failure("系统提示音音量必须是 0..1 的有限数字。")
 	if not language_value is String or not language_value in SUPPORTED_LANGUAGES:
-		return DataResult.failure("语言必须为简体中文（zh_CN）、繁體中文（zh_HK）、Español（es）或 English（en）。")
+		return DataResult.failure("语言必须为简体中文（zh_CN）、繁體中文（zh_HK）、Español（es）、English（en）或日本語（ja）。")
 	if not completion_value is bool:
 		return DataResult.failure("Tab 补全必须为布尔值。")
 	if not hints_value is String or not hints_value in SUPPORTED_CODE_HINTS:

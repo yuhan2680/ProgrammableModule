@@ -33,7 +33,7 @@ func _run() -> void:
 	var model := editor.editor_document
 	var menu := editor._command_menu
 	var button := editor._command_button
-	var row := editor.find_child("MapEditorCommandManagement", true, false) as HBoxContainer
+	var row := editor.find_child("MapEditorCommandManagement", true, false) as ResponsivePropertyRow
 	var label := editor.find_child("MapEditorCommandManagementLabel", true, false) as Label
 	var scroll := editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
 	var original := model.document.to_dict()
