@@ -6,6 +6,7 @@ signal rename_requested(entry: PlayerLevelRecord, new_name: String)
 signal delete_requested(entry: PlayerLevelRecord)
 signal edit_requested(entry: PlayerLevelRecord)
 signal open_folder_requested(entry: PlayerLevelRecord)
+signal migration_requested(entry: PlayerLevelRecord)
 
 const COLUMN_WEIGHTS := [0.34, 0.18, 0.20, 0.28]
 const MIN_COLUMN_WIDTH := 64.0
@@ -217,6 +218,7 @@ func _build_ui() -> void:
 	_context_menu.delete_requested.connect(delete_requested.emit)
 	_context_menu.edit_requested.connect(edit_requested.emit)
 	_context_menu.open_folder_requested.connect(open_folder_requested.emit)
+	_context_menu.migration_requested.connect(migration_requested.emit)
 
 
 ## 标题说明放在比表格略宽的浅灰圆角卡片中，长译文在卡片内部自然换行。
@@ -552,8 +554,10 @@ func _comes_before(first: PlayerLevelRecord, second: PlayerLevelRecord) -> bool:
 	return compared < 0
 
 
-## 状态排序沿用显示诊断的优先级，正常、普通异常、新版格式、文件损坏依次排列。
+## 状态排序沿用显示诊断的优先级，旧目录条目独立排在内容诊断之后。
 func _status_rank(entry: PlayerLevelRecord) -> int:
+	if entry.needs_migration:
+		return 4
 	if entry.is_corrupt:
 		return 3
 	if entry.requires_newer_version:
@@ -588,8 +592,8 @@ func _add_row(entry: PlayerLevelRecord) -> void:
 		label.tooltip_text = captions[index]
 		_configure_cell(label, index)
 		labels.append(label)
-	var issue := entry.is_corrupt or entry.requires_newer_version or not entry.errors.is_empty()
-	labels[3].add_theme_color_override("font_color", Color("e62020") if entry.is_corrupt or entry.requires_newer_version else Color("cb2222") if issue else GameTheme.TEXT)
+	var issue := entry.needs_migration or entry.is_corrupt or entry.requires_newer_version or not entry.errors.is_empty()
+	labels[3].add_theme_color_override("font_color", Color("ff2c2c") if entry.needs_migration else Color("e62020") if entry.is_corrupt or entry.requires_newer_version else Color("cb2222") if issue else GameTheme.TEXT)
 	var explanation := GameI18n.translate_errors(entry.errors)
 	# 子标签忽略鼠标以保留整行右键；真正接收悬停的按钮承载完整状态与诊断。
 	button.tooltip_text = captions[3] + ("\n" + explanation if not explanation.is_empty() else "") if issue else entry.display_name + "\n" + captions[1] + "\n" + entry.source_path.get_file()
@@ -597,8 +601,10 @@ func _add_row(entry: PlayerLevelRecord) -> void:
 	_style_row(button, entry.source_path == _selected_path)
 
 
-## 状态优先区分损坏文件及新版兼容问题，再展示首条普通诊断；完整诊断放入行提示。
+## 旧目录优先显示迁移状态，当前目录再区分内容诊断；完整诊断保留在行提示。
 func _entry_status(entry: PlayerLevelRecord) -> String:
+	if entry.needs_migration:
+		return tr("目录错误")
 	if entry.is_corrupt:
 		return tr("文件损坏")
 	if entry.requires_newer_version:
@@ -646,7 +652,7 @@ func _on_row_input(event: InputEvent, entry: PlayerLevelRecord, button: Button) 
 		if event.keycode == KEY_MENU or (event.keycode == KEY_F10 and event.shift_pressed):
 			_context_menu.popup_at(button, button.get_global_rect().get_center(), entry)
 			button.accept_event()
-		elif event.keycode == KEY_F2 and entry.can_rename:
+		elif event.keycode == KEY_F2 and entry.can_rename and not entry.needs_migration:
 			_begin_rename(entry)
 			button.accept_event()
 
@@ -674,7 +680,7 @@ func _sort_by(column: String) -> void:
 ## 名称单元格内覆盖无外框输入，保留原文字占位与用户选区，避免重排整行。
 func _begin_rename(entry: PlayerLevelRecord) -> void:
 	_cancel_rename()
-	if entry == null or not entry.can_rename or not _rows.has(entry.source_path):
+	if entry == null or entry.needs_migration or not entry.can_rename or not _rows.has(entry.source_path):
 		return
 	_select_row(entry.source_path)
 	_message.hide()

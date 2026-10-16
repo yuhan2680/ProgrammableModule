@@ -13,3 +13,5 @@ var can_edit: bool = false
 var playable: bool = false
 var requires_newer_version: bool = false
 var is_corrupt: bool = false
+# 旧目录文件仅提供迁移或查看原目录，不获得当前保存根的编辑与删除权限。
+var needs_migration: bool = false

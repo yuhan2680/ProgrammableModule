@@ -122,45 +122,18 @@ func save(document: MapDocument, registry: ContentRegistry, preferred_path: Stri
 	return DataResult.success({"path": destination, "document": candidate})
 
 
-## 将直接托管 JSON 的资源路径或系统绝对路径统一为 user://；调用方负责确认文件归属。
+## 将直接托管 JSON 的原生路径统一为当前保存目录表示，外部来源始终生成独立副本。
 func managed_path(path: String) -> String:
-	if path.is_empty() or _has_unsafe_segments(path):
+	if path.is_empty() or _has_unsafe_segments(path) or path.get_file().begins_with("."):
 		return ""
-	# 目录扫描不展示隐藏 JSON；保留来源文件，让普通保存生成可见的玩家副本。
-	if path.get_file().begins_with("."):
-		return ""
-	if not DataValidation.is_resource_path(directory) or not directory.begins_with("user://"):
-		return ""
-	var absolute_directory := ProjectSettings.globalize_path(directory)
-	var absolute_path := ProjectSettings.globalize_path(path)
-	if absolute_path.get_base_dir() != absolute_directory or path.get_extension().to_lower() != "json":
+	if not PlayerLevelPaths.is_direct_json(path, directory):
 		return ""
 	return directory.path_join(path.get_file())
 
 
-## 只接受 user:// 下的逐段目录，读写均不跟随链接，也不把普通文件视为缺失目录。
+## 复用玩家关卡专用目录授权，不改变导出到任意用户选择位置的独立语义。
 func _managed_folder(create_missing: bool) -> DataResult:
-	if not DataValidation.is_resource_path(directory) or not directory.begins_with("user://"):
-		return DataResult.failure("玩家关卡目录必须位于 user://，且不能包含上级路径。")
-	var folder := DirAccess.open("user://")
-	if folder == null:
-		return DataResult.failure("无法打开玩家关卡根目录：%s。" % error_string(DirAccess.get_open_error()))
-	for segment in directory.trim_prefix("user://").split("/"):
-		if folder.is_link(segment):
-			return DataResult.failure("玩家关卡目录不能包含符号链接：%s。" % directory)
-		if not folder.dir_exists(segment):
-			if folder.file_exists(segment):
-				return DataResult.failure("玩家关卡目录被同名文件占用：%s。" % directory)
-			if not create_missing:
-				return DataResult.success()
-			var create_error := folder.make_dir(segment)
-			if create_error != OK:
-				return DataResult.failure("无法创建玩家关卡目录：%s。" % error_string(create_error))
-		var change_error := folder.change_dir(segment)
-		if change_error != OK:
-			return DataResult.failure("无法打开玩家关卡目录：%s。" % error_string(change_error))
-	folder.include_hidden = true
-	return DataResult.success(folder)
+	return PlayerLevelPaths.open_directory(directory, create_missing)
 
 
 ## 读取所有直接 JSON 的顶层 ID；坏地图也保留 ID 占位，避免修复后遮蔽本次保存。

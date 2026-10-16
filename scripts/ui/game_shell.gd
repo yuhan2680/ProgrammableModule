@@ -18,7 +18,12 @@ const ACTIVITY_SAVE_INTERVAL := 30.0
 @export var start_in_editor: bool = false
 
 # 这些依赖可以在测试中替换，避免测试打开资源管理器或写入玩家的真实草稿。
-var user_levels_directory: String = "user://levels"
+var user_levels_directory: String = ""
+var player_save_location: PlayerSaveLocation
+var player_saves_source := "user://levels"
+var player_saves_journal := "user://player_saves_migration.json"
+var legacy_upgrade: PlayerLegacyUpgrade
+var legacy_upgrade_native_dialog_handler: Callable
 var drafts_directory: String = "user://solutions"
 var settings_path: String = "user://settings.json"
 var profile_path: String = ""
@@ -154,6 +159,15 @@ var _startup_menu_card: Panel
 var _startup_menu_buttons: Array[Button] = []
 var _startup_menu_tween: Tween
 var _startup_menu_progress := 0.0
+var _legacy_upgrade_state: Dictionary = {}
+var _legacy_upgrade_errors := PackedStringArray()
+var _legacy_upgrade_dialog: PlayerLegacyUpgradeDialog
+var _player_storage_ready := false
+var _player_storage_errors := PackedStringArray()
+var _player_storage_continuation: Callable
+var _player_storage_dialog: FileDialog
+var _player_storage_problem: ConfirmationDialog
+var _player_storage_selecting := false
 var _startup_notice_title := ""
 var _startup_notice_body := ""
 
@@ -189,7 +203,16 @@ func _ready() -> void:
 	window_controller.availability_changed.connect(_sync_window_resolutions)
 	add_child(window_controller)
 	drafts = GameDraftStore.new(drafts_directory)
-	catalog.user_directory = user_levels_directory
+	# 显式注入目录保持隔离；正式启动解析可见位置，旧地图只在玩家明确点击时迁移。
+	if not user_levels_directory.is_empty():
+		_player_storage_ready = true
+	elif player_save_location == null and settings_path != "user://settings.json":
+		user_levels_directory = settings_path.get_base_dir().path_join("levels")
+		_player_storage_ready = true
+	else:
+		_prepare_player_storage()
+	catalog.user_directory = user_levels_directory if _player_storage_ready else ""
+	_prepare_legacy_upgrade()
 	if _startup_managed and not await _report_startup_step(2.0 / 6.0):
 		return
 	_build_ui()
@@ -204,7 +227,7 @@ func _ready() -> void:
 	catalog.refresh(registry)
 	if _startup_managed and not await _report_startup_step(5.0 / 6.0):
 		return
-	if start_in_editor:
+	if start_in_editor and _player_storage_ready:
 		_open_editor()
 	else:
 		_show_main_page()
@@ -223,6 +246,193 @@ func _ready() -> void:
 		_startup_notice_body = "\n".join(profile_result.errors)
 	if not _startup_menu_pending:
 		_show_startup_notice()
+
+
+## 正式入口只准备可见保存目录，不自动搬动旧地图，也不回退到隐藏目录写入。
+func _prepare_player_storage() -> void:
+	_player_storage_ready = false
+	if player_save_location == null:
+		player_save_location = PlayerSaveLocation.new()
+	var resolved := player_save_location.resolve()
+	_player_storage_errors = resolved.errors.duplicate()
+	if not resolved.is_ok():
+		return
+	user_levels_directory = str(resolved.value)
+	var prepared := PlayerLevelPaths.open_directory(user_levels_directory, true, true)
+	_player_storage_errors = prepared.errors.duplicate()
+	_player_storage_ready = prepared.is_ok()
+
+
+## 保存相关入口可重试失败的授权或迁移，教学关卡始终可在主菜单继续游玩。
+func _ensure_player_storage(continuation: Callable) -> bool:
+	if _player_storage_ready:
+		return true
+	_player_storage_continuation = continuation
+	_request_player_storage()
+	return false
+
+
+## macOS 沙盒首次使用原生选择器授予文稿目录访问；恢复失败时沿用相同重试入口。
+func _request_player_storage() -> void:
+	if _closing or _player_storage_selecting or (is_instance_valid(_player_storage_problem) and _player_storage_problem.visible):
+		return
+	if player_save_location != null and player_save_location.needs_authorization:
+		if not is_instance_valid(_player_storage_dialog):
+			_player_storage_dialog = FileDialog.new()
+			_player_storage_dialog.name = "PlayerSaveFolderDialog"
+			_player_storage_dialog.access = FileDialog.ACCESS_FILESYSTEM
+			_player_storage_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+			_player_storage_dialog.use_native_dialog = true
+			_player_storage_dialog.title = "请选择文稿（Documents）文件夹以保存玩家关卡"
+			_player_storage_dialog.dir_selected.connect(_select_player_save_folder)
+			_player_storage_dialog.canceled.connect(_cancel_player_save_folder)
+			add_child(_player_storage_dialog)
+		_player_storage_selecting = true
+		_player_storage_dialog.popup_centered(Vector2i(900, 600))
+	else:
+		_show_player_storage_problem()
+
+
+## 系统选择成功后持久化位置，再继续原来的保存或单条迁移入口。
+func _select_player_save_folder(directory: String) -> void:
+	_player_storage_selecting = false
+	if _closing:
+		return
+	# 原授权记录丢失时也不能把仍绑定旧目录的迁移进度提交到另一个保存位置。
+	var target := directory.trim_suffix("/").path_join(PlayerLevelPaths.SAVE_SUFFIX)
+	var compatible := PlayerLevelMigration.new().check_target(player_saves_source, target, player_saves_journal)
+	if not compatible.is_ok():
+		_player_storage_errors = compatible.errors.duplicate()
+		player_save_location.needs_authorization = true
+		_show_player_storage_problem()
+		return
+	var selected := player_save_location.accept_directory(directory)
+	if not selected.is_ok():
+		_player_storage_errors = selected.errors.duplicate()
+		_show_player_storage_problem()
+		return
+	_retry_player_storage()
+
+
+## 取消授权明确保留所有原文件；下一次进入地图编辑或导入时仍可以重新选择。
+func _cancel_player_save_folder() -> void:
+	_player_storage_selecting = false
+	_player_storage_continuation = Callable()
+	_show_message("玩家关卡保存位置", tr("尚未授权保存目录。再次打开地图编辑器、导入关卡或玩家关卡列表时可以重试。"))
+
+
+## 读取或写入错误显示具体原因与重试按钮，不能假装已完成迁移或清空玩家地图。
+func _show_player_storage_problem() -> void:
+	if not is_instance_valid(_player_storage_problem):
+		_player_storage_problem = ConfirmationDialog.new()
+		_player_storage_problem.name = "PlayerSaveFolderProblem"
+		_player_storage_problem.title = "无法使用玩家关卡保存目录"
+		_player_storage_problem.ok_button_text = "重试"
+		_player_storage_problem.cancel_button_text = "暂不处理"
+		_player_storage_problem.confirmed.connect(_retry_player_storage)
+		_player_storage_problem.canceled.connect(func() -> void: _player_storage_continuation = Callable())
+		add_child(_player_storage_problem)
+	_player_storage_problem.dialog_text = user_levels_directory + "\n" + GameI18n.translate_errors(_player_storage_errors)
+	_player_storage_problem.popup_centered(Vector2i(720, 310))
+
+
+## 重试成功后重新扫描同一正式路径；失败则保留原入口，等待玩家修复权限。
+func _retry_player_storage() -> void:
+	if is_instance_valid(_player_storage_problem):
+		_player_storage_problem.hide()
+	_prepare_player_storage()
+	if not _player_storage_ready:
+		_request_player_storage()
+		return
+	catalog.user_directory = user_levels_directory
+	if legacy_upgrade != null:
+		legacy_upgrade.target_directory = user_levels_directory
+	catalog.refresh(registry)
+	var continuation := _player_storage_continuation
+	_player_storage_continuation = Callable()
+	if continuation.is_valid():
+		continuation.call()
+	elif page == Page.LEVELS:
+		_refresh_levels()
+
+
+## 升级状态与玩家档案分开；空旧目录静默停用，已有作品只登记一次原生提醒。
+func _prepare_legacy_upgrade() -> void:
+	if legacy_upgrade == null and (player_save_location == null or user_levels_directory == player_saves_source):
+		return
+	if legacy_upgrade == null:
+		legacy_upgrade = PlayerLegacyUpgrade.new()
+		if settings_path != "user://settings.json":
+			legacy_upgrade.state_directory = settings_path.get_base_dir().path_join("player_saves_upgrade")
+	legacy_upgrade.source_directory = player_saves_source
+	legacy_upgrade.target_directory = user_levels_directory
+	legacy_upgrade.journal_path = player_saves_journal
+	var inspected := legacy_upgrade.inspect()
+	_legacy_upgrade_errors = inspected.errors.duplicate()
+	if inspected.is_ok():
+		_legacy_upgrade_state = inspected.value
+
+
+## 只在首次发现旧作品时询问，默认关闭保留原件，不能把未回应当作删除授权。
+func _show_legacy_upgrade_notice() -> bool:
+	if legacy_upgrade == null:
+		return false
+	if not _legacy_upgrade_errors.is_empty():
+		_show_message("旧关卡迁移", GameI18n.translate_errors(_legacy_upgrade_errors))
+		return true
+	if not _legacy_upgrade_state.get("needs_notice", false):
+		return false
+	var marked := legacy_upgrade.mark_prompted()
+	if not marked.is_ok():
+		_show_message("旧关卡迁移", GameI18n.translate_errors(marked.errors))
+		return true
+	_legacy_upgrade_state["needs_notice"] = false
+	if not is_instance_valid(_legacy_upgrade_dialog):
+		_legacy_upgrade_dialog = PlayerLegacyUpgradeDialog.new()
+		_legacy_upgrade_dialog.native_dialog_handler = legacy_upgrade_native_dialog_handler
+		_legacy_upgrade_dialog.migrate_requested.connect(_show_player_level_list_page)
+		_legacy_upgrade_dialog.discard_requested.connect(_discard_legacy_levels)
+		add_child(_legacy_upgrade_dialog)
+	_legacy_upgrade_dialog.open_confirmation(ProjectSettings.globalize_path(player_saves_source), int(_legacy_upgrade_state.get("pending_count", 0)))
+	return true
+
+
+## 只有原生询问中明确的放弃按钮进入此处，删除限定在本次旧关卡目录快照。
+func _discard_legacy_levels() -> void:
+	if _closing or legacy_upgrade == null:
+		return
+	var discarded := legacy_upgrade.discard()
+	if not discarded.is_ok():
+		_show_message("无法清理旧关卡目录", GameI18n.translate_errors(discarded.errors))
+		return
+	_legacy_upgrade_state = {"needs_notice": false, "retired": true, "pending_count": 0}
+	if page == Page.PLAYER_LEVEL_LIST:
+		_refresh_player_level_list()
+
+
+## 旧条目先核对列表快照，授权后只迁移这一文件；全部完成才清理旧副本并永久停用旧目录。
+func _migrate_player_entry(entry: PlayerLevelRecord) -> void:
+	if page != Page.PLAYER_LEVEL_LIST or entry == null or not entry.needs_migration or legacy_upgrade == null or _legacy_upgrade_state.get("retired", false):
+		return
+	if not _ensure_player_storage(_migrate_player_entry.bind(entry)):
+		return
+	var source := player_level_library.get_legacy_migration_source(entry)
+	if not source.is_ok():
+		_show_message("无法迁移旧关卡", GameI18n.translate_errors(source.errors))
+		return
+	var migrated := PlayerLevelMigration.new().migrate_file(player_saves_source, user_levels_directory, player_saves_journal, source.value.filename, source.value.fingerprint)
+	if not migrated.is_ok():
+		_show_message("无法迁移旧关卡", GameI18n.translate_errors(migrated.errors))
+		return
+	legacy_upgrade.target_directory = user_levels_directory
+	var retired := legacy_upgrade.retire_if_migrated()
+	if retired.is_ok() and retired.value:
+		_legacy_upgrade_state = {"needs_notice": false, "retired": true, "pending_count": 0}
+	catalog.user_directory = user_levels_directory
+	catalog.refresh(registry)
+	_refresh_player_level_list()
+	if not retired.is_ok():
+		_show_message("无法清理旧关卡目录", GameI18n.translate_errors(retired.errors))
 
 
 ## 只在一个真实初始化阶段结束后报告，并先绘制当前进度再进行下一阶段。
@@ -309,6 +519,10 @@ func _apply_startup_menu_transition(progress: float) -> void:
 ## 启动期间先保存原有错误反馈，卡片出现后再展示，避免弹窗抢到加载层前方。
 func _show_startup_notice() -> void:
 	if _startup_notice_title.is_empty():
+		if _show_legacy_upgrade_notice():
+			return
+		if not _player_storage_ready:
+			_request_player_storage()
 		return
 	_show_message(_startup_notice_title, _startup_notice_body)
 	_startup_notice_title = ""
@@ -1652,6 +1866,8 @@ func _level_icon_box(color: Color, border: Color = Color.TRANSPARENT) -> StyleBo
 func _import_levels() -> void:
 	if page != Page.LEVELS or _level_import_pending:
 		return
+	if not _ensure_player_storage(_import_levels):
+		return
 	_import_dialog.current_file = ""
 	var downloads := OS.get_system_dir(OS.SYSTEM_DIR_DOWNLOADS)
 	if downloads.is_empty():
@@ -2298,6 +2514,8 @@ func _back_to_levels() -> void:
 
 ## 地图编辑器只负责编辑并发出试玩请求，页面切换和游戏会话由外层承接。
 func _open_editor(initial_path: String = "", return_to_player_list: bool = false) -> void:
+	if not _ensure_player_storage(_open_editor.bind(initial_path, return_to_player_list)):
+		return
 	_clear_page()
 	_editor_returns_to_player_list = return_to_player_list
 	_editor = MapEditor.new()
@@ -2643,6 +2861,7 @@ func _show_player_level_list_page() -> void:
 	player_level_list_panel.delete_requested.connect(_delete_player_entry)
 	player_level_list_panel.edit_requested.connect(_open_editor_from_player_entry)
 	player_level_list_panel.open_folder_requested.connect(_open_player_entry_folder)
+	player_level_list_panel.migration_requested.connect(_migrate_player_entry)
 	_menu_card.add_child(player_level_list_panel)
 	player_level_list_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_attach_settings_header()
@@ -2654,6 +2873,8 @@ func _refresh_player_level_list() -> void:
 	if page != Page.PLAYER_LEVEL_LIST or not is_instance_valid(player_level_list_panel):
 		return
 	player_level_library.user_directory = catalog.user_directory
+	player_level_library.legacy_directory = player_saves_source if legacy_upgrade != null and not _legacy_upgrade_state.get("retired", false) else ""
+	player_level_library.migration_journal = player_saves_journal
 	var result := player_level_library.refresh(registry)
 	player_level_list_panel.set_entries(player_level_library.entries)
 	if not result.is_ok():

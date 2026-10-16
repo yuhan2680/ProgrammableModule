@@ -3,6 +3,8 @@ extends RefCounted
 ## 独立管理玩家地图文件，包括未完成和损坏文档；不会更改选关目录的可玩规则。
 
 var user_directory: String = "user://levels"
+var legacy_directory: String = ""
+var migration_journal: String = "user://player_saves_migration.json"
 var entries: Array[PlayerLevelRecord] = []
 var _sources: Dictionary = {}
 
@@ -13,22 +15,39 @@ func refresh(content: ContentRegistry) -> DataResult:
 	_sources.clear()
 	if content == null:
 		return DataResult.failure("玩家关卡文件列表需要已加载的内容注册表。")
-	var folder_result := _safe_folder()
+	# 尚未授权新位置时仍可只读查看旧目录；空目标只用于迁移记录过滤，不获得写权限。
+	var folder_result := DataResult.success() if user_directory.is_empty() and not legacy_directory.is_empty() else _safe_folder()
 	if not folder_result.is_ok():
 		return folder_result
 	var folder: DirAccess = folder_result.value
-	if folder == null:
+	if folder != null:
+		_append_directory_records(user_directory, folder, folder.get_files(), content)
+	if legacy_directory.is_empty() or ProjectSettings.globalize_path(legacy_directory) == ProjectSettings.globalize_path(user_directory):
 		return DataResult.success(entries)
-	var dates := _windows_creation_times(ProjectSettings.globalize_path(user_directory)) if OS.get_name() == "Windows" else {}
-	var names := folder.get_files()
+	var legacy := _safe_legacy_folder()
+	if not legacy.is_ok():
+		return _refresh_error(legacy)
+	if legacy.value == null:
+		return DataResult.success(entries)
+	var pending := PlayerLevelMigration.new().pending_files(legacy_directory, user_directory, migration_journal)
+	if not pending.is_ok():
+		return _refresh_error(pending)
+	_append_directory_records(legacy_directory, legacy.value, pending.value, content, true)
+	return DataResult.success(entries)
+
+
+## 新旧目录复用文件元数据和内容诊断；旧文件只作为迁移候选，不污染当前目录的重复 ID 判断。
+func _append_directory_records(directory: String, folder: DirAccess, names: PackedStringArray, content: ContentRegistry, legacy: bool = false) -> void:
+	var dates := _windows_creation_times(ProjectSettings.globalize_path(directory)) if OS.get_name() == "Windows" else {}
 	names.sort()
 	var ids: Dictionary = {}
 	for filename in names:
 		if filename.get_extension().to_lower() != "json":
 			continue
 		var record := PlayerLevelRecord.new()
-		record.source_path = user_directory.path_join(filename)
+		record.source_path = directory.path_join(filename)
 		record.display_name = filename.get_basename()
+		record.needs_migration = legacy
 		entries.append(record)
 		if folder.is_link(filename) or folder.dir_exists(filename):
 			record.errors.append("玩家关卡文件不能是符号链接或目录。")
@@ -39,6 +58,10 @@ func refresh(content: ContentRegistry) -> DataResult:
 			continue
 		record.created_at = int(dates.get(filename, 0)) if OS.get_name() == "Windows" else _creation_time(record.source_path)
 		var level_id := _read_record(record, content)
+		if legacy:
+			record.can_edit = false
+			record.can_rename = false
+			record.playable = false
 		if not level_id.is_empty():
 			if not ids.has(level_id):
 				ids[level_id] = []
@@ -50,14 +73,20 @@ func refresh(content: ContentRegistry) -> DataResult:
 			record.playable = false
 			record.errors.append("玩家关卡文件已改变，请刷新文件列表。")
 			continue
-		_sources[record.get_instance_id()] = {"path": record.source_path, "directory": user_directory, "fingerprint": fingerprint, "editable": record.can_edit, "id": level_id}
+		_sources[record.get_instance_id()] = {"path": record.source_path, "directory": directory, "fingerprint": fingerprint, "editable": record.can_edit, "id": level_id, "legacy": legacy, "target": user_directory, "journal": migration_journal}
 	var builtin_ids := _builtin_ids()
 	for level_id: String in ids:
 		if ids[level_id].size() > 1 or builtin_ids.has(level_id):
 			for record: PlayerLevelRecord in ids[level_id]:
 				record.errors.append("关卡 ID 重复，无法用于游玩：%s。" % level_id)
 				record.playable = false
-	return DataResult.success(entries)
+
+
+## 旧目录或迁移记录出错时仍返回已经取得的新目录条目，让列表保留可用文件和明确诊断。
+func _refresh_error(failure: DataResult) -> DataResult:
+	var result := DataResult.success(entries)
+	result.errors = failure.errors.duplicate()
+	return result
 
 
 ## 对可编辑草稿只修改显示名，复用现有名称规则和允许无出生点的原子保存。
@@ -114,10 +143,21 @@ func delete_entry(record: PlayerLevelRecord) -> DataResult:
 
 ## 仅返回当前真实文件所在绝对目录，系统文件管理器由界面调用。
 func get_entry_directory(record: PlayerLevelRecord) -> DataResult:
-	var source_result := _verified_source(record)
+	var source_result := _verified_source(record, true)
 	if not source_result.is_ok():
 		return source_result
 	return DataResult.success(ProjectSettings.globalize_path(source_result.value.path.get_base_dir()))
+
+
+## 单条迁移只返回当前稳定旧文件的名称和摘要，实际复制与完成检查点仍由迁移模块负责。
+func get_legacy_migration_source(record: PlayerLevelRecord) -> DataResult:
+	var source_result := _verified_source(record, true)
+	if not source_result.is_ok():
+		return source_result
+	var snapshot: Dictionary = source_result.value
+	if not snapshot.get("legacy", false):
+		return DataResult.failure("此关卡已经位于当前保存目录，无需迁移。")
+	return DataResult.success({"filename": snapshot.path.get_file(), "fingerprint": str(snapshot.fingerprint).get_slice(":", 1)})
 
 
 ## 可编辑文件也须重新核验快照，防止旧菜单打开外部替换后的文件。
@@ -270,16 +310,22 @@ static func _first_module_reference_is_unknown(value: Variant, content: ContentR
 
 
 ## 授权同时绑定当前对象、目录、直接文件类型和原始字节，字段伪造无法转移操作目标。
-func _verified_source(record: PlayerLevelRecord) -> DataResult:
+func _verified_source(record: PlayerLevelRecord, allow_legacy: bool = false) -> DataResult:
 	if record == null or not entries.has(record):
 		return DataResult.failure("只能操作当前文件列表中的玩家关卡。")
 	var snapshot: Dictionary = _sources.get(record.get_instance_id(), {})
-	if snapshot.is_empty() or snapshot.directory != user_directory or snapshot.path != record.source_path:
+	if snapshot.is_empty() or snapshot.path != record.source_path:
 		return DataResult.failure("只能操作当前文件列表中的玩家关卡。")
+	var legacy: bool = snapshot.get("legacy", false)
+	var directory := legacy_directory if legacy else user_directory
+	if snapshot.directory != directory or (legacy and (snapshot.target != user_directory or snapshot.journal != migration_journal)):
+		return DataResult.failure("只能操作当前文件列表中的玩家关卡。")
+	if legacy and not allow_legacy:
+		return DataResult.failure("此关卡位于旧目录，请先迁移后再编辑或删除。")
 	var path: String = snapshot.path
-	if not DataValidation.is_resource_path(path) or path.get_base_dir() != user_directory or path.get_extension().to_lower() != "json":
+	if not PlayerLevelPaths.is_direct_json(path, directory) or path.get_base_dir() != directory:
 		return DataResult.failure("玩家关卡文件路径不安全。")
-	var folder_result := _safe_folder()
+	var folder_result := _safe_legacy_folder() if legacy else _safe_folder()
 	if not folder_result.is_ok():
 		return folder_result
 	var folder: DirAccess = folder_result.value
@@ -290,6 +336,12 @@ func _verified_source(record: PlayerLevelRecord) -> DataResult:
 		return DataResult.failure("玩家关卡文件不能是符号链接或目录。")
 	if not folder.file_exists(filename):
 		return DataResult.failure("玩家关卡文件已不存在，请刷新文件列表。")
+	if legacy:
+		var pending := PlayerLevelMigration.new().pending_files(legacy_directory, user_directory, migration_journal)
+		if not pending.is_ok():
+			return pending
+		if not filename in pending.value:
+			return DataResult.failure("此旧关卡已迁移或文件已改变，请刷新文件列表。")
 	var fingerprint := _fingerprint(path)
 	if fingerprint.is_empty() or fingerprint != snapshot.fingerprint:
 		return DataResult.failure("玩家关卡文件已改变，请刷新文件列表。")
@@ -298,30 +350,16 @@ func _verified_source(record: PlayerLevelRecord) -> DataResult:
 	return DataResult.success(snapshot)
 
 
-## 只遍历正式玩家目录或独占测试目录，不跟随任何目录链接，也不隐式创建缺失目录。
+## 只遍历正式玩家目录或隔离测试目录，不跟随链接，也不创建缺失目录。
 func _safe_folder() -> DataResult:
-	if not DataValidation.is_resource_path(user_directory) or not user_directory.begins_with("user://"):
-		return DataResult.failure("玩家关卡文件目录必须是安全的 user://levels 路径。")
-	var segments := user_directory.trim_prefix("user://").split("/")
-	var isolated_test := segments.size() >= 3 and segments[0] == "tests"
-	if user_directory != "user://levels" and not isolated_test:
-		return DataResult.failure("只允许操作玩家关卡目录，不能操作设置或记录目录。")
-	if segments[-1] in ["solutions", "settings", "data"]:
-		return DataResult.failure("玩家关卡文件目录不能使用设置或记录目录。")
-	var folder := DirAccess.open("user://")
-	if folder == null:
-		return DataResult.failure("无法访问玩家关卡根目录。")
-	for segment in segments:
-		if folder.is_link(segment):
-			return DataResult.failure("玩家关卡目录不能包含符号链接。")
-		if not folder.dir_exists(segment):
-			if folder.file_exists(segment):
-				return DataResult.failure("玩家关卡目录被同名文件占用。")
-			return DataResult.success()
-		if folder.change_dir(segment) != OK:
-			return DataResult.failure("无法访问玩家关卡文件目录。")
-	folder.include_hidden = true
-	return DataResult.success(folder)
+	return PlayerLevelPaths.open_directory(user_directory, false, true)
+
+
+## 迁移来源只读取旧正式 user://levels 或隔离测试子目录，绝不扩大外部绝对目录授权。
+func _safe_legacy_folder() -> DataResult:
+	if not legacy_directory.begins_with("user://") or not PlayerLevelPaths.is_allowed_directory(legacy_directory, true):
+		return DataResult.failure("旧玩家关卡迁移来源不在允许的目录内。")
+	return PlayerLevelPaths.open_directory(legacy_directory, false, true)
 
 
 ## 以固定小块计算完整字节指纹，既支持空文件与超限坏文件，也不为其分配巨大缓冲区。

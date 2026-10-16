@@ -20,10 +20,10 @@ func refresh(content: ContentRegistry) -> DataResult:
 		return DataResult.failure(errors[0])
 	var used_ids: Dictionary = {}
 	_load_directory("res://data/levels", content, used_ids)
-	if user_directory.begins_with("user://"):
+	if PlayerLevelPaths.is_allowed_directory(user_directory):
 		_load_directory(user_directory, content, used_ids)
 	else:
-		errors.append("自定义关卡目录必须位于 user://。")
+		errors.append("玩家关卡目录不在允许的保存位置。")
 	var result := DataResult.success(levels)
 	result.errors = errors.duplicate()
 	return result
@@ -31,13 +31,10 @@ func refresh(content: ContentRegistry) -> DataResult:
 
 ## 创建自定义关卡目录并返回绝对路径，打开系统文件夹由 UI 自行处理。
 func ensure_import_directory() -> DataResult:
-	if not DataValidation.is_resource_path(user_directory) or not user_directory.begins_with("user://"):
-		return DataResult.failure("自定义关卡目录必须位于 user://，且不能包含上级路径。")
-	var absolute := ProjectSettings.globalize_path(user_directory)
-	var error := DirAccess.make_dir_recursive_absolute(absolute)
-	if error != OK:
-		return DataResult.failure("无法创建导入目录：%s。" % error_string(error))
-	return DataResult.success(absolute)
+	var opened := PlayerLevelPaths.open_directory(user_directory, true)
+	if not opened.is_ok():
+		return opened
+	return DataResult.success(ProjectSettings.globalize_path(user_directory))
 
 
 ## 只为本次目录实际拥有的玩家关卡提供删除入口；磁盘状态在执行时重新检查。
@@ -48,7 +45,7 @@ func can_delete_user_level(definition: LevelDefinition) -> bool:
 	if snapshot.is_empty() or snapshot.directory != user_directory:
 		return false
 	var path := definition.source_path
-	return snapshot.path == path and snapshot.id == definition.id and DataValidation.is_resource_path(path) and path.get_base_dir() == user_directory and path.get_extension().to_lower() == "json"
+	return snapshot.path == path and snapshot.id == definition.id and PlayerLevelPaths.is_direct_json(path, user_directory) and path.get_base_dir() == user_directory
 
 
 ## 仅返回当前玩家卡片实际所属的安全目录；读取入口不创建目录，也不打开外部来源。
@@ -230,31 +227,9 @@ func clear_user_levels(draft_store: GameDraftStore = null) -> DataResult:
 	return _clear_import_files(folder, filenames, level_ids, draft_store)
 
 
-## 删除入口只接受正式导入位置或隔离测试目录，拒绝根目录、配置目录及任何路径链接。
+## 文件管理复用严格目录授权，拒绝根目录、配置目录以及任何托管目录链接。
 func _user_clear_folder() -> DataResult:
-	if not DataValidation.is_resource_path(user_directory) or not user_directory.begins_with("user://"):
-		return DataResult.failure("用户关卡清除目录必须是安全的 user://levels 路径。")
-	var segments := user_directory.trim_prefix("user://").split("/")
-	var isolated_test := segments.size() >= 3 and segments[0] == "tests"
-	if user_directory != "user://levels" and not isolated_test:
-		return DataResult.failure("只允许清除导入关卡目录，不能清除设置、记录或其它数据目录。")
-	if segments[-1] in ["solutions", "settings", "data"]:
-		return DataResult.failure("用户关卡清除目录不能使用设置或记录目录。")
-	var folder := DirAccess.open("user://")
-	if folder == null:
-		return DataResult.failure("无法访问用户关卡根目录：%s。" % error_string(DirAccess.get_open_error()))
-	for segment in segments:
-		if folder.is_link(segment):
-			return DataResult.failure("用户关卡目录不能包含符号链接，未清除任何文件：%s。" % user_directory)
-		if not folder.dir_exists(segment):
-			if folder.file_exists(segment):
-				return DataResult.failure("用户关卡目录被同名文件占用，未清除任何文件：%s。" % user_directory)
-			return DataResult.success()
-		var change_error := folder.change_dir(segment)
-		if change_error != OK:
-			return DataResult.failure("无法访问用户关卡目录：%s。" % error_string(change_error))
-	folder.include_hidden = true
-	return DataResult.success(folder)
+	return PlayerLevelPaths.open_directory(user_directory, false, true)
 
 
 ## 独立读取全部内置 JSON 的真实 ID，不使用可能遗漏坏文件或重复 ID 的显示列表作为保护范围。
@@ -378,17 +353,28 @@ func _write_user_level(document: MapDocument, path: String, content: ContentRegi
 
 ## 每个目录单独排序后追加，保证用户 order 不会改变内置关卡的优先位置。
 func _load_directory(directory: String, content: ContentRegistry, used_ids: Dictionary) -> void:
-	if not DataValidation.is_resource_path(directory):
-		errors.append("关卡目录路径无效：%s。" % directory)
-		return
-	if not DirAccess.dir_exists_absolute(directory):
-		if not directory.begins_with("user://"):
+	var folder: DirAccess
+	if directory == user_directory:
+		var opened := PlayerLevelPaths.open_directory(directory)
+		if not opened.is_ok():
+			errors.append_array(opened.errors)
+			return
+		folder = opened.value
+		if folder == null:
+			return
+	else:
+		if not DataValidation.is_resource_path(directory):
+			errors.append("关卡目录路径无效：%s。" % directory)
+			return
+		if not DirAccess.dir_exists_absolute(directory):
 			errors.append("内置关卡目录不存在：%s。" % directory)
-		return
-	var folder := DirAccess.open(directory)
-	if folder == null:
-		errors.append("无法打开关卡目录：%s。" % directory)
-		return
+			return
+		folder = DirAccess.open(directory)
+		if folder == null:
+			errors.append("无法打开关卡目录：%s。" % directory)
+			return
+
+	folder.include_hidden = false
 	var names := folder.get_files()
 	names.sort()
 	var loaded: Array[LevelDefinition] = []
@@ -397,6 +383,9 @@ func _load_directory(directory: String, content: ContentRegistry, used_ids: Dict
 			continue
 		var path := directory.path_join(filename)
 		var is_user_file := directory == user_directory
+		if is_user_file and folder.is_link(filename):
+			errors.append("玩家关卡路径不安全，未访问任何文件：%s。" % path)
+			continue
 		var fingerprint := _user_file_fingerprint(path) if is_user_file else ""
 		var parsed := MapCodec.load_file(path, content, true)
 		if not parsed.is_ok():

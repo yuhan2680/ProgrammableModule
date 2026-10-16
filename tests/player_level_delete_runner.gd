@@ -170,7 +170,8 @@ func _test_symbolic_links() -> void:
 		return
 	_error(catalog.delete_user_level(selected), "加载后被替换成符号链接的文件不能删除")
 	_check(folder.is_link("owned.json") and FileAccess.get_file_as_bytes(external) == external_bytes, "链接及外部目标都保留")
-	_ok(catalog.refresh(_content), "扫描链接地图本身不会越界写盘")
+	_error(catalog.refresh(_content), "扫描链接地图报告安全错误，不读取链接目标")
+	_check(_find(catalog, "linked") == null and FileAccess.get_file_as_bytes(external) == external_bytes, "链接目标未加载且字节保持不变")
 	_error(catalog.delete_user_level(_find(catalog, "linked")), "直接载入的链接地图也不能删除")
 	DirAccess.remove_absolute(target)
 	_write_map(target, "linked")

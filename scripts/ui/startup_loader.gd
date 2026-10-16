@@ -41,7 +41,7 @@ const WARM_RESOURCES := [
 # 这些路径供独立启动回归替换，不读取或写入正式玩家测试数据。
 var scene_path := GAME_SCENE
 var settings_path := "user://settings.json"
-var user_levels_directory := "user://levels"
+var user_levels_directory := ""
 var drafts_directory := "user://solutions"
 var progress := 0.0
 var phase := "waiting"

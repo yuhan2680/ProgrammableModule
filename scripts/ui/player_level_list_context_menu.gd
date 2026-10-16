@@ -6,6 +6,7 @@ signal rename_requested(entry: PlayerLevelRecord)
 signal delete_requested(entry: PlayerLevelRecord)
 signal edit_requested(entry: PlayerLevelRecord)
 signal open_folder_requested(entry: PlayerLevelRecord)
+signal migration_requested(entry: PlayerLevelRecord)
 
 const EDGE_MARGIN := 12.0
 const MENU_SCALE := 0.8
@@ -19,9 +20,10 @@ var _entry: PlayerLevelRecord
 var _pointer := Vector2.ZERO
 var _open := false
 var _swallowed_button := MOUSE_BUTTON_NONE
+var _legacy_actions := false
 
 
-## 在独立画布层构造四项轻量菜单，背景合成与设置正文遮罩互不影响。
+## 在独立画布层构造轻量菜单，背景合成与设置正文遮罩互不影响。
 func _ready() -> void:
 	layer = 51
 	_overlay = Control.new()
@@ -50,12 +52,26 @@ func _ready() -> void:
 	glass_material.shader = load("res://assets/ui/menu_glass.gdshader")
 	_glass.material = glass_material
 	_panel.add_child(_glass)
-	_items.append(_make_item("ListRenamePlayerLevelButton", "重命名关卡", "rename"))
-	_items.append(_make_item("ListDeletePlayerLevelButton", "删除关卡", "delete", true))
-	_items.append(_make_item("ListEditPlayerLevelButton", "使用地图编辑器更改", "edit"))
-	_items.append(_make_item("ListOpenPlayerLevelFolderButton", "查看目录", "folder"))
+	_build_actions(false)
 	get_viewport().size_changed.connect(_update_placement)
 	set_process_input(false)
+
+
+## 旧目录与正常条目使用互斥的动作集合，未迁移文件不保留隐藏的编辑或删除菜单项。
+func _build_actions(legacy: bool) -> void:
+	for button in _items:
+		_panel.remove_child(button)
+		button.queue_free()
+	_items.clear()
+	_legacy_actions = legacy
+	if legacy:
+		_items.append(_make_item("ListMigratePlayerLevelButton", "迁移到正确的目录", "migrate"))
+		_items.append(_make_item("ListOpenLegacyPlayerLevelFolderButton", "打开旧关卡所在文件夹", "folder"))
+	else:
+		_items.append(_make_item("ListRenamePlayerLevelButton", "重命名关卡", "rename"))
+		_items.append(_make_item("ListDeletePlayerLevelButton", "删除关卡", "delete", true))
+		_items.append(_make_item("ListEditPlayerLevelButton", "使用地图编辑器更改", "edit"))
+		_items.append(_make_item("ListOpenPlayerLevelFolderButton", "查看目录", "folder"))
 
 
 ## 普通项目保持深色、删除为红色，禁用项目不接受鼠标与键盘激活。
@@ -87,7 +103,7 @@ func _focus_item(button: Button) -> void:
 		button.grab_focus()
 
 
-## 每次打开都使用最新记录能力，坏文件仍可删除或查看目录。
+## 每次打开选择当前记录对应的独立动作集合，正常目录的坏文件仍可删除或查看目录。
 func popup_at(anchor: Control, pointer: Vector2, entry: PlayerLevelRecord) -> void:
 	close_menu(false)
 	if entry == null or not is_instance_valid(anchor) or not anchor.is_visible_in_tree():
@@ -95,11 +111,14 @@ func popup_at(anchor: Control, pointer: Vector2, entry: PlayerLevelRecord) -> vo
 	_anchor = anchor
 	_entry = entry
 	_pointer = pointer
-	_items[0].disabled = not entry.can_rename
-	_items[2].disabled = not entry.can_edit
-	var reason := GameI18n.translate_errors(entry.errors)
-	_items[0].tooltip_text = reason if _items[0].disabled else ""
-	_items[2].tooltip_text = reason if _items[2].disabled else ""
+	if _legacy_actions != entry.needs_migration:
+		_build_actions(entry.needs_migration)
+	if not entry.needs_migration:
+		_items[0].disabled = not entry.can_rename
+		_items[2].disabled = not entry.can_edit
+		var reason := GameI18n.translate_errors(entry.errors)
+		_items[0].tooltip_text = reason if _items[0].disabled else ""
+		_items[2].tooltip_text = reason if _items[2].disabled else ""
 	_open = true
 	_swallowed_button = MOUSE_BUTTON_NONE
 	_overlay.show()
@@ -206,6 +225,10 @@ func _move_focus(direction: int) -> void:
 func _activate(action: String) -> void:
 	if not _open or _entry == null or (action == "rename" and not _entry.can_rename) or (action == "edit" and not _entry.can_edit):
 		return
+	if _entry.needs_migration and action not in ["migrate", "folder"]:
+		return
+	if not _entry.needs_migration and action == "migrate":
+		return
 	var selected := _entry
 	close_menu(false)
 	match action:
@@ -213,6 +236,7 @@ func _activate(action: String) -> void:
 		"delete": delete_requested.emit(selected)
 		"edit": edit_requested.emit(selected)
 		"folder": open_folder_requested.emit(selected)
+		"migrate": migration_requested.emit(selected)
 
 
 ## 翻译变化时关闭旧尺寸菜单，下一次打开重新读取实际文字宽度。

@@ -157,7 +157,7 @@ func start_example(document: MapDocument, content: ContentRegistry) -> DataResul
 
 `LevelScroll` 使用 `SCROLL_MODE_RESERVE` 固定保留 12 像素的纵向滚动条宽度；外层 `LevelScrollMargin` 等量延伸到页面右侧留白，使 `LevelSections` 的宽度始终不变。局部原生滚动条样式使用透明轨道和浅灰蓝滑块，不改变其他页面或滚动交互，展开、收起和搜索均不产生横向重排。
 
-内置关卡来自 `res://data/levels`，当前包含第一至第十六关，共 16 关；排序使用真实 `order`，第十关使用真实复习地图。玩家关卡来自 `user://levels`，统一包含编辑器托管保存和原有导入地图。单个损坏文件或重复 ID 会加入 `catalog.errors`，但有效关卡仍保留在 `catalog.levels`；界面不能因 `refresh()` 的结果含错误就隐藏全部关卡。内置项保持优先，分别按 `order` 与源路径稳定排序。
+内置关卡来自 `res://data/levels`，当前包含第一至第十六关，共 16 关；排序使用真实 `order`，第十关使用真实复习地图。玩家关卡来自 `GameShell` 注入的平台可见目录，统一包含编辑器托管保存、导入地图和从旧 `user://levels` 复制的地图；位置解析、沙盒授权与幂等迁移见 PLAYER_SAVE_LOCATION.md。单个损坏文件或重复 ID 会加入 `catalog.errors`，但有效关卡仍保留在 `catalog.levels`；界面不能因 `refresh()` 的结果含错误就隐藏全部关卡。内置项保持优先，分别按 `order` 与源路径稳定排序。
 
 `AssemblyModel.create()` 始终建立空模块清单，`GameSession.create()` 继承这一语义。地图 `player_spawn.modules` 仍保留为底层格式和缺省关卡规则的来源；正常关卡与编辑器测试都不会自动复制它。正常关卡上次草稿中的源程序可以自动恢复，装配只能在玩家点击“载入上次装配”后显式恢复，并通过 `validate_editing()` 检查当前关卡的编辑约束。缺中心或断连的草稿仍可恢复修复，不能因此被当成损坏数据丢弃。
 
@@ -185,7 +185,7 @@ func start_example(document: MapDocument, content: ContentRegistry) -> DataResul
 
 设置页的「清除预设进度」由 `ClearProgressDialog` 优先调用 macOS / Windows 原生确认；取消为默认项，系统不可用时回退到原单层圆角毛玻璃浮层。请求代数与页面状态拒绝迟到及重复响应，`GameShell` 收集来源位于 `res://data/levels/` 的内置关卡 ID，只有弹窗明确确认才调用 `GameDraftStore.clear_level_records()`。存储接口按 ID 定位对应通关记录、代码/装配草稿及已知恢复副本；清除前校验完整候选集，先暂存、失败时回滚，不递归删除整个 solutions 目录。导入关卡、设置及关卡地图不属于此操作范围。
 
-设置页不再提供「清除用户关卡」批量入口，玩家通过「玩家关卡列表」管理不需要的地图。底层兼容接口 `LevelCatalog.clear_user_levels(drafts)` 仍保留，未从界面调用。目录只接受正式 `user://levels` 或隔离测试位置，逐段拒绝符号链接；枚举直接 JSON（包含坏文件和重复 ID），非 JSON 和子目录保留。关联记录仅按文件合法顶层 ID 或本会话同路径已加载定义识别，并独立读取全部内置 ID 加以排除。内置保护范围不能确定时终止操作。
+设置页不再提供「清除用户关卡」批量入口，玩家通过「玩家关卡列表」管理不需要的地图。底层兼容接口 `LevelCatalog.clear_user_levels(drafts)` 仍保留，未从界面调用。目录只接受 `PlayerLevelPaths` 授权的平台保存根、旧正式 `user://levels` 或隔离测试位置，逐段拒绝符号链接；枚举直接 JSON（包含坏文件和重复 ID），非 JSON 和子目录保留。关联记录仅按文件合法顶层 ID 或本会话同路径已加载定义识别，并独立读取全部内置 ID 加以排除。内置保护范围不能确定时终止操作。
 
 用户地图整体暂存后才清关联记录；暂存或记录失败时恢复地图，最终删除失败时恢复尚未删除的地图并报告部分完成情况，不误报成功。所有取消与页面切换撤销待处理请求，确认仅消费一次；设置面板只显示结果，不直接接触文件。测试使用独占目录并覆盖取消、范围隔离、符号链接和磁盘失败恢复。
 
@@ -225,7 +225,7 @@ Windows 关卡选择页由中性的 `PageLayoutHost` 承接原生 VBoxContainer 
 
 ## 地图编辑器与测试接入
 
-`PlayerLevelStore` 是不依赖场景树的普通保存边界，默认 `directory = "user://levels"`，与 `LevelCatalog.user_directory` 使用同一位置。`create_map_id(extra_used_ids)` 只读扫描 `res://data/maps`、`res://data/levels` 及玩家 JSON 的真实 ID，并结合进程内已分配集合有限重试。独立 RNG 均匀采样两个五位段并补零，组成 `map_` 加十位数字，允许前导零与重复；不使用游戏随机源、不创建目录或 JSON、不新增地图元数据。`MapEditor._new_document()` 先分配成功再清绑定及替换文档，分配失败保留草稿和观察状态。
+`PlayerLevelStore` 是不依赖场景树的普通保存边界，独立模型保留 `directory = "user://levels"` 兼容默认；正式入口经 `PlayerSaveLocation` 与 `PlayerLevelMigration` 准备可见保存根，并向它和 `LevelCatalog.user_directory` 注入同一位置。`create_map_id(extra_used_ids)` 只读扫描 `res://data/maps`、`res://data/levels` 及玩家 JSON 的真实 ID，并结合进程内已分配集合有限重试。独立 RNG 均匀采样两个五位段并补零，组成 `map_` 加十位数字，允许前导零与重复；不使用游戏随机源、不创建目录或 JSON、不新增地图元数据。`MapEditor._new_document()` 先分配成功再清绑定及替换文档，分配失败保留草稿和观察状态。
 
 `save(document, registry, preferred_path, preserve_id)` 先验证当前文档，再深拷贝、分配文件名，经 `MapCodec.save_file(..., false)` 原子写盘；成功返回 `{path, document}`，失败不修改调用方输入。编辑器对当前新建地图启用 `preserve_id`，创建后外部抢占同 ID 时拒绝保存，不静默改号；普通新建保存、另存为、试玩和历史往返均保持创建身份。无出生点草稿仍可保存，但正式目录按原有规则报告未完成地图，其他有效关卡继续显示。
 

@@ -65,6 +65,14 @@ if ($smokeResult.ExitCode -ne 0 -or $smokeResult.Output -match '(?m)^ERROR:|SCRI
 
 # 新增的语言与游戏测试单独运行，任一进程缺少完成标记也视为失败。
 $gameChecks = @(
+    @{ Script = 'res://tests/player_legacy_library_runner.gd'; Marker = '旧玩家关卡聚合回归完成：.+0 项失败。'; Label = '未迁移旧关卡列表与操作边界回归' },
+    @{ Script = 'res://tests/player_legacy_list_ui_runner.gd'; Marker = '旧目录关卡列表界面回归完成：.+0 项失败。'; Label = '旧目录状态颜色与独立迁移菜单回归' },
+    @{ Script = 'res://tests/player_legacy_upgrade_runner.gd'; Marker = '旧玩家关卡升级生命周期回归完成：.+0 项失败。'; Label = '一次升级提醒与旧目录退役回归' },
+    @{ Script = 'res://tests/player_legacy_upgrade_dialog_runner.gd'; Marker = '旧关卡升级提示界面回归完成：.+0 项失败。'; Label = '旧关卡原生迁移询问回归' },
+    @{ Script = 'res://tests/player_level_paths_runner.gd'; Marker = '玩家关卡外部路径回归完成：.+0 项失败。'; Label = '玩家关卡可见保存目录边界回归' },
+    @{ Script = 'res://tests/player_level_migration_runner.gd'; Marker = '玩家关卡旧目录迁移回归完成：.+0 项失败。'; Label = '旧玩家地图无损迁移回归' },
+    @{ Script = 'res://tests/player_save_location_runner.gd'; Marker = '玩家关卡保存位置回归完成：.+0 项失败。'; Label = '玩家关卡平台位置与授权恢复回归' },
+    @{ Script = 'res://tests/player_saves_shell_runner.gd'; Marker = '玩家关卡保存入口回归完成：.+0 项失败。'; Label = '玩家关卡保存目录与游戏入口接线回归' },
     @{ Script = 'res://tests/map_editor_responsive_runner.gd'; Marker = '地图属性响应式回归完成：.+0 项失败。'; Label = '五语地图属性自适应排版回归' },
     @{ Script = 'res://tests/japanese_locale_runner.gd'; Marker = 'JAPANESE_LOCALE_TESTS .+ checks, 0 failures'; Label = '日语本土化与显示语言回归' },
     @{ Script = 'res://tests/statistics_about_ui_runner.gd'; Marker = 'STATISTICS_ABOUT_UI_TESTS .+ checks, 0 failures'; Label = '首次运行日期与统计说明弹窗回归' },
