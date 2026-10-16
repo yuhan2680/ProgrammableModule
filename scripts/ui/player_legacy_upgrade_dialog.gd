@@ -6,11 +6,13 @@ signal migrate_requested
 signal discard_requested
 signal canceled
 
-const WARNING_BODY := "发现 %d 个旧关卡。请前往玩家关卡列表，逐个迁移到新的保存目录。选择‘放弃并删除’将永久删除旧目录中的关卡，此操作无法撤销。此提醒只显示一次。\n旧目录：%s"
+const WARNING_BODY := "发现%d个位于旧目录的关卡文件，点击下方按钮后可前往“关卡列表”完成迁移。若选择删除，则所有旧目录中的关卡都将被删除，此操作无法撤销。"
 
 var use_native_dialog := true
+var platform_name := OS.get_name()
 var native_dialog_handler: Callable
 var _native_active := false
+var _request_actions := PackedStringArray()
 var _request_generation := 0
 var _fallback: ConfirmationDialog
 var _discard_button: Button
@@ -33,7 +35,7 @@ func _ready() -> void:
 	_fallback.canceled.connect(_cancel)
 	_fallback.close_requested.connect(_cancel)
 	_fallback.custom_action.connect(_on_custom_action)
-	_discard_button = _fallback.add_button("放弃并删除", false, "discard")
+	_discard_button = _fallback.add_button("删除", false, "discard")
 	_discard_button.name = "DiscardLegacyLevelsButton"
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		_discard_button.add_theme_color_override(state, Color("9d1414"))
@@ -43,20 +45,23 @@ func _ready() -> void:
 	hide()
 
 
-## 系统默认首项为暂不处理，重复请求不会替换正在确认的路径或数量。
+## Windows 仅显示迁移与删除；其他平台保留忽略，默认首项均不删除文件。
 func open_confirmation(oldpath: String, count: int) -> void:
 	if is_open():
 		return
 	_request_generation += 1
 	_old_directory = oldpath
 	_level_count = maxi(count, 0)
+	_request_actions = PackedStringArray(["migrate", "discard"]) if platform_name == "Windows" else PackedStringArray(["cancel", "migrate", "discard"])
 	_previous_focus = get_viewport().gui_get_focus_owner()
 	_native_active = use_native_dialog and (native_dialog_handler.is_valid() or (OS.get_name() in ["macOS", "Windows"] and DisplayServer.has_feature(DisplayServer.FEATURE_NATIVE_DIALOG)))
 	show()
 	if _native_active:
 		var generation := _request_generation
 		var callback := _on_native_choice.bind(generation)
-		var buttons := PackedStringArray([tr("暂不处理"), tr("前往迁移"), tr("放弃并删除")])
+		var buttons := PackedStringArray()
+		for action in _request_actions:
+			buttons.append(tr("忽略") if action == "cancel" else tr("前往迁移") if action == "migrate" else tr("删除"))
 		var result: int = native_dialog_handler.call(tr("旧关卡迁移"), _description(), buttons, callback) if native_dialog_handler.is_valid() else DisplayServer.dialog_show(tr("旧关卡迁移"), _description(), buttons, callback)
 		if result == OK or generation != _request_generation or not is_open():
 			return
@@ -66,12 +71,13 @@ func open_confirmation(oldpath: String, count: int) -> void:
 	_refresh_fallback()
 	var available := get_viewport().get_visible_rect().size
 	_fallback.popup_centered(Vector2i(minf(540.0, maxf(380.0, available.x - 40.0)), minf(320.0, maxf(220.0, available.y - 60.0))))
-	_fallback.get_cancel_button().grab_focus.call_deferred()
+	var default_button := _fallback.get_cancel_button() if _request_actions.has("cancel") else _fallback.get_ok_button()
+	default_button.grab_focus.call_deferred()
 
 
-## 路径作为原始数据插入译文，不翻译用户文件夹名。
+## 简短说明只插入实际关卡数量，旧目录仍可从关卡列表单独打开。
 func _description() -> String:
-	return tr(WARNING_BODY) % [_level_count, _old_directory]
+	return tr(WARNING_BODY) % _level_count
 
 
 ## 系统回调只排队，避免仍处于原生模态调用栈时迁移页面或删除文件。
@@ -79,14 +85,15 @@ func _on_native_choice(index: int, generation: int) -> void:
 	_apply_native_choice.call_deferred(index, generation)
 
 
-## 仅第三个明确按钮产生删除意图，系统关闭、取消及未知索引全部视为暂不处理。
+## 按打开时冻结的按钮动作映射系统结果；关闭、取消及未知索引均按忽略处理。
 func _apply_native_choice(index: int, generation: int) -> void:
 	if not _native_active or generation != _request_generation or not is_open():
 		return
-	match index:
-		1: _finish_choice("migrate")
-		2: _finish_choice("discard")
-		_: _cancel()
+	var action := _request_actions[index] if index >= 0 and index < _request_actions.size() else "cancel"
+	if action == "cancel":
+		_cancel()
+	else:
+		_finish_choice(action)
 
 
 ## 后备普通确认只导航迁移，绝不能借用默认确认触发删除。
@@ -151,8 +158,9 @@ func _refresh_fallback() -> void:
 	_fallback.title = tr("旧关卡迁移")
 	_fallback.dialog_text = _description()
 	_fallback.ok_button_text = tr("前往迁移")
-	_fallback.cancel_button_text = tr("暂不处理")
-	_discard_button.text = tr("放弃并删除")
+	_fallback.cancel_button_text = tr("忽略")
+	_fallback.get_cancel_button().visible = _request_actions.has("cancel")
+	_discard_button.text = tr("删除")
 
 
 ## 原生模态期间吞掉残留游戏输入，实际按钮和系统关闭事件由操作系统处理。
