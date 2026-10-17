@@ -65,6 +65,8 @@ if ($smokeResult.ExitCode -ne 0 -or $smokeResult.Output -match '(?m)^ERROR:|SCRI
 
 # 新增的语言与游戏测试单独运行，任一进程缺少完成标记也视为失败。
 $gameChecks = @(
+    @{ Script = 'res://tests/player_runtime_storage_runner.gd'; Marker = '缓存与进度存储回归完成：.+0 项失败。'; Label = '缓存与进度目录及升级迁移回归' },
+    @{ Script = 'res://tests/player_runtime_shell_runner.gd'; Marker = '玩家运行数据外壳回归完成：.+0 项失败。'; Label = '缓存进度启动接线与恢复门禁回归' },
     @{ Script = 'res://tests/player_legacy_library_runner.gd'; Marker = '旧玩家关卡聚合回归完成：.+0 项失败。'; Label = '未迁移旧关卡列表与操作边界回归' },
     @{ Script = 'res://tests/player_legacy_list_ui_runner.gd'; Marker = '旧目录关卡列表界面回归完成：.+0 项失败。'; Label = '旧目录状态颜色与独立迁移菜单回归' },
     @{ Script = 'res://tests/player_legacy_upgrade_runner.gd'; Marker = '旧玩家关卡升级生命周期回归完成：.+0 项失败。'; Label = '一次升级提醒与旧目录退役回归' },

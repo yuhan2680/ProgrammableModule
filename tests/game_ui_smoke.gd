@@ -242,8 +242,11 @@ func _run() -> void:
 	game.find_child("MapEditorButton", true, false).pressed.emit()
 	await _wait_menu_transition(game)
 	await process_frame
-	_check(game._editor != null, "旧地图编辑器可以从游戏入口打开")
+	_check(game._editor != null, "地图编辑器可以从游戏入口打开")
 	var opened_editor := game._editor
+	_check(opened_editor.editor_document.path.is_empty(), "主菜单编辑入口从空白地图开始")
+	# 试玩需要可运行场地，显式打开样例，不依赖入口偷偷载入旧地图。
+	_check(opened_editor._load_document(MapEditor.DEFAULT_MAP_PATH), "试玩回归显式打开可运行样例")
 	opened_editor._play_button.pressed.emit()
 	await process_frame
 	_finish_dialogue(game)

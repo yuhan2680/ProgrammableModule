@@ -3,11 +3,13 @@ extends RefCounted
 ## 玩家程序和装配单独保存，不修改地图；通关进度使用独立文件。
 
 var directory: String = "user://solutions"
+var progress_directory: String = ""
 
 
 ## 可注入独立存储目录，方便无窗口测试与多个存档槽扩展。
-func _init(storage_directory: String = "user://solutions") -> void:
+func _init(storage_directory: String = "user://solutions", completion_directory: String = "") -> void:
 	directory = storage_directory
+	progress_directory = completion_directory
 
 
 ## 保存尚未运行的玩家草稿，允许空程序及空装配以支持继续编辑。
@@ -144,6 +146,9 @@ func is_completed(level_id: String) -> bool:
 
 ## 仅清除调用方明确指定关卡的代码、装配、通关记录及本类生成的草稿恢复文件。
 func clear_level_records(level_ids: Array[String]) -> DataResult:
+	var storage_check := _validate_storage("clear_records")
+	if not storage_check.is_ok():
+		return storage_check
 	# 先校验整个批次，不能清到一半才发现后面的 ID 或路径不合法。
 	var keys: Dictionary = {}
 	for level_id in level_ids:
@@ -151,6 +156,8 @@ func clear_level_records(level_ids: Array[String]) -> DataResult:
 		if not validation.is_ok():
 			return validation
 		keys[level_id.sha256_text()] = true
+	if not progress_directory.is_empty() and progress_directory != directory:
+		return _clear_split_records(keys)
 	var folder_result := _clear_storage_folder()
 	if not folder_result.is_ok():
 		return folder_result
@@ -177,26 +184,9 @@ func clear_level_records(level_ids: Array[String]) -> DataResult:
 	return _clear_record_files(folder, candidates)
 
 
-## 校验完整目录链，拒绝通过 user:// 内的符号链接访问其它目录；缺失目录不创建。
+## 校验受控目录的完整链，拒绝通过符号链接访问其它位置；缺失目录不创建。
 func _clear_storage_folder() -> DataResult:
-	var validation := _validate_storage("clear_records")
-	if not validation.is_ok():
-		return validation
-	var folder := DirAccess.open("user://")
-	if folder == null:
-		return DataResult.failure("无法访问玩家存档根目录：%s。" % error_string(DirAccess.get_open_error()))
-	for segment in directory.trim_prefix("user://").split("/"):
-		if folder.is_link(segment):
-			return DataResult.failure("玩家存档目录不能包含符号链接，未清除任何记录：%s。" % directory)
-		if not folder.dir_exists(segment):
-			if folder.file_exists(segment):
-				return DataResult.failure("玩家存档目录被同名文件占用，未清除任何记录：%s。" % directory)
-			return DataResult.success()
-		var change_error := folder.change_dir(segment)
-		if change_error != OK:
-			return DataResult.failure("无法访问待清除的存档目录：%s。" % error_string(change_error))
-	folder.include_hidden = true
-	return DataResult.success(folder)
+	return PlayerRuntimePaths.open_directory(directory)
 
 
 ## 文件所有权只由完整哈希键与既有命名格式确定，损坏 JSON 也可清除而不会扩大范围。
@@ -283,15 +273,20 @@ func _remove_clear_file(path: String) -> Error:
 
 ## 存储键允许任意非空文本，通过 SHA-256 映射为固定文件名以隔离路径。
 func _path(level_id: String, kind: String) -> String:
-	return directory.path_join("%s.%s.json" % [level_id.sha256_text(), kind])
+	var root := progress_directory if kind == "progress" and not progress_directory.is_empty() else directory
+	return root.path_join("%s.%s.json" % [level_id.sha256_text(), kind])
 
 
-## 用户数据始终写在受控 user:// 目录，调用方不能借目录参数跳出存储根。
+## 只开放受控运行目录和既有 user:// 测试路径，每次操作验证文件不是链接。
 func _validate_storage(level_id: Variant) -> DataResult:
+	if not PlayerRuntimePaths.is_allowed_directory(directory) or (not progress_directory.is_empty() and not PlayerRuntimePaths.is_allowed_directory(progress_directory)):
+		return DataResult.failure("玩家存档目录不在允许的保存位置。")
 	if not DataValidation.is_text(level_id, false):
 		return DataResult.failure("存档关卡 ID 必须是非空字符串，最多 65536 字符。")
-	if not directory.begins_with("user://") or not DataValidation.is_resource_path(directory):
-		return DataResult.failure("玩家草稿目录必须是安全的 user:// 路径。")
+	for kind: String in ["draft", "progress"]:
+		var checked := PlayerRuntimePaths.validate_file(_path(level_id, kind))
+		if not checked.is_ok():
+			return checked
 	return DataResult.success()
 
 
@@ -327,9 +322,12 @@ func _save_json(path: String, data: Dictionary) -> DataResult:
 	if source.to_utf8_buffer().size() > DataValidation.MAX_FILE_BYTES:
 		return DataResult.failure("玩家存档超过 8 MiB 上限。")
 	var absolute := ProjectSettings.globalize_path(path)
-	var folder_error := DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
-	if folder_error != OK:
-		return DataResult.failure("无法创建玩家存档目录：%s。" % error_string(folder_error))
+	var checked := PlayerRuntimePaths.validate_file(path)
+	if not checked.is_ok():
+		return checked
+	var opened := PlayerRuntimePaths.open_directory(path.get_base_dir(), true)
+	if not opened.is_ok():
+		return opened
 	var suffix := ".%d.%d" % [OS.get_process_id(), Time.get_ticks_usec()]
 	var temporary := absolute + suffix + ".tmp"
 	var backup := absolute + suffix + ".bak"
@@ -370,3 +368,69 @@ func _replace_file(temporary: String, destination: String, backup: String) -> Da
 	if had_original and DirAccess.remove_absolute(backup) != OK:
 		push_warning("玩家存档已保存，但无法删除备份：%s。" % backup)
 	return DataResult.success(destination)
+
+
+## 两个目录先共同预检并全部暂存，任一暂存失败会回滚两边，不能先删草稿再发现进度不可写。
+func _clear_split_records(keys: Dictionary) -> DataResult:
+	var groups: Array[Dictionary] = []
+	for storage: String in [directory, progress_directory]:
+		var opened := PlayerRuntimePaths.open_directory(storage)
+		if not opened.is_ok():
+			return opened
+		if opened.value == null:
+			continue
+		var folder: DirAccess = opened.value
+		var files: Array[String] = []
+		var listed := folder.list_dir_begin()
+		if listed != OK:
+			return DataResult.failure("无法读取待清除的存档目录。")
+		var filename := folder.get_next()
+		while not filename.is_empty():
+			var owned := _is_level_record_file(filename, keys)
+			var correct_kind := filename.ends_with(".progress.json") if storage == progress_directory else not filename.ends_with(".progress.json")
+			if owned and correct_kind:
+				if folder.is_link(filename) or folder.current_is_dir():
+					folder.list_dir_end()
+					return DataResult.failure("存档路径不是普通文件，未清除任何记录：%s。" % storage.path_join(filename))
+				files.append(filename)
+			filename = folder.get_next()
+		folder.list_dir_end()
+		if not files.is_empty():
+			files.sort()
+			groups.append({"folder": folder, "files": files, "staged": [], "absolute": ProjectSettings.globalize_path(storage), "stage": ""})
+	for group: Dictionary in groups:
+		var staging_name := ".clear_records_%s" % Crypto.new().generate_random_bytes(16).hex_encode()
+		var folder: DirAccess = group.folder
+		if folder.make_dir(staging_name) != OK:
+			var restored := _restore_split_records(groups)
+			return DataResult.failure("无法暂存待清除的记录，原记录已恢复。") if restored.is_ok() else restored
+		group.stage = str(group.absolute).path_join(staging_name)
+		for filename: String in group.files:
+			if folder.is_link(filename) or folder.dir_exists(filename) or not folder.file_exists(filename) or _rename_clear_file(str(group.absolute).path_join(filename), str(group.stage).path_join(filename)) != OK:
+				var restored := _restore_split_records(groups)
+				return DataResult.failure("无法暂存待清除的记录，原记录已恢复。") if restored.is_ok() else restored
+			group.staged.append(filename)
+	for group: Dictionary in groups:
+		while not group.staged.is_empty():
+			var filename: String = group.staged[0]
+			if _remove_clear_file(str(group.stage).path_join(filename)) != OK:
+				var restored := _restore_split_records(groups)
+				return DataResult.failure("清除未完成，其余记录已恢复原位置，请检查目录权限后重试。") if restored.is_ok() else restored
+			group.staged.pop_front()
+	return _restore_split_records(groups)
+
+
+## 逆序恢复尚未删除的记录并清理空暂存目录，失败时保留原件位置。
+func _restore_split_records(groups: Array[Dictionary]) -> DataResult:
+	for index in range(groups.size() - 1, -1, -1):
+		var group: Dictionary = groups[index]
+		if str(group.stage).is_empty():
+			continue
+		var names: Array[String] = []
+		for filename: String in group.staged:
+			names.append(filename)
+		var restored := _restore_clear_files(group.absolute, group.stage, names)
+		if not restored.is_ok():
+			return restored
+		group.stage = ""
+	return DataResult.success()

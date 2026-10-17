@@ -35,7 +35,13 @@ func _run() -> void:
 	# 文件交互只验证信号与持久化，避免图形测试时留下系统文件面板。
 	editor._file_dialog.use_native_dialog = false
 	_check(not editor._message_dialog.visible and not game._message_dialog.visible, "启动没有错误对话框")
-	_check(editor.editor_document.document.id == "movement_lab", "默认示例地图已载入")
+	var initial := editor.editor_document.document
+	_check(PlayerLevelStore.is_generated_map_id(initial.id) and initial.id != "movement_lab", "独立编辑器入口创建新地图身份，不默认打开内置示例")
+	_check(initial.cells.is_empty() and initial.player_spawn == null and initial.enemies.is_empty() and initial.objects.is_empty(), "新入口地图只有 void，没有旧地形、出生点、敌人或对象")
+	_check(initial.width == 16 and initial.height == 12 and editor.editor_document.path.is_empty() and not editor.editor_document.is_dirty() and not editor.editor_document.can_undo(), "空白地图采用新建尺寸且不绑定旧路径或历史")
+	_check(initial.properties.level.creator == game.profile.get_username() and not editor.editor_document.is_code_paste_policy_locked(), "新入口继承当前玩家署名且允许首次配置粘贴限制")
+	# 后续编辑及试玩专门使用内置示例夹具，不让生产入口为回归默认载入旧地图。
+	_check(editor._load_document(MapEditor.DEFAULT_MAP_PATH), "显式打开示例供保存及试玩往返回归使用")
 	_check(_find_button(editor, "执行 move") == null and _find_button(editor, "停止测试") == null and _find_button(editor, "重置测试") == null, "地图编辑页面移除直接执行 move 和旧测试控制")
 	_check(not editor.has_method("_submit_move") and not editor.has_method("_reset_playtest"), "地图编辑器不再暴露旧的手动移动测试入口")
 	var canvas := editor._canvas

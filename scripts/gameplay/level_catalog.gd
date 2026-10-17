@@ -182,9 +182,14 @@ func clear_user_levels(draft_store: GameDraftStore = null) -> DataResult:
 		return DataResult.success({"file_count": 0, "level_ids": []})
 	if draft_store != null:
 		# 地图和记录目录不能相互包含，避免错误配置把记录 JSON 当成地图清除。
-		var records_path := draft_store.directory
-		if records_path == user_directory or records_path.begins_with(user_directory + "/") or user_directory.begins_with(records_path + "/"):
-			return DataResult.failure("用户关卡与玩家记录目录不能相互包含，未清除任何文件。")
+		# 资源别名和物理绝对路径须按同一路径比较，同时保护拆分后的 Cache 与 Progress。
+		var maps_path := ProjectSettings.globalize_path(user_directory).simplify_path().trim_suffix("/").to_lower()
+		for records_directory: String in [draft_store.directory, draft_store.progress_directory]:
+			if records_directory.is_empty():
+				continue
+			var records_path := ProjectSettings.globalize_path(records_directory).simplify_path().trim_suffix("/").to_lower()
+			if records_path == maps_path or records_path.begins_with(maps_path + "/") or maps_path.begins_with(records_path + "/"):
+				return DataResult.failure("用户关卡与玩家记录目录不能相互包含，未清除任何文件。")
 		var record_validation := draft_store.clear_level_records([])
 		if not record_validation.is_ok():
 			return record_validation

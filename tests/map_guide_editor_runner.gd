@@ -32,6 +32,7 @@ func _run() -> void:
 	await _settle()
 	_game.settings.set_language("zh_CN")
 	var editor := _game._editor
+	editor._load_document(MapEditor.DEFAULT_MAP_PATH) # 此回归需要有出生点的既有地图夹具。
 	var model := editor.editor_document
 	var document := model.document.duplicate_document()
 	document.id = "guide_ui_fixture"

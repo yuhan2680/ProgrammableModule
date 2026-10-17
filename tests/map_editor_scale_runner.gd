@@ -254,7 +254,7 @@ func _check_popup(menu: CanvasLayer, factor: float, context: String) -> void:
 func _check_resize_and_history() -> void:
 	_game.settings.set_ui_scale(100)
 	_game.settings.set_window_resolution("1280x800")
-	_game._open_editor()
+	_game._open_editor(MapEditor.DEFAULT_MAP_PATH)
 	await _settle(12)
 	var editor := _game._editor
 	var model := editor.editor_document

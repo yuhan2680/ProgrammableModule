@@ -63,15 +63,15 @@
 
 每次开始测试都创建空装配，数量和类型受快照的 `module_limit` / `allowed_modules` 约束。确认后进入正常编程界面；同一次会话内可以反复切换组装与编程、停止或重置位置，并保留当前程序与布局。返回地图编辑器会结束本次会话，原文档、路径、未保存标记和撤销/重做历史保持不变；下次开始测试不会恢复上次测试的作品。
 
-此入口不读取或写入下述 `GameDraftStore`，也不记录通关进度。保存草稿与载入上次装配入口隐藏，自动保存和完成事件只影响当前会话；即使编辑地图与正式关卡使用相同 ID，也不会覆盖其 `user://solutions` 文件。测试地图不加入关卡列表，不迁移到 `data/levels`。
+此入口不读取或写入下述 `GameDraftStore`，也不记录通关进度。保存草稿与载入上次装配入口隐藏，自动保存和完成事件只影响当前会话；即使编辑地图与正式关卡使用相同 ID，也不会覆盖其 `Cache` 草稿或 `Progress` 记录。测试地图不加入关卡列表，不迁移到 `data/levels`。
 
 ## 正常关卡的草稿与进度
 
-`GameDraftStore.new(directory)` 默认使用 `user://solutions/`，可注入独立测试目录。`save_draft(level_id, source, modules)` 保存程序和布局；`load_draft(level_id)` 在没有文件时成功返回 null，有文件时返回含 source、modules 的字典。草稿允许空程序，以及空装配、缺中心或断连的未完成布局；保存成功不代表通过最终运行校验。
+正式入口由 `GameShell` 向 `GameDraftStore` 分别注入平台 `ProgrammableModule/Cache/` 和 `ProgrammableModule/Progress/`。模型的单目录兼容入口仍可使用 `user://solutions/` 或独立测试目录；正式存储不靠该缺省值决定。位置、档案及一次迁移契约见 [缓存与游戏进度保存位置](RUNTIME_STORAGE.md)。`save_draft(level_id, source, modules)` 保存程序和布局；`load_draft(level_id)` 在没有文件时成功返回 null，有文件时返回含 source、modules 的字典。草稿允许空程序，以及空装配、缺中心或断连的未完成布局；保存成功不代表通过最终运行校验。
 
 进入关卡时只自动恢复源程序，已有装配暂存为可选的恢复数据。点击“载入上次装配”后才把旧布局应用到当前模型，使用 `validate_editing()` 重新检查结构、网格、关卡允许类型、容量、命名和重叠。缺中心和断连属于可修复的编辑状态，不应因最终 `validate()` 失败而丢弃；修复前仍不能确认或运行。未主动采用旧布局之前，当前玩家装配保持为空。
 
-每个关卡 ID 经 SHA-256 映射为固定文件名前缀，因此 ID 中的斜杠等字符不会变成文件系统路径。草稿文件为 `<hash>.draft.json`，通关记录为 `<hash>.progress.json`。`mark_completed(level_id)` 只更新通关记录，保存草稿也不会清除通关状态。`is_completed(level_id)` 只将版本、关卡 ID 和布尔 completed 全部正确的记录视为已完成。
+每个关卡 ID 经 SHA-256 映射为固定文件名前缀，因此 ID 中的斜杠等字符不会变成文件系统路径。草稿文件为 `Cache/<hash>.draft.json`，通关记录为 `Progress/<hash>.progress.json`。`mark_completed(level_id)` 只更新通关记录，保存草稿也不会清除通关状态。`is_completed(level_id)` 只将版本、关卡 ID 和布尔 completed 全部正确的记录视为已完成。
 
 保存先验证，再写同目录临时文件并回读，最后备份旧文件并替换。常规写入或替换失败保留旧存档；恢复失败会保留备份并报告路径。此机制不承诺操作系统断电级事务。
 
@@ -81,7 +81,7 @@
 
 ## 菜单与设置
 
-主菜单提供开始、地图编辑器、设置和离开。地图编辑器只由主菜单进入；开始进入关卡列表，选择关卡后先组装再编程。页面切换由 UI 负责，关卡、装配与模拟模型不持有菜单节点。
+主菜单提供开始、地图编辑器、设置和离开。地图编辑器可从主菜单新建空白地图，或从玩家关卡列表明确打开已有地图；开始进入关卡列表，选择关卡后先组装再编程。页面切换由 UI 负责，关卡、装配与模拟模型不持有菜单节点。
 
 `GameSettings.new(path)` 默认使用 `user://settings.json`。`load_settings()` 在缺失文件时采用默认值；`set_volume(value)` 接受 `0..1` 的有限数值，`set_language(value)` 接受 `zh_CN` 或 `en`，`set_tab_completion(value)` 接受布尔值，`set_code_hints(value)` 接受 `none`、`normal` 或 `more`。有效值立即应用并保存；错误通过 `DataResult` 和 `last_error` 提供，界面不能把写盘失败显示为已持久化。
 

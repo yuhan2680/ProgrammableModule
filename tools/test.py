@@ -21,6 +21,8 @@ def main() -> int:
     project = Path(__file__).resolve().parents[1]
     stages = [('import', ['--editor', '--import'], None)]
     for filename, marker in [
+        ('player_runtime_storage_runner', r'缓存与进度存储回归完成：.+0 项失败。'),
+        ('player_runtime_shell_runner', r'玩家运行数据外壳回归完成：.+0 项失败。'),
         ('editor_native_exit_runner', r'EDITOR_NATIVE_EXIT_TESTS .+ checks, 0 failures'),
         ('editor_footer_runner', r'EDITOR_FOOTER_TESTS .+ checks, 0 failures'),
         ('editor_timed_gate_runner', r'EDITOR_TIMED_GATE_TESTS .+ checks, 0 failures'),

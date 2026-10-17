@@ -100,7 +100,7 @@ var _presentation_scale := 1.0
 var _properties_workspace: Control
 
 
-# 用途：先载入内容目录，再打开外层指定草稿；普通入口仍使用示例地图。
+# 用途：先载入内容目录；明确指定时打开已有地图，普通入口创建独立空白草稿。
 func _ready() -> void:
 	_build_ui()
 	if settings != null:
@@ -122,8 +122,6 @@ func _ready() -> void:
 		initial_map_opened = _load_document(initial_map_path, false)
 		if not initial_map_opened:
 			_new_document()
-	elif FileAccess.file_exists(DEFAULT_MAP_PATH):
-		_load_document(DEFAULT_MAP_PATH)
 	else:
 		_new_document()
 

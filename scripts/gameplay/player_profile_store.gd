@@ -487,25 +487,11 @@ func _validate_level_ledger(value: Variant) -> DataResult:
 	return DataResult.success()
 
 
-## 只接受安全 user:// 文件路径，逐段拒绝符号链接及目录占位，不访问其他玩家文件。
+## 档案只接受已授权 Progress 的直接文件或安全 user:// 测试路径，拒绝链接和目录占位。
 func _validate_path() -> DataResult:
-	if not storage_path.begins_with("user://") or not DataValidation.is_resource_path(storage_path):
-		return DataResult.failure("玩家档案路径必须是安全的 user:// 文件路径。")
-	var folder := DirAccess.open("user://")
-	if folder == null:
-		return DataResult.failure("无法访问玩家数据目录。")
-	var segments := storage_path.trim_prefix("user://").split("/")
-	for index in range(segments.size()):
-		var segment: String = segments[index]
-		if folder.is_link(segment):
-			return DataResult.failure("玩家档案路径不能包含符号链接。")
-		if index == segments.size() - 1:
-			return DataResult.failure("玩家档案文件路径被目录占用。") if folder.dir_exists(segment) else DataResult.success()
-		if not folder.dir_exists(segment):
-			return DataResult.failure("玩家档案目录被文件占用。") if folder.file_exists(segment) else DataResult.success()
-		if folder.change_dir(segment) != OK:
-			return DataResult.failure("无法访问玩家档案目录。")
-	return DataResult.failure("玩家档案路径无效。")
+	if not storage_path.begins_with("user://") and (storage_path.get_file() != "player_profile.json" or storage_path.get_base_dir().get_file() != "Progress"):
+		return DataResult.failure("玩家档案必须位于已授权的 Progress 目录。")
+	return PlayerRuntimePaths.validate_file(storage_path)
 
 
 ## 验证、回读和替换全部成功后才更新内存，写入失败保留 UID、用户名和统计。
@@ -521,9 +507,9 @@ func _commit(next: Dictionary, explicit_replacement: bool = false) -> DataResult
 	if source.to_utf8_buffer().size() > MAX_PROFILE_BYTES:
 		return _remember_result(DataResult.failure("玩家档案超过 4 MiB，原文件保持不变。"))
 	var absolute := ProjectSettings.globalize_path(storage_path)
-	var directory_error := DirAccess.make_dir_recursive_absolute(absolute.get_base_dir())
-	if directory_error != OK:
-		return _remember_result(DataResult.failure("无法创建玩家档案目录：%s。" % error_string(directory_error)))
+	var opened := PlayerRuntimePaths.open_directory(storage_path.get_base_dir(), true)
+	if not opened.is_ok():
+		return _remember_result(opened)
 	var suffix := ".%d.%d.%s" % [OS.get_process_id(), Time.get_ticks_usec(), Crypto.new().generate_random_bytes(8).hex_encode()]
 	var temporary := absolute + suffix + ".tmp"
 	var backup := absolute + suffix + ".bak"

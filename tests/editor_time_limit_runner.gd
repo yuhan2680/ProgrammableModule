@@ -172,6 +172,7 @@ func _test_editor() -> void:
 	root.add_child(game)
 	await _settle()
 	var editor := game._editor
+	editor._load_document(MapEditor.DEFAULT_MAP_PATH) # 验证旧图缺省耐久，不能由新地图默认值替代。
 	var field := editor._time_limit_field
 	_check(field.text == "60", "默认显示60秒")
 	_check(editor._player_health_field.text == "1", "玩家耐久默认显示1")

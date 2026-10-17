@@ -25,6 +25,7 @@ var player_saves_journal := "user://player_saves_migration.json"
 var legacy_upgrade: PlayerLegacyUpgrade
 var legacy_upgrade_native_dialog_handler: Callable
 var drafts_directory: String = "user://solutions"
+var runtime_storage_migration: PlayerRuntimeMigration
 var settings_path: String = "user://settings.json"
 var profile_path: String = ""
 # 档案与计时边界可独立注入，回归不读取真实玩家信息或等待实际时间。
@@ -123,6 +124,7 @@ var _confirm_assembly_caption: String = "确认装配，开始编程"
 var _clear_progress_pending: bool = false
 var _pending_clear_level_ids: Array[String] = []
 var _pending_clear_drafts_directory: String = ""
+var _pending_clear_progress_directory: String = ""
 var _import_dialog: FileDialog
 var _level_import_pending := false
 var _rename_input: LineEdit
@@ -163,6 +165,9 @@ var _legacy_upgrade_state: Dictionary = {}
 var _legacy_upgrade_errors := PackedStringArray()
 var _legacy_upgrade_dialog: PlayerLegacyUpgradeDialog
 var _player_storage_ready := false
+var _uses_external_runtime_storage := false
+var _runtime_storage_ready := false
+var _runtime_storage_errors := PackedStringArray()
 var _player_storage_errors := PackedStringArray()
 var _player_storage_continuation: Callable
 var _player_storage_dialog: FileDialog
@@ -186,12 +191,29 @@ func _ready() -> void:
 	GameI18n.install()
 	settings = GameSettings.new(settings_path)
 	var settings_result := settings.load_settings()
-	# 既有回归注入设置路径时，档案自动落入同一隔离命名空间。
-	var storage_path := profile_path
-	if storage_path.is_empty():
-		storage_path = "user://player_profile.json" if settings_path == "user://settings.json" else settings_path.get_basename() + ".player_profile.json"
-	profile = PlayerProfileStore.new(storage_path)
-	var profile_result := profile.load_profile()
+	# 正式入口共享 saves 的平台根；显式依赖注入继续使用原有隔离目录。
+	_uses_external_runtime_storage = runtime_storage_migration != null or (settings_path == "user://settings.json" and drafts_directory == "user://solutions" and profile_path.is_empty() and user_levels_directory.is_empty())
+	if not user_levels_directory.is_empty():
+		_player_storage_ready = true
+	elif player_save_location == null and settings_path != "user://settings.json":
+		user_levels_directory = settings_path.get_base_dir().path_join("levels")
+		_player_storage_ready = true
+	else:
+		_prepare_player_storage()
+	var profile_result: DataResult
+	if _uses_external_runtime_storage:
+		# 迁移或授权失败时占位模型不可写，绝不生成新的 UID 覆盖待恢复档案。
+		profile = PlayerProfileStore.new("")
+		drafts = GameDraftStore.new("")
+		profile_result = _prepare_runtime_storage()
+	else:
+		var storage_path := profile_path
+		if storage_path.is_empty():
+			storage_path = "user://player_profile.json" if settings_path == "user://settings.json" else settings_path.get_basename() + ".player_profile.json"
+		profile = PlayerProfileStore.new(storage_path)
+		profile_result = profile.load_profile()
+		drafts = GameDraftStore.new(drafts_directory)
+		_runtime_storage_ready = true
 	settings.changed.connect(_remember_profile_hint_mode)
 	_profile_tracker = PlayerAttemptTracker.new(profile_clock)
 	_activity_tracker = PlayerActivityTracker.new(profile_clock)
@@ -202,15 +224,6 @@ func _ready() -> void:
 	window_controller.settings = settings
 	window_controller.availability_changed.connect(_sync_window_resolutions)
 	add_child(window_controller)
-	drafts = GameDraftStore.new(drafts_directory)
-	# 显式注入目录保持隔离；正式启动解析可见位置，旧地图只在玩家明确点击时迁移。
-	if not user_levels_directory.is_empty():
-		_player_storage_ready = true
-	elif player_save_location == null and settings_path != "user://settings.json":
-		user_levels_directory = settings_path.get_base_dir().path_join("levels")
-		_player_storage_ready = true
-	else:
-		_prepare_player_storage()
 	catalog.user_directory = user_levels_directory if _player_storage_ready else ""
 	_prepare_legacy_upgrade()
 	if _startup_managed and not await _report_startup_step(2.0 / 6.0):
@@ -241,7 +254,7 @@ func _ready() -> void:
 	elif not settings_result.is_ok():
 		_startup_notice_title = "设置读取失败"
 		_startup_notice_body = "\n".join(settings_result.errors)
-	elif not profile_result.is_ok():
+	elif not profile_result.is_ok() and not _uses_external_runtime_storage:
 		_startup_notice_title = "玩家档案读取失败"
 		_startup_notice_body = "\n".join(profile_result.errors)
 	if not _startup_menu_pending:
@@ -263,7 +276,52 @@ func _prepare_player_storage() -> void:
 	_player_storage_ready = prepared.is_ok()
 
 
-## 保存相关入口可重试失败的授权或迁移，教学关卡始终可在主菜单继续游玩。
+## 缓存和进度先迁移后载入；失败保留原件和不可写状态，重试不会重复导入旧数据。
+func _prepare_runtime_storage() -> DataResult:
+	if not _uses_external_runtime_storage or _runtime_storage_ready:
+		return DataResult.success()
+	if not _player_storage_ready:
+		_runtime_storage_errors = _player_storage_errors.duplicate()
+		return DataResult.failure("\n".join(_runtime_storage_errors))
+	var paths := PlayerRuntimePaths.configure_from_saves(user_levels_directory, runtime_storage_migration != null)
+	if not paths.is_ok():
+		_runtime_storage_errors = paths.errors.duplicate()
+		return paths
+	var cache_path: String = paths.value.cache_directory
+	var progress_path: String = paths.value.progress_directory
+	if runtime_storage_migration == null:
+		runtime_storage_migration = PlayerRuntimeMigration.new(cache_path, progress_path)
+	elif runtime_storage_migration.cache_directory != cache_path or runtime_storage_migration.progress_directory != progress_path:
+		_runtime_storage_errors = PackedStringArray(["运行数据保存位置已改变，请恢复原目录后重试。"])
+		return DataResult.failure("\n".join(_runtime_storage_errors))
+	var migrated := runtime_storage_migration.migrate()
+	if not migrated.is_ok():
+		_runtime_storage_errors = migrated.errors.duplicate()
+		return migrated
+	var loaded_profile := PlayerProfileStore.new(paths.value.profile_path)
+	var loaded := loaded_profile.load_profile()
+	if not loaded.is_ok():
+		_runtime_storage_errors = loaded.errors.duplicate()
+		return loaded
+	profile = loaded_profile
+	drafts = GameDraftStore.new(cache_path, progress_path)
+	_runtime_storage_errors.clear()
+	_runtime_storage_ready = true
+	_shark_best_score = int(profile.get_statistics().shark_best_score)
+	_shark_discovered = bool(profile.get_statistics().get("shark_discovered", _shark_best_score > 0))
+	return DataResult.success()
+
+
+## 正式游玩和统计修改必须等待保存目录可用；菜单与设置仍可浏览并从原入口重试。
+func _ensure_runtime_storage(continuation: Callable) -> bool:
+	if _runtime_storage_ready:
+		return true
+	_player_storage_continuation = continuation
+	_request_player_storage()
+	return false
+
+
+## 保存相关入口可重试失败的授权或迁移，菜单始终可以继续浏览。
 func _ensure_player_storage(continuation: Callable) -> bool:
 	if _player_storage_ready:
 		return true
@@ -332,7 +390,9 @@ func _show_player_storage_problem() -> void:
 		_player_storage_problem.confirmed.connect(_retry_player_storage)
 		_player_storage_problem.canceled.connect(func() -> void: _player_storage_continuation = Callable())
 		add_child(_player_storage_problem)
-	_player_storage_problem.dialog_text = user_levels_directory + "\n" + GameI18n.translate_errors(_player_storage_errors)
+	_player_storage_problem.title = "无法使用游戏保存目录" if _uses_external_runtime_storage else "无法使用玩家关卡保存目录"
+	var errors := _runtime_storage_errors if _player_storage_ready and not _runtime_storage_ready else _player_storage_errors
+	_player_storage_problem.dialog_text = user_levels_directory + "\n" + GameI18n.translate_errors(errors)
 	_player_storage_problem.popup_centered(Vector2i(720, 310))
 
 
@@ -342,6 +402,10 @@ func _retry_player_storage() -> void:
 		_player_storage_problem.hide()
 	_prepare_player_storage()
 	if not _player_storage_ready:
+		_request_player_storage()
+		return
+	var runtime_result := _prepare_runtime_storage()
+	if not runtime_result.is_ok():
 		_request_player_storage()
 		return
 	catalog.user_directory = user_levels_directory
@@ -521,7 +585,7 @@ func _show_startup_notice() -> void:
 	if _startup_notice_title.is_empty():
 		if _show_legacy_upgrade_notice():
 			return
-		if not _player_storage_ready:
+		if not _player_storage_ready or not _runtime_storage_ready:
 			_request_player_storage()
 		return
 	_show_message(_startup_notice_title, _startup_notice_body)
@@ -1126,6 +1190,10 @@ func _show_about_dialog() -> void:
 func _open_shark_game() -> void:
 	if page != Page.SETTINGS or not is_instance_valid(settings_panel) or not _about_dialog.is_open() or shark_game != null or _shark_entry_pending:
 		return
+	if not _runtime_storage_ready:
+		_about_dialog.close_dialog()
+		_ensure_runtime_storage(_show_about_dialog)
+		return
 	_shark_settings_scroll = settings_panel._scroll.scroll_vertical
 	_shark_entry_generation += 1
 	_shark_entry_pending = true
@@ -1249,11 +1317,14 @@ func _open_about_link(url: String) -> void:
 func _request_clear_progress() -> void:
 	if _closing or page != Page.SETTINGS or settings_panel == null or _clear_progress_dialog.is_open() or _about_dialog.is_open():
 		return
+	if not _ensure_runtime_storage(_request_clear_progress):
+		return
 	_cancel_clear_progress()
 	for definition in catalog.levels:
 		if definition.source_path.begins_with("res://data/levels/") and not definition.id in _pending_clear_level_ids:
 			_pending_clear_level_ids.append(definition.id)
 	_pending_clear_drafts_directory = drafts.directory
+	_pending_clear_progress_directory = drafts.progress_directory
 	_clear_progress_pending = true
 	_clear_progress_dialog.popup_dialog(settings_panel.find_child("ClearProgressButton", true, false) as Control)
 
@@ -1263,6 +1334,7 @@ func _cancel_clear_progress() -> void:
 	_clear_progress_pending = false
 	_pending_clear_level_ids.clear()
 	_pending_clear_drafts_directory = ""
+	_pending_clear_progress_directory = ""
 	if is_instance_valid(_clear_progress_dialog):
 		_clear_progress_dialog.close_dialog(false)
 
@@ -1272,7 +1344,7 @@ func _confirm_clear_progress() -> void:
 	if _closing or not _clear_progress_pending or page != Page.SETTINGS or settings_panel == null or session != null or _clear_progress_dialog.is_open():
 		return
 	var level_ids: Array[String] = _pending_clear_level_ids.duplicate()
-	var paths_match := drafts.directory == _pending_clear_drafts_directory
+	var paths_match := drafts.directory == _pending_clear_drafts_directory and drafts.progress_directory == _pending_clear_progress_directory
 	_cancel_clear_progress()
 	var result := drafts.clear_level_records(level_ids) if paths_match else DataResult.failure("关卡或草稿目录已变更，请重新打开清除确认。")
 	settings_panel.show_progress_result(result)
@@ -2060,6 +2132,8 @@ func _cancel_player_level_rename() -> void:
 
 ## 每次进入关卡先显示空组装台；程序自动恢复，历史装配需由玩家主动选择载入。
 func _enter_level(definition: LevelDefinition) -> void:
+	if not _ensure_runtime_storage(_enter_level.bind(definition)):
+		return
 	_clear_page()
 	session = GameSession.create(definition, registry)
 	var draft_warning := _load_current_draft()
@@ -2377,7 +2451,7 @@ func _sync_activity_timer() -> void:
 	var content_active := page not in [Page.MAIN, Page.SETTINGS, Page.CODE_COLORS, Page.PLAYER_LEVEL_LIST, Page.PLAYER_PROFILE]
 	if is_instance_valid(shark_game) and shark_game.is_visible_in_tree() and not _shark_entry_pending:
 		content_active = true
-	var active := startup_complete and not _closing and _application_active and not _application_suspended and not _is_activity_window_minimized() and content_active
+	var active := _runtime_storage_ready and startup_complete and not _closing and _application_active and not _application_suspended and not _is_activity_window_minimized() and content_active
 	_activity_tracker.set_active(active)
 	if was_active and not active:
 		_activity_save_elapsed = 0.0
@@ -2391,7 +2465,7 @@ func _is_activity_window_minimized() -> bool:
 
 ## 定期、离开前台和退出时保存；写盘失败保留待存秒数，下一次边界或周期重试。
 func _flush_activity_statistics() -> void:
-	if profile == null or _activity_tracker == null:
+	if not _runtime_storage_ready or profile == null or _activity_tracker == null:
 		return
 	var seconds := _activity_tracker.get_pending_seconds()
 	if seconds > 0.0:
@@ -2405,7 +2479,7 @@ func _flush_activity_statistics() -> void:
 
 ## 首次进入与最高分一起保存；主动退出也保留新高，写盘失败由后续周期重试。
 func _persist_shark_statistics() -> void:
-	if profile == null:
+	if not _runtime_storage_ready or profile == null:
 		return
 	if is_instance_valid(shark_game):
 		_shark_best_score = maxi(_shark_best_score, shark_game.best_score)
@@ -2767,6 +2841,8 @@ func _show_code_colors_page() -> void:
 
 ## 玩家档案作为设置子页共用白卡、渐隐和导航，数据只读注入的独立模型。
 func _show_player_profile_page() -> void:
+	if not _ensure_runtime_storage(_show_player_profile_page):
+		return
 	_clear_page(false, true)
 	# 每次进入按当前版本实际可用目录计算教学进度，新增关卡不需要迁移玩家档案。
 	catalog.refresh(registry)

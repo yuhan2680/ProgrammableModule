@@ -470,6 +470,9 @@ func _return_to_level_navigation(game: GameShell, expected_back: Rect2, expected
 ## 编辑器和试玩共用相同导航几何，退出试玩恢复同一个编辑器及图标工具栏。
 func _editor_playtest_navigation(game: GameShell, expected_back: Rect2, expected_navigation: Rect2, message: String) -> void:
 	var editor := game._editor
+	# 普通入口为空白地图；导航试玩使用明确的可运行场地夹具。
+	_expect(editor._load_document(MapEditor.DEFAULT_MAP_PATH), "导航试玩显式载入样例 " + message)
+	await _settle()
 	var editor_document := editor.editor_document
 	var app_icon := game.find_child("HeaderAppIcon", true, false) as Control
 	var header := editor._header

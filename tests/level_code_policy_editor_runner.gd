@@ -117,7 +117,9 @@ func _test_editor() -> void:
 	root.add_child(editor)
 	editor.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	await _settle()
-	_check(editor._restrict_code_paste_switch.disabled and editor._restrict_code_paste_label.has_theme_color_override("font_color"), "默认打开已有地图的标签与开关都禁用变灰")
+	_check(not editor._restrict_code_paste_switch.disabled and not editor._restrict_code_paste_label.has_theme_color_override("font_color") and editor.editor_document.path.is_empty(), "默认空白地图的标签与开关可编辑，允许首次配置限制")
+	_check(editor._load_document(MapEditor.DEFAULT_MAP_PATH), "显式打开旧地图夹具")
+	_check(editor._restrict_code_paste_switch.disabled and editor._restrict_code_paste_label.has_theme_color_override("font_color"), "显式打开已有地图的标签与开关都禁用变灰")
 	editor._new_document()
 	var model := editor.editor_document
 	_check(not editor._restrict_code_paste_switch.disabled and not editor._restrict_code_paste_label.has_theme_color_override("font_color"), "新建恢复可编辑的默认标签和开关")

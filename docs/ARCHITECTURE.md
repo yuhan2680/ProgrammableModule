@@ -181,9 +181,9 @@ func start_example(document: MapDocument, content: ContentRegistry) -> DataResul
 
 有终点的关卡在机器参考点到达或经过终点半径范围时成功，程序结束但未抵达终点则失败。移动受到 void 阻挡会传播为程序失败。没有 `properties.level.goal` 的导入地图作为沙盒使用，程序正常结束时不要求终点。终点检测只读世界位置，不改变底层移动或地形规则。
 
-`GameDraftStore` 默认写入 `user://solutions`。草稿与通关记录分开保存，以关卡 ID 的 SHA-256 构造文件名；关卡 ID 不作为路径拼接。保存程序不会清除已有完成状态。可通过 `directory` 注入独占测试目录，缺失草稿返回成功且 `value = null`。
+正式 `GameShell` 向 `GameDraftStore` 注入平台 `Cache` / `Progress`；模型保留单目录注入的兼容默认值 `user://solutions`。目录授权和一次迁移见 [运行数据存储](RUNTIME_STORAGE.md)。草稿与通关记录分开保存，以关卡 ID 的 SHA-256 构造文件名；关卡 ID 不作为路径拼接。保存程序不会清除已有完成状态。可通过 `directory` 注入独占测试目录，缺失草稿返回成功且 `value = null`。
 
-设置页的「清除预设进度」由 `ClearProgressDialog` 优先调用 macOS / Windows 原生确认；取消为默认项，系统不可用时回退到原单层圆角毛玻璃浮层。请求代数与页面状态拒绝迟到及重复响应，`GameShell` 收集来源位于 `res://data/levels/` 的内置关卡 ID，只有弹窗明确确认才调用 `GameDraftStore.clear_level_records()`。存储接口按 ID 定位对应通关记录、代码/装配草稿及已知恢复副本；清除前校验完整候选集，先暂存、失败时回滚，不递归删除整个 solutions 目录。导入关卡、设置及关卡地图不属于此操作范围。
+设置页的「清除预设进度」由 `ClearProgressDialog` 优先调用 macOS / Windows 原生确认；取消为默认项，系统不可用时回退到原单层圆角毛玻璃浮层。请求代数与页面状态拒绝迟到及重复响应，`GameShell` 收集来源位于 `res://data/levels/` 的内置关卡 ID，只有弹窗明确确认才调用 `GameDraftStore.clear_level_records()`。存储接口按 ID 定位对应通关记录、代码/装配草稿及已知恢复副本；清除前校验完整候选集，先暂存、失败时回滚，不递归删除整个 Cache 或 Progress 目录。导入关卡、设置及关卡地图不属于此操作范围。
 
 设置页不再提供「清除用户关卡」批量入口，玩家通过「玩家关卡列表」管理不需要的地图。底层兼容接口 `LevelCatalog.clear_user_levels(drafts)` 仍保留，未从界面调用。目录只接受 `PlayerLevelPaths` 授权的平台保存根、旧正式 `user://levels` 或隔离测试位置，逐段拒绝符号链接；枚举直接 JSON（包含坏文件和重复 ID），非 JSON 和子目录保留。关联记录仅按文件合法顶层 ID 或本会话同路径已加载定义识别，并独立读取全部内置 ID 加以排除。内置保护范围不能确定时终止操作。
 
@@ -191,7 +191,7 @@ func start_example(document: MapDocument, content: ContentRegistry) -> DataResul
 
 `GameShell` 在草稿损坏或装配不兼容时回退到初始内容，同时记录恢复状态。未编辑直接返回不会写回默认内容；首次编辑或手动保存前，先通过 `backup_draft()` 逐字节保留旧文件。备份失败则停止保存，成功路径显示在保存状态提示中。该备份与普通写盘事务中的临时备份不同，会持续保留供恢复使用。
 
-`PlayerProfileStore` 独立保存到 `user://player_profile.json`，初次创建 13 位十进制 UID（首位 1..9，其余 0..9，可重复）；用户名默认 Player，最多 11 个 Unicode 字符，过滤 emoji、控制字符及私用区。更改名字不改 UID；载入旧档案接受 10..13 位非零开头数字，界面只读，不提供改号 API。JSON 版本、身份和统计完整校验，普通更新保留扩展字段、复核文件指纹，经同目录临时回读与备份替换后才提交内存；损坏或外部变化的档案不能被普通统计更新覆盖。历史草稿和通关标记没有完整的提示、尝试或活动耗时，首次档案不推测补录历史统计。
+`PlayerProfileStore` 在正式入口独立保存到平台 `Progress/player_profile.json`，模型默认 `user://player_profile.json` 仅保留旧位置和测试兼容；初次创建 13 位十进制 UID（首位 1..9，其余 0..9，可重复）；用户名默认 Player，最多 11 个 Unicode 字符，过滤 emoji、控制字符及私用区。更改名字不改 UID；载入旧档案接受 10..13 位非零开头数字，界面只读，不提供改号 API。JSON 版本、身份和统计完整校验，普通更新保留扩展字段、复核文件指纹，经同目录临时回读与备份替换后才提交内存；损坏或外部变化的档案不能被普通统计更新覆盖。历史草稿和通关标记没有完整的提示、尝试或活动耗时，首次档案不推测补录历史统计。
 
 `GameShell._enter_level()` 对所有正式关卡连接独立统计信号，不依赖教学来源；编辑器试玩不连接。`GameSession.attempt_started` 在通过运行状态锁后、编译前发出，使立即完成的程序也能启动新挑战计时；可靠的 `attempt_failed` 每次真实尝试最多一次，涵盖编译、装配、执行和世界失败。装配拖动校验、拒绝重复运行、手动停止、重置和自愿离开不增加失败。通过率为 `successes / (successes + failures)`，没有尝试显示横线。`GameWorkbench.code_hint_used` 只在真实插入新源码后发出一次；服务内部克隆验证、无修改提示及撤销不累计。
 

@@ -1,6 +1,6 @@
 # 玩家关卡保存位置
 
-正式入口在读取玩家关卡前解析位置。macOS 非沙盒使用系统 Documents 目录中的 `ProgrammableModule/saves`；Windows 使用系统 `USERPROFILE` 中的 `ProgrammableModule/saves`，不硬编码盘符或用户名。其他平台暂时沿用 `user://levels`。仅玩家地图改变位置，设置、统计、程序与装配草稿仍在原有 `user://` 中。
+正式入口在读取玩家关卡前解析位置。macOS 非沙盒使用系统 Documents 目录中的 `ProgrammableModule/saves`；Windows 使用系统 `USERPROFILE` 中的 `ProgrammableModule/saves`，不硬编码盘符或用户名。其他平台暂时沿用 `user://levels`。同级 `Cache` 保存程序/装配草稿与恢复备份，`Progress` 保存通关记录和玩家档案；设置、授权与迁移标记仍在 `user://`。自动迁移与访问失败处理见 [缓存与游戏进度保存位置](RUNTIME_STORAGE.md)。
 
 macOS 旧位置通常为 `~/Library/Application Support/Godot/app_userdata/ProgrammableModule/levels/`，属于应用数据而非缓存。旧数据只在明确放弃或全部迁移完成后清理。沙盒版本的旧 `user://` 位于自身容器，迁移只能读取当前应用有权访问的旧目录，不能跨容器猜测玩家数据。
 
@@ -20,7 +20,7 @@ Windows 旧位置通常为 `%APPDATA%\Godot\app_userdata\ProgrammableModule\leve
 
 macOS 预设保留 App Sandbox 和 `files_user_selected=2`，追加 `com.apple.security.files.bookmarks.app-scope` entitlement，并配置五语 Documents 用途说明。当前预设关闭代码签名，不能将配置存在当作实际沙盒权限验证；发布签名版本必须核验生成的 entitlement，并人工验证「选择文稿 → 保存 → 退出 → 重启读取」。本次自动测试不修改 TCC 或真实系统授权。
 
-取消授权、权限被撤销或写入失败时显示原因并提供重试。地图编辑、导入与单条迁移入口可以再次请求授权；玩家文件管理页在未授权新根时仍允许只读查看旧关卡；教学关卡仍可继续游玩。任何失败都不静默切换回隐藏目录。
+取消授权、权限被撤销或写入失败时显示原因并提供重试。地图编辑、导入与单条迁移入口可以再次请求授权；玩家文件管理页在未授权新根时仍允许只读查看旧关卡；主菜单与设置仍可使用，正式游玩及统计等需要运行记录的入口会重试授权与目录初始化。任何失败都不静默切换回隐藏目录。
 
 ## 一次升级询问与旧目录退役
 

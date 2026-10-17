@@ -32,6 +32,7 @@ func _run() -> void:
 	_game.settings.set_language("zh_CN")
 	await _settle()
 	var editor := _game._editor
+	editor._load_document(MapEditor.DEFAULT_MAP_PATH) # 保存与试玩检查显式使用内置示例夹具。
 	await _test_dialog_appearance(editor)
 	await _test_menu(editor)
 	await _test_menu_focus_modes(editor)

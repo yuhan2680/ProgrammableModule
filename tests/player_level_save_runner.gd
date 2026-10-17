@@ -66,7 +66,10 @@ func _test_new_map_ids() -> void:
 	await _settle()
 	var editor := _game._editor
 	var model := editor.editor_document
-	var seen: Dictionary = {}
+	var initial_id := model.document.id
+	_check(PlayerLevelStore.is_generated_map_id(initial_id) and model.document.cells.is_empty() and model.document.player_spawn == null and model.path.is_empty(), "主菜单编辑器入口直接创建空白地图，无需额外点新建")
+	_check(not model.is_dirty() and not model.can_undo() and model.get_creator() == _game.profile.get_username(), "主菜单新建使用玩家署名及干净初始历史")
+	var seen: Dictionary = {initial_id: true}
 	for _index in range(32):
 		editor._new_document()
 		var map_id := model.document.id
@@ -86,20 +89,29 @@ func _test_new_map_ids() -> void:
 	_check(editor._map_view.view_center == center and editor._map_view.zoom == zoom, "分配失败不重置当前地图视点")
 	editor._message_dialog.hide()
 	editor.player_levels_directory = directory
+	# 显式打开已有地图后再走无路径入口，不能自动恢复上一张地图。
+	_game._open_editor(MapEditor.DEFAULT_MAP_PATH)
+	await _settle()
+	_check(_game._editor.initial_map_opened and _game._editor.editor_document.path == MapEditor.DEFAULT_MAP_PATH, "明确指定路径时仍完整打开已有地图")
+	_game._show_main_page()
+	_game._open_editor()
+	await _settle()
+	var reopened := _game._editor.editor_document
+	_check(PlayerLevelStore.is_generated_map_id(reopened.document.id) and reopened.document.id != initial_id and reopened.document.cells.is_empty() and reopened.path.is_empty(), "离开示例再进入编辑器仍新建独立空白图，不把旧文档当缓存恢复")
 
 
 ## 普通保存与另存为、打开、新建交错时只更新当前拥有的玩家关卡文件。
 func _test_editor_binding() -> void:
-	_game._open_editor()
+	_game._open_editor(MapEditor.DEFAULT_MAP_PATH)
 	await _settle()
 	var editor := _game._editor
 	editor._file_dialog.use_native_dialog = false
 	var model := editor.editor_document
 	var source_bytes := FileAccess.get_file_as_bytes(MapEditor.DEFAULT_MAP_PATH)
-	_check(model.path == MapEditor.DEFAULT_MAP_PATH and editor.player_levels_directory == _game.catalog.user_directory, "默认示例与游戏玩家关卡目录正确注入编辑器")
+	_check(model.path == MapEditor.DEFAULT_MAP_PATH and editor.player_levels_directory == _game.catalog.user_directory, "显式示例与游戏玩家关卡目录正确注入编辑器")
 	editor._header.save_button.pressed.emit()
 	_managed_a = model.path
-	_check(_is_managed(_managed_a) and FileAccess.file_exists(_managed_a) and not editor._file_dialog.visible and not model.is_dirty(), "默认res示例正常保存直接生成玩家关卡且不弹路径选择")
+	_check(_is_managed(_managed_a) and FileAccess.file_exists(_managed_a) and not editor._file_dialog.visible and not model.is_dirty(), "显式打开的res示例正常保存直接生成玩家关卡且不弹路径选择")
 	_check(FileAccess.get_file_as_bytes(MapEditor.DEFAULT_MAP_PATH) == source_bytes, "保存示例没有修改内置res原件")
 	_check(_find_level(_game.catalog, model.document.id) != null, "普通保存成功时外壳立即刷新关卡目录")
 	var file_count := _player_files().size()

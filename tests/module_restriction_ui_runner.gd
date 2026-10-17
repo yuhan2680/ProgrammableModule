@@ -30,6 +30,7 @@ func _run() -> void:
 	root.add_child(_game)
 	await _settle()
 	var editor := _game._editor
+	editor._load_document(MapEditor.DEFAULT_MAP_PATH) # 此回归需要有出生点的既有地图夹具。
 	var model := editor.editor_document
 	var choice := editor._restriction_choice
 	var picker := editor._restriction_picker

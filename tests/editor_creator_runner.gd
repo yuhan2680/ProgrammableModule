@@ -30,6 +30,7 @@ func _run() -> void:
 	root.add_child(_game)
 	await _settle()
 	var editor := _game._editor
+	editor._load_document(MapEditor.DEFAULT_MAP_PATH) # 此回归需要有出生点的既有地图夹具。
 	var model := editor.editor_document
 	var field := editor._creator_field
 	_check(field != null and field.auto_translate_mode == Node.AUTO_TRANSLATE_MODE_DISABLED and field.max_length == 0 and editor._name_field.max_length == 0, "名称与署名输入完整保留原文，由提交校验限制长度")

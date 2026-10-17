@@ -33,6 +33,7 @@ func _run() -> void:
 	await _settle()
 	_game._editor_discard_dialog.use_native_dialog = false
 	_editor = _game._editor
+	_editor._load_document(MapEditor.DEFAULT_MAP_PATH) # 此回归需要有出生点的既有地图夹具。
 	_field = _editor._subtitle_field
 	_check(_field.caret_blink and is_equal_approx(_field.caret_blink_interval, 0.5) and _field.auto_translate_mode == Node.AUTO_TRANSLATE_MODE_DISABLED, "副标题使用正常闪烁光标且原文不翻译")
 	_check(_field.text.is_empty() and not _editor.editor_document.is_dirty(), "旧地图缺省留空不自动改写")
