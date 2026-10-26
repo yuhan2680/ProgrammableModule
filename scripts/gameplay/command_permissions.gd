@@ -9,6 +9,14 @@ const DEPENDENCIES := {
 	"radar_angle": ["variables", "scan"], "radar_position": ["variables", "scan"], "radar_distance": ["variables", "scan"],
 	"radar_event": ["named_calls", "variables", "scan"],
 }
+# 模块联动依据已注册行为而不是显示名或单个 ID；同族仍有可用模块时保留指令。
+# 移动模块按编辑需求豁免；ready() 查询射击冷却，因此随射击能力一同锁定。
+const MODULE_COMMANDS := {
+	"MeleeModule": ["attack", "named_attack"],
+	"ShootingModule": ["shoot", "named_shoot", "ready"],
+	"RangefinderModule": ["distance", "named_distance"],
+	"RadarModule": ["scan", "named_scan", "radar_angle", "radar_position", "radar_distance", "radar_event"],
+}
 const FLAG_COMMANDS := {
 	"allow_tick": ["tick"], "allow_named_calls": ["named_calls"], "allow_loops": ["loop"],
 	"allow_conditionals": ["if_else", "ready"], "allow_simultaneous": ["simultaneously"],
@@ -69,6 +77,41 @@ static func project_legacy(metadata: Dictionary) -> PackedStringArray:
 ## 显式新策略严格读取；没有该字段时保持旧开关的真实权限，绝不补写默认数组。
 static func read(metadata: Dictionary) -> DataResult:
 	return validate(metadata.enabled_commands) if metadata.has("enabled_commands") else DataResult.success(project_legacy(metadata))
+
+
+## 从真实可用模块投影自动锁定项；同类扩展模块仍可提供能力，移动指令始终不联动。
+static func module_blocked_commands(allowed_module_ids: PackedStringArray, content: ContentRegistry) -> PackedStringArray:
+	if content == null:
+		return PackedStringArray()
+	var available_behaviors := {}
+	for module_id in allowed_module_ids:
+		var definition := content.get_module(module_id)
+		if definition != null:
+			available_behaviors[definition.behavior] = true
+	var blocked := PackedStringArray()
+	for behavior: String in MODULE_COMMANDS:
+		if not available_behaviors.has(behavior):
+			for identity: String in MODULE_COMMANDS[behavior]:
+				blocked.append(identity)
+	return ordered(blocked)
+
+
+## 有效权限只做收紧，不回写手动选择；扣除锁定项后删除缺失前提的依赖，不能反向开启模块能力。
+static func effective_enabled(manual_ids: PackedStringArray, blocked_ids: PackedStringArray) -> PackedStringArray:
+	var effective := PackedStringArray()
+	for identity in manual_ids:
+		if identity not in blocked_ids:
+			effective.append(identity)
+	var changed := true
+	while changed:
+		changed = false
+		for identity in effective.duplicate():
+			for required: String in DEPENDENCIES.get(identity, []):
+				if required not in effective:
+					effective.remove_at(effective.find(identity))
+					changed = true
+					break
+	return ordered(effective)
 
 
 ## 用户显式开启指令时同一事务补齐前提，不改写任何旧地图默认策略。

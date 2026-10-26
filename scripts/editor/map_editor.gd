@@ -809,7 +809,7 @@ func _open_command_restrictions() -> void:
 	_restriction_picker.close_menu(false)
 	_enemy_panel._picker.close_menu(false)
 	_command_button.release_focus()
-	_command_menu.show_commands(_command_button, registry, editor_document.get_enabled_commands(registry))
+	_command_menu.show_commands(_command_button, registry, editor_document.get_enabled_commands(registry), editor_document.get_module_blocked_commands(registry))
 
 
 ## 开启表示允许；文档一次事务处理依赖项，撤销与失败同步回原有效开关状态。
@@ -823,7 +823,7 @@ func _on_command_toggled(command_id: String, enabled: bool) -> void:
 
 ## 历史、载入与注册表重载只同步开关，不在打开旧地图时写入指令权限。
 func _sync_command_restrictions() -> void:
-	_command_menu.sync_enabled_commands(editor_document.get_enabled_commands(registry))
+	_command_menu.sync_enabled_commands(editor_document.get_enabled_commands(registry), editor_document.get_module_blocked_commands(registry))
 
 
 ## 敌人设置与场景玩法平级，只折叠自身表单，避免玩家设置牵连敌人配置。
@@ -2068,7 +2068,9 @@ func _new_document() -> void:
 	document.display_name = "新地图"
 	document.width = 16
 	document.height = 12
-	document.properties = {"level": {"max_ticks": 600, "completion_mode": "reach_or_clear", "player_max_health": 1.0, "restricted_modules": [], "allow_code_hints": false, "restrict_code_paste": false}}
+	document.properties = {"level": {"max_ticks": 600, "completion_mode": "reach_or_clear", "player_max_health": 1.0, "restricted_modules": [], "allow_code_hints": false, "restrict_code_paste": false, "enabled_commands": CommandPermissions.COMMAND_IDS.duplicate()}}
+	# 新地图显式允许全部已有指令；只初始化新草稿，旧地图仍保留自己的解锁策略。
+	document.properties.level.merge(CommandPermissions.legacy_flags(PackedStringArray(CommandPermissions.COMMAND_IDS)), true)
 	if not default_creator.is_empty() and DataValidation.is_creator(default_creator) and default_creator.length() <= DataValidation.MAX_EDITOR_CREATOR_LENGTH:
 		document.properties.level["creator"] = default_creator
 	_managed_save_path = ""

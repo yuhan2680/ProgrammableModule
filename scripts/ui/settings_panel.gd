@@ -39,6 +39,7 @@ var _status: Label
 var _syncing: bool = false
 var _card: Control
 var _content_fade: SettingsContentFade
+var _audio_glass_overlay: Control
 var _column: VBoxContainer
 var _scroll: ScrollContainer
 var _scroll_content: MarginContainer
@@ -86,6 +87,11 @@ func _build_ui() -> void:
 	_content_fade = SettingsContentFade.new()
 	_content_fade.name = "SettingsContentFade"
 	add_child(_content_fade)
+	# 玻璃在正文 CanvasGroup 合成后采样，避免 Compatibility 在组内返回白色纹理。
+	_audio_glass_overlay = Control.new()
+	_audio_glass_overlay.name = "AudioGlassOverlay"
+	_audio_glass_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_audio_glass_overlay)
 	_card = Control.new()
 	# 保留既有布局容器名称与测试定位；Control 本身没有背景或阴影。
 	_card.name = "SettingsCard"
@@ -356,6 +362,7 @@ func _add_option_glass(option: OptionButton) -> void:
 	var glass := OPTION_GLASS.new()
 	glass.name = option.name + "Glass"
 	glass.option = option
+	glass.fit_popup = _fit_option_popup.bind(option)
 	add_child(glass)
 
 
@@ -426,7 +433,8 @@ func _add_audio_slider(parent: Node, prefix: String, caption: String, change_han
 	controls.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(controls)
 	_add_speaker(controls, "res://assets/ui/settings_speaker_low.svg")
-	var slider := HSlider.new()
+	var slider := SettingsGlassSlider.new()
+	slider.glass_overlay = _audio_glass_overlay
 	slider.name = prefix + "Slider"
 	slider.min_value = 0.0
 	slider.max_value = 100.0
@@ -447,6 +455,8 @@ func _add_audio_slider(parent: Node, prefix: String, caption: String, change_han
 func _add_speaker(parent: Node, path: String) -> void:
 	var icon := TextureRect.new()
 	icon.texture = load(path)
+	# 四倍 SVG 保留高分屏细节，mipmap 让设置正文缩到八成时仍平稳采样。
+	icon.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	icon.custom_minimum_size = Vector2(22, 22)
 	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -455,7 +465,7 @@ func _add_speaker(parent: Node, path: String) -> void:
 	parent.add_child(icon)
 
 
-## 音量轨道改用低对比灰色，白色胶囊滑块仍保留原生拖动、滚轮和键盘操作。
+## 音量轨道保持低对比灰色；旋钮由 SettingsGlassSlider 绘制，原生滑条继续管理输入。
 func _style_volume_slider(slider: HSlider) -> void:
 	var track := GameTheme.box(Color("D7D9DF"), Color.TRANSPARENT, 3)
 	track.set_content_margin_all(0)
@@ -466,9 +476,6 @@ func _style_volume_slider(slider: HSlider) -> void:
 	slider.add_theme_stylebox_override("slider", track)
 	slider.add_theme_stylebox_override("grabber_area", fill)
 	slider.add_theme_stylebox_override("grabber_area_highlight", fill)
-	var grabber: Texture2D = load("res://assets/ui/settings_slider_grabber.svg")
-	for state in ["grabber", "grabber_highlight", "grabber_disabled"]:
-		slider.add_theme_icon_override(state, grabber)
 	slider.add_theme_constant_override("center_grabber", 0)
 	slider.add_theme_stylebox_override("focus", GameTheme.box(Color.TRANSPARENT, Color("BFC8D4"), 10))
 
@@ -500,6 +507,8 @@ func _layout_card() -> void:
 	_scroll.size = Vector2(scroll_rect.size.x, maxf(0, scroll_rect.size.y - (0 if inside_card else CONTENT_TOP_GAP))) / content_scale
 	var visible_rect := _scroll.get_global_rect()
 	_content_fade.set_fade(visible_rect.position.y, TOP_FADE_WIDTH * absf(get_global_transform().get_scale().y), get_viewport().get_visible_rect().size.y, visible_rect.end.y)
+	for slider: SettingsGlassSlider in [_volume_slider, _system_sound_slider]:
+		slider.set_glass_clip(visible_rect, TOP_FADE_WIDTH * absf(get_global_transform().get_scale().y))
 
 
 ## 原生跟随焦点完成后留出渐隐带，键盘导航不会把正在操作的设置藏在透明区域。
@@ -530,7 +539,7 @@ func _fit_language_popup() -> void:
 	_fit_option_popup(_language_option)
 
 
-## 语言和分辨率共用弹层边界约束，较小窗口中仍保留完整选项及圆角。
+## 所有设置菜单对齐选项的右下缘，使用真实画布变换避免缩放与右对齐文字导致横向偏移。
 func _fit_option_popup(option: OptionButton) -> void:
 	var popup := option.get_popup()
 	if not popup.visible or not popup.is_embedded():
@@ -540,9 +549,14 @@ func _fit_option_popup(option: OptionButton) -> void:
 	popup.max_size = Vector2i(0, floori(bounds.size.y))
 	if popup.size.y > popup.max_size.y:
 		popup.size.y = popup.max_size.y
+	var anchor := option.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, option.size)
+	var top := anchor.end.y
+	# 优先向下展开；底部不足而上方完整可放时翻到上方，其他情况保留原生滚动并收进画幅。
+	if top + popup.size.y > bounds.end.y and anchor.position.y - popup.size.y >= bounds.position.y:
+		top = anchor.position.y - popup.size.y
 	popup.position = Vector2i(
-		clampf(popup.position.x, bounds.position.x, maxf(bounds.position.x, bounds.end.x - popup.size.x)),
-		clampf(popup.position.y, bounds.position.y, maxf(bounds.position.y, bounds.end.y - popup.size.y))
+		roundi(clampf(anchor.end.x - popup.size.x, bounds.position.x, maxf(bounds.position.x, bounds.end.x - popup.size.x))),
+		roundi(clampf(top, bounds.position.y, maxf(bounds.position.y, bounds.end.y - popup.size.y)))
 	)
 
 
@@ -718,7 +732,7 @@ func _on_assembly_free_zoom_toggled(enabled: bool) -> void:
 	_sync_controls()
 
 
-## 设置选择器使用一致外观并保留原生键盘操作，不留下鼠标点击后的蓝色描边。
+## 设置选择器使用一致外观并保留原生键盘操作，所有输入方式均不绘制焦点外框。
 func _style_option(option: OptionButton) -> void:
 	option.custom_minimum_size = Vector2(180, 40)
 	option.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -746,18 +760,12 @@ func _on_code_hints_selected(index: int) -> void:
 	_sync_controls()
 
 
-## 仅键盘导航显示选择器焦点环；鼠标选择菜单后立即撤掉，避免残留蓝色轮廓。
+## 记录输入方式以便键盘导航自动滚动到控件，焦点外框始终保持隐藏。
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed or event is InputEventScreenTouch and event.pressed:
 		_keyboard_option_focus = false
 	elif event is InputEventKey and event.pressed:
 		_keyboard_option_focus = true
-	else:
-		return
-	for option: OptionButton in [_language_option, _code_hints_option, _window_resolution_option, _ui_scale_option]:
-		if option != null:
-			var focus: StyleBox = GameTheme.box(Color.TRANSPARENT, Color("A7CDFF"), 10) if _keyboard_option_focus else StyleBoxEmpty.new()
-			option.add_theme_stylebox_override("focus", focus)
 
 
 ## 显示分组的中间行进入颜色子页，沿用统一设置导航行。

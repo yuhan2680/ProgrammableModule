@@ -22,6 +22,8 @@ func _run() -> void:
 	_test_dependencies()
 	_test_flag_projection()
 	_test_codec()
+	_test_module_linking()
+	_test_linked_runtime()
 	_cleanup(_temporary)
 	print("COMMAND_PERMISSIONS_TESTS %d checks, %d failures" % [_checks, _failures])
 	quit(0 if _failures == 0 else 1)
@@ -108,6 +110,7 @@ func _test_transactions() -> void:
 func _test_dependencies() -> void:
 	var model := MapEditorDocument.new()
 	model.replace_document(_document())
+	model.set_restricted_modules([], _content)
 	_check(model.set_enabled_commands(["main"], _content).is_ok(), "建立只含主入口的新策略")
 	var count := model._undo_stack.size()
 	var selected := model.set_command_enabled("ready", true, _content)
@@ -156,6 +159,7 @@ func _test_flag_projection() -> void:
 	reverse.reverse()
 	var model := MapEditorDocument.new()
 	model.replace_document(document)
+	model.set_restricted_modules([], _content)
 	_check(model.set_enabled_commands(reverse, _content).is_ok() and model.document.properties.level.enabled_commands == CommandPermissions.COMMAND_IDS, "显式编辑按固定目录顺序序列化所有指令")
 
 
@@ -179,6 +183,92 @@ func _test_codec() -> void:
 	_check(not MapCodec.validate(model.document, _content, false).is_ok(), "未完成草稿也拒绝未知指令策略")
 	model.document.properties.level["enabled_commands"] = ["main"]
 	_check(MapCodec.validate(model.document, _content, false).is_ok(), "没有出生点的有效 main 策略仍可作为草稿保存")
+
+
+## 模块锁定只限制有效权限，不覆盖作者手动选择；保存与单次历史均能恢复原有偏好。
+func _test_module_linking() -> void:
+	var families := {
+		"radar": ["scan", "named_scan", "radar_angle", "radar_position", "radar_distance", "radar_event"],
+		"melee": ["attack", "named_attack"],
+		"shooting": ["shoot", "named_shoot", "ready"],
+		"rangefinder": ["distance", "named_distance"],
+	}
+	for module_id: String in families:
+		var model := MapEditorDocument.new()
+		model.replace_document(_document())
+		model.set_restricted_modules([], _content)
+		_check(model.set_enabled_commands(CommandPermissions.COMMAND_IDS, _content).is_ok(), "开放模块时可显式启用全部指令 " + module_id)
+		var manual_off := str(families[module_id][1])
+		model.set_command_enabled(manual_off, false, _content)
+		var manual := model.get_enabled_commands(_content)
+		var unrestricted := model.document.to_dict()
+		var history := model._undo_stack.size()
+		_check(model.set_restricted_modules([module_id], _content).is_ok(), "限制模块正常提交 " + module_id)
+		var locked := model.document.to_dict()
+		var blocked := model.get_module_blocked_commands(_content)
+		_check(blocked == CommandPermissions.ordered(PackedStringArray(families[module_id])), "只锁定对应模块的广播/具名/属性指令 " + module_id)
+		_check(model._undo_stack.size() == history + 1 and model.get_enabled_commands(_content) == manual, "模块变化仅一次事务且不覆盖手动开关 " + module_id)
+		var level := LevelDefinition.from_document(model.document, _content)
+		_check(level.is_ok() and level.value.has_command_policy, "模块限制生成运行时有效策略 " + module_id)
+		if level.is_ok():
+			for command_id: String in families[module_id]:
+				_check(command_id not in level.value.enabled_commands, "运行策略扣除被锁指令 " + command_id)
+			_check("move" in level.value.enabled_commands and "named_move" in level.value.enabled_commands and "if_else" in level.value.enabled_commands and "named_calls" in level.value.enabled_commands and "random" in level.value.enabled_commands, "无关基础指令不被模块联动误关 " + module_id)
+		_check(not model.set_command_enabled(manual_off, true, _content).is_ok() and model.document.to_dict() == locked, "调用模型也不能开启锁定项 " + module_id)
+		_check(not model.set_enabled_commands(CommandPermissions.COMMAND_IDS, _content).is_ok() and model.document.to_dict() == locked, "批量提交不能新增锁定指令 " + module_id)
+		_check(model.set_enabled_commands(manual, _content).is_ok() and model._undo_stack.size() == history + 1, "等值策略可保留隐藏偏好且不增加历史 " + module_id)
+		_check(model.undo() and model.document.to_dict() == unrestricted and model.get_module_blocked_commands(_content).is_empty(), "一次撤销恢复模块与原策略 " + module_id)
+		_check(model.redo() and model.document.to_dict() == locked, "一次重做恢复完整锁定 " + module_id)
+		var path := _temporary.path_join("linked_" + module_id + ".json")
+		_check(MapCodec.save_file(model.document, path, _content).is_ok(), "锁定状态可正常保存 " + module_id)
+		var loaded := MapCodec.load_file(path, _content)
+		_check(loaded.is_ok(), "锁定地图可重新载入 " + module_id)
+		if not loaded.is_ok():
+			continue
+		model.replace_document(loaded.value, path)
+		var snapshot := model.document.to_dict()
+		model.get_module_blocked_commands(_content)
+		model.get_enabled_commands(_content)
+		_check(not model.is_dirty() and not model.can_undo() and model.document.to_dict() == snapshot and model.get_enabled_commands(_content) == manual, "重开只读同步保留手动状态且零写入 " + module_id)
+		model.set_restricted_modules([], _content)
+		var restored := LevelDefinition.from_document(model.document, _content)
+		_check(restored.is_ok() and restored.value.enabled_commands == manual and manual_off not in restored.value.enabled_commands, "解除模块锁定恢复先前手动开关，不强制全开 " + module_id)
+	var movement := MapEditorDocument.new()
+	movement.replace_document(_document())
+	movement.set_restricted_modules([], _content)
+	movement.set_enabled_commands(CommandPermissions.COMMAND_IDS, _content)
+	movement.set_restricted_modules(["movement"], _content)
+	_check(movement.get_module_blocked_commands(_content).is_empty() and movement.get_enabled_commands(_content) == PackedStringArray(CommandPermissions.COMMAND_IDS), "移动模块禁用不联动关闭移动或其他基础指令")
+
+
+## 显式策略和模块规则在真实运行入口同时生效，死分支与未调用函数也不能绕过。
+func _test_linked_runtime() -> void:
+	var sources := {
+		"melee": ["main(){if(0==1){attack(0)}}", "main(){}\nfunction unused(){blade.attack(0)}"],
+		"shooting": ["main(){if(0==1){shoot(0)}}", "main(){}\nfunction unused(){gun.shoot(0)}", "main(){if(gun.ready()){move(0,1)}}"],
+		"rangefinder": ["constant value1=distance(0)\nmain(){}", "main(){}\nfunction unused(){move(sensor.distance(0),1)}"],
+		"radar": ["variable target=scan()\nmain(){}", "variable target=null\nsensor.onDetected{EnemyPosition->target}\nmain(){}", "variable target=0\nmain(){}\nfunction unused(){move(target.Position.x,1)}"],
+	}
+	for module_id: String in sources:
+		var model := MapEditorDocument.new()
+		model.replace_document(_document())
+		model.set_restricted_modules([], _content)
+		model.set_enabled_commands(CommandPermissions.COMMAND_IDS, _content)
+		model.set_restricted_modules([module_id], _content)
+		var snapshot := model.document.to_dict()
+		var defined := LevelDefinition.from_document(model.document, _content)
+		if not _check(defined.is_ok(), "运行测试关卡定义有效 " + module_id):
+			continue
+		var session := GameSession.create(defined.value, _content)
+		_check(session.assembly.add_module("movement", Vector2.ZERO, "drive").is_ok(), "真实安装可用移动模块 " + module_id)
+		for source: String in sources[module_id]:
+			session.source = source
+			var result := session.run()
+			_check(not result.is_ok() and session.world == null and session.source == source and "行，第" in " ".join(result.errors), "运行前静态拒绝被禁模块语法并保留源码 " + module_id + " " + source)
+		session.source = "main(){move(0,1)}"
+		_check(session.run().is_ok(), "其他模块被禁不影响允许的移动程序 " + module_id)
+		session.stop()
+		_check(model.document.to_dict() == snapshot, "运行权限投影与预检不回写作者地图 " + module_id)
 
 
 ## 累计明确失败并输出完整原因，包装脚本同时检查完成标记和引擎日志。

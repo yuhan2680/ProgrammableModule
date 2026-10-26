@@ -9,9 +9,14 @@ const MENU_TITLE := "管理关卡中允许使用的指令集"
 const SWITCH_HINT := "开启表示允许使用，关闭表示限制使用。"
 const MAIN_HINT := "main 是程序的必需入口，必须允许使用。"
 const UNSUPPORTED_HINT := "当前版本尚不支持此指令。"
+const MODULE_BLOCKED_HINT := "相关模块已被限制，此指令暂不可用。解除模块限制后会恢复原来的指令设置。"
+const DISABLED_TEXT := Color("A1A7B0")
 
 var _enabled_commands: Dictionary = {}
+var _module_blocked_commands: Dictionary = {}
 var _command_switches: Dictionary = {}
+var _command_labels: Dictionary = {}
+var _restriction_cards: Dictionary = {}
 var _swallowed_button := 0
 var _header_focus_style: StyleBox
 var _content_fade: ScrollContentFade
@@ -50,9 +55,9 @@ func _notification(what: int) -> void:
 		_refresh_title.call_deferred()
 
 
-## 展示完整指令目录；开关状态来自编辑文档，模块限制和旧语法解锁标志不参与筛选。
-func show_commands(anchor: Control, registry: ContentRegistry, enabled_ids) -> void:
-	sync_enabled_commands(enabled_ids)
+## 展示完整指令目录；保留作者手动选择，模块限制只派生当前关闭且锁定的状态。
+func show_commands(anchor: Control, registry: ContentRegistry, enabled_ids, module_blocked_ids = []) -> void:
+	sync_enabled_commands(enabled_ids, module_blocked_ids)
 	if _open:
 		_registry = registry
 		catalog.load_directory(catalog_directory)
@@ -69,16 +74,48 @@ func show_commands(anchor: Control, registry: ContentRegistry, enabled_ids) -> v
 
 
 ## 外层依赖联动、撤销和重做只同步现有开关，不重复发信号或重置搜索与滚动位置。
-func sync_enabled_commands(ids) -> void:
+func sync_enabled_commands(ids, module_blocked_ids = []) -> void:
 	_enabled_commands.clear()
 	for command_id in ids:
 		_enabled_commands[str(command_id)] = true
 	_enabled_commands["main"] = true
+	_module_blocked_commands.clear()
+	for command_id in module_blocked_ids:
+		if str(command_id) != "main":
+			_module_blocked_commands[str(command_id)] = true
+	_command_buttons.clear()
 	for command_id in _command_switches:
+		_sync_command_row(command_id)
 		var switch: SettingsSwitch = _command_switches[command_id]
-		if is_instance_valid(switch):
-			switch.set_pressed_no_signal(_enabled_commands.has(command_id))
-			switch.queue_redraw()
+		if is_instance_valid(switch) and not switch.disabled:
+			_command_buttons.append(switch)
+
+
+## 模块锁定同时更新开关、文字与悬停原因，不改写作者保存的开关选择。
+func _sync_command_row(command_id: String) -> void:
+	var switch: SettingsSwitch = _command_switches.get(command_id)
+	if not is_instance_valid(switch):
+		return
+	var module_blocked := _module_blocked_commands.has(command_id)
+	var unsupported := command_id not in CommandPermissions.COMMAND_IDS
+	switch.set_pressed_no_signal(_enabled_commands.has(command_id) and not module_blocked)
+	switch.disabled = command_id == "main" or unsupported or module_blocked
+	switch.mouse_default_cursor_shape = Control.CURSOR_ARROW if switch.disabled else Control.CURSOR_POINTING_HAND
+	switch.tooltip_text = tr(MAIN_HINT if command_id == "main" else UNSUPPORTED_HINT if unsupported else MODULE_BLOCKED_HINT if module_blocked else SWITCH_HINT)
+	switch.queue_redraw()
+	for label: Label in _command_labels.get(command_id, []):
+		if is_instance_valid(label):
+			label.add_theme_color_override("font_color", DISABLED_TEXT if module_blocked or unsupported else label.get_meta("enabled_color"))
+	var card: PanelContainer = _restriction_cards.get(command_id)
+	if is_instance_valid(card):
+		card.tooltip_text = str(card.get_meta("reference_hint")) + ("\n\n" + tr(MODULE_BLOCKED_HINT) if module_blocked else "")
+		for label: Label in _command_labels.get(command_id, []):
+			if is_instance_valid(label):
+				label.tooltip_text = card.tooltip_text
+	if switch.disabled and switch.has_focus():
+		switch.release_focus()
+		if _open and is_instance_valid(_scroll):
+			_scroll.grab_focus()
 
 
 ## 关闭后隐藏整个浮层并释放其焦点；外点的抬起事件也被消费，避免在地图上落下一笔。
@@ -117,10 +154,12 @@ func _listed_entries(entries: Array) -> Array[Dictionary]:
 ## 重建分类与搜索结果时清除旧开关引用，允许状态保持在文档同步的独立集合里。
 func _rebuild_content() -> void:
 	_command_switches.clear()
+	_command_labels.clear()
+	_restriction_cards.clear()
 	super._rebuild_content()
 
 
-## 紧凑行只显示语法与开关，资料放在悬停提示中，右侧状态不冒充模块权限。
+## 紧凑行显示语法与开关，模块禁用说明放在悬停提示中，正文始终保留可读。
 func _add_command_card(entry: Dictionary, searching: bool) -> void:
 	var command_id := str(entry.id)
 	var locale := TranslationServer.get_locale()
@@ -130,6 +169,7 @@ func _add_command_card(entry: Dictionary, searching: bool) -> void:
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card.mouse_filter = Control.MOUSE_FILTER_PASS
 	card.tooltip_text = CommandCatalog.localized(entry, "title", locale) + "\n\n" + CommandCatalog.localized(entry, "description", locale)
+	card.set_meta("reference_hint", card.tooltip_text)
 	var surface := GameTheme.box(Color(1, 1, 1, 0.75), Color.TRANSPARENT, 16)
 	surface.set_content_margin_all(0)
 	card.add_theme_stylebox_override("panel", surface)
@@ -153,8 +193,10 @@ func _add_command_card(entry: Dictionary, searching: bool) -> void:
 	syntax.tooltip_text = card.tooltip_text
 	syntax.add_theme_font_override("font", GameTheme.code_font())
 	_syntax.append(syntax)
+	_command_labels[command_id] = [syntax]
 	if searching:
-		_entry_label(text_column, str(entry.get("section_title", "")), 12, GameTheme.MUTED)
+		var section_label := _entry_label(text_column, str(entry.get("section_title", "")), 12, GameTheme.MUTED)
+		_command_labels[command_id].append(section_label)
 	var switch_column := VBoxContainer.new()
 	switch_column.alignment = BoxContainer.ALIGNMENT_CENTER
 	switch_column.add_theme_constant_override("separation", 6)
@@ -162,12 +204,11 @@ func _add_command_card(entry: Dictionary, searching: bool) -> void:
 	var switch := SettingsSwitch.new()
 	switch.name = "CommandRestrictionSwitch_" + command_id
 	switch.set_meta("command_id", command_id)
-	switch.set_pressed_no_signal(_enabled_commands.has(command_id))
-	switch.disabled = command_id == "main" or command_id not in CommandPermissions.COMMAND_IDS
-	switch.tooltip_text = tr(MAIN_HINT if command_id == "main" else UNSUPPORTED_HINT if switch.disabled else SWITCH_HINT)
 	switch.toggled.connect(_on_command_toggled.bind(command_id))
 	switch_column.add_child(switch)
 	_command_switches[command_id] = switch
+	_restriction_cards[command_id] = card
+	_sync_command_row(command_id)
 	if command_id == "main":
 		var required := GameTheme.label(switch_column, "必需", 12)
 		required.name = "CommandRestrictionRequired"
@@ -185,13 +226,14 @@ func _entry_label(parent: Node, value: String, font_size: int, color: Color) -> 
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	label.add_theme_color_override("font_color", color)
+	label.set_meta("enabled_color", color)
 	return label
 
 
 ## 用户切换立即更新本地状态并报告意图，依赖开启或关闭由外层编辑事务统一处理。
 func _on_command_toggled(enabled: bool, command_id: String) -> void:
-	if command_id == "main" or command_id not in CommandPermissions.COMMAND_IDS:
-		sync_enabled_commands(_enabled_commands.keys())
+	if command_id == "main" or command_id not in CommandPermissions.COMMAND_IDS or _module_blocked_commands.has(command_id):
+		sync_enabled_commands(_enabled_commands.keys(), _module_blocked_commands.keys())
 		return
 	if enabled:
 		_enabled_commands[command_id] = true

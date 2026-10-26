@@ -30,6 +30,7 @@ func _run() -> void:
 	root.add_child(_game)
 	await _settle()
 	var editor := _game._editor
+	await _test_new_defaults(editor)
 	editor._load_document(MapEditor.DEFAULT_MAP_PATH) # 此回归需要有出生点的既有地图夹具。
 	var model := editor.editor_document
 	var menu := editor._command_menu
@@ -120,12 +121,149 @@ func _run() -> void:
 	_check(model.document.to_dict() == before_playtest, "试玩之后仍可撤销允许指令修改")
 	await _test_dynamic_catalog(editor)
 	editor._new_document()
-	_check(not model.document.properties.level.has("enabled_commands") and not model.can_undo(), "新建地图清理之前策略并保持旧默认能力")
+	_check(model.get_enabled_commands(editor.registry) == PackedStringArray(CommandPermissions.COMMAND_IDS) and not model.can_undo(), "新建地图清理旧策略并默认允许全部现有指令")
+	await _test_module_linked_ui(editor)
 	_game.queue_free()
 	await _settle()
 	_cleanup(_temporary)
 	print("COMMAND_RESTRICTION_UI_TESTS %d checks, %d failures" % [_checks, _failures])
 	quit(0 if _failures == 0 else 1)
+
+
+## 首次新建的真实文档明确开放全部目录项；只打开和切换分类不产生写入或历史。
+func _test_new_defaults(editor: MapEditor) -> void:
+	var model := editor.editor_document
+	var original := model.document.to_dict()
+	_check(model.get_enabled_commands(editor.registry) == PackedStringArray(CommandPermissions.COMMAND_IDS) and model.get_module_blocked_commands(editor.registry).is_empty(), "新建地图默认全部27项指令和模块开放")
+	var scroll := editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
+	scroll.ensure_control_visible(editor._command_button)
+	await _settle()
+	_click(editor._command_button.get_global_rect().get_center())
+	await _settle()
+	var menu := editor._command_menu
+	var encountered := {}
+	for section: String in ["", "movement", "melee", "shooting", "rangefinder", "radar"]:
+		if not section.is_empty():
+			menu.select_section(section)
+		await _settle()
+		for identity: String in menu._command_switches:
+			var switch: SettingsSwitch = menu._command_switches[identity]
+			encountered[identity] = true
+			_check(switch.button_pressed and switch.disabled == (identity == "main"), "新地图目录项默认开启且非main可操作 " + identity)
+	_check(encountered.size() == CommandPermissions.COMMAND_IDS.size(), "默认全开检查实际遍历完整27项目录")
+	_check(model.document.to_dict() == original and not model.is_dirty() and not model.can_undo(), "浏览所有分类不补写默认元数据或历史")
+	await _capture("command-new-map-all-enabled.png")
+	menu.select_section("general", "general")
+	menu.close_menu(false)
+
+
+## 从模块多选菜单真实勾选后锁定指令，搜索、无信号回填、保存和历史仍保持作者选择。
+func _test_module_linked_ui(editor: MapEditor) -> void:
+	editor._load_document(MapEditor.DEFAULT_MAP_PATH)
+	var model := editor.editor_document
+	model.set_restricted_modules([], editor.registry)
+	model.set_enabled_commands(CommandPermissions.COMMAND_IDS, editor.registry)
+	var menu := editor._command_menu
+	var scroll := editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
+	var families := {
+		"radar": ["scan", "named_scan", "radar_angle", "radar_position", "radar_distance", "radar_event"],
+		"melee": ["attack", "named_attack"],
+		"shooting": ["shoot", "named_shoot", "ready"],
+		"rangefinder": ["distance", "named_distance"],
+	}
+	for module_id: String in families:
+		var manual_off := str(families[module_id][1])
+		model.set_command_enabled(manual_off, false, editor.registry)
+		var manual := model.get_enabled_commands(editor.registry)
+		var unrestricted := model.document.to_dict()
+		await _toggle_module_picker(editor, module_id)
+		var locked := model.document.to_dict()
+		_check(module_id in model.get_restricted_modules(editor.registry) and manual == model.get_enabled_commands(editor.registry), "模块菜单只限制可用性并保留指令手动选择 " + module_id)
+		scroll.ensure_control_visible(editor._command_button)
+		await _settle()
+		_click(editor._command_button.get_global_rect().get_center())
+		await _settle()
+		menu.select_section(module_id)
+		await _settle()
+		for identity: String in families[module_id]:
+			_assert_locked(menu, identity, module_id)
+		var switch: SettingsSwitch = menu._command_switches[families[module_id][0]]
+		_click(switch.get_global_rect().get_center())
+		await _settle()
+		_check(model.document.to_dict() == locked and switch.disabled and not switch.button_pressed, "锁定开关真实点击不会写入文档 " + module_id)
+		await _capture("command-module-locked-" + module_id + ".png")
+		_click(menu.header.search_button.get_global_rect().get_center())
+		await create_timer(0.25).timeout
+		menu.header.search_input.text = str(families[module_id][0])
+		menu.header.search_input.text_changed.emit(menu.header.search_input.text)
+		await _settle()
+		for identity: String in [str(families[module_id][0]), manual_off]:
+			_assert_locked(menu, identity, "搜索 " + module_id)
+		var history := model._undo_stack.size()
+		for index in 3:
+			editor._sync_command_restrictions()
+		await _settle()
+		_check(model.document.to_dict() == locked and model._undo_stack.size() == history, "反复无信号回填不改文档或新增事务 " + module_id)
+		menu.header.search_input.clear()
+		menu.header.search_input.text_changed.emit("")
+		menu.close_menu(false)
+		_check(model.undo() and model.document.to_dict() == unrestricted, "模块联动可一次撤销精确恢复 " + module_id)
+		_check(model.redo() and model.document.to_dict() == locked, "模块联动可一次重做完整恢复 " + module_id)
+		# 保存包含隐藏偏好的策略，重新打开后解除模块锁定仍还原之前手动关闭项。
+		editor._save_document(false)
+		var path := model.path
+		_check(path.begins_with(_temporary) and not model.is_dirty() and editor._load_document(path), "模块锁定与偏好一起保存到独占玩家目录 " + module_id)
+		await _toggle_module_picker(editor, module_id)
+		scroll.ensure_control_visible(editor._command_button)
+		await _settle()
+		_click(editor._command_button.get_global_rect().get_center())
+		await _settle()
+		menu.select_section(module_id)
+		await _settle()
+		for identity: String in families[module_id]:
+			var restored: SettingsSwitch = menu._command_switches[identity]
+			_check(not restored.disabled and restored.button_pressed == (identity in manual), "解除模块锁定恢复已保存手动选择 " + identity)
+		menu.close_menu(false)
+		model.set_enabled_commands(CommandPermissions.COMMAND_IDS, editor.registry)
+	await _toggle_module_picker(editor, "movement")
+	scroll.ensure_control_visible(editor._command_button)
+	await _settle()
+	_click(editor._command_button.get_global_rect().get_center())
+	await _settle()
+	menu.select_section("movement")
+	await _settle()
+	for identity: String in ["move", "named_move"]:
+		var switch: SettingsSwitch = menu._command_switches[identity]
+		_check(not switch.disabled and switch.button_pressed, "移动模块限制不锁定移动指令 " + identity)
+	menu.close_menu(false)
+
+
+## 独立模块菜单只接受真实点击，整个菜单生命周期保持既有编辑器交互。
+func _toggle_module_picker(editor: MapEditor, module_id: String) -> void:
+	editor._command_menu.close_menu(false)
+	var scroll := editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
+	scroll.ensure_control_visible(editor._restriction_choice)
+	await _settle()
+	_click(editor._restriction_choice.get_global_rect().get_center())
+	await _settle()
+	var picker := editor._restriction_picker
+	var index := picker._ids.find(module_id)
+	if _check(picker.is_open() and index >= 0, "原生点击打开模块限制菜单 " + module_id):
+		picker._scroll.ensure_control_visible(picker._items[index])
+		await _settle()
+		_click(picker._items[index].get_global_rect().get_center())
+		await _settle()
+	picker.close_menu(false)
+
+
+## 文字与开关同步灰显，锁定项退出键盘操作集合，搜索不会还原可用外观。
+func _assert_locked(menu: CommandRestrictionMenu, identity: String, context: String) -> void:
+	if not _check(menu._command_switches.has(identity), "模块锁定后仍显示对应指令 " + context + " " + identity):
+		return
+	var switch: SettingsSwitch = menu._command_switches[identity]
+	_check(switch.disabled and not switch.button_pressed and switch not in menu._command_buttons, "关联指令关闭、禁用且不参与键盘操作 " + context + " " + identity)
+	for label: Label in menu._command_labels[identity]:
+		_check(label.get_theme_color("font_color") == Color("A1A7B0"), "指令名称与分类使用统一锁定灰色 " + context + " " + identity)
 
 
 ## 正式GameSession读取已保存策略，补全与资料权限跟随，手写代码也不能绕过。
@@ -263,11 +401,12 @@ func _settle() -> void:
 
 
 ## 失败项汇总为可验证退出状态。
-func _check(condition: bool, message: String) -> void:
+func _check(condition: bool, message: String) -> bool:
 	_checks += 1
 	if not condition:
 		_failures += 1
 		push_error(message)
+	return condition
 
 
 ## 仅清理本轮独占目录，禁止访问正式玩家设置与存档。

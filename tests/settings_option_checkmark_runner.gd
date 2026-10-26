@@ -18,8 +18,10 @@ func _run() -> void:
 		await _dispose_game()
 		_finish()
 		return
-	for profile: Dictionary in [{"size": Vector2i(1000, 740), "scale": 100}, {"size": Vector2i(1280, 800), "scale": 100}, {"size": Vector2i(1280, 800), "scale": 125}]:
-		_game.settings.set_language("zh_CN")
+	for profile: Dictionary in [{"size": Vector2i(1000, 740), "scale": 100}, {"size": Vector2i(1280, 800), "scale": 100}, {"size": Vector2i(1280, 800), "scale": 125}, {"size": Vector2i(3840, 2160), "scale": 200}]:
+		if profile.size.x >= 3840 and not _native_size_available(profile.size):
+			continue
+		_game.settings.set_language("ja" if profile.scale == 200 else "zh_CN")
 		_game.settings.set_code_hints("normal")
 		_game.settings.set_window_resolution("1280x800")
 		_game.settings.set_ui_scale(profile.scale)
@@ -29,6 +31,10 @@ func _run() -> void:
 		var context := "%dx%d_%d" % [root.size.x, root.size.y, profile.scale]
 		for node_name: String in ["LanguageOption", "CodeHintsOption", "WindowResolutionOption"]:
 			await _check_selected_menu(node_name, context)
+	# 4K 大字号只覆盖锚定；后续持久化、鼠标选择用常规字号，避免窗口缩小时菜单覆盖打开指针。
+	_game.settings.set_ui_scale(125)
+	_game.settings.set_window_resolution("1280x800")
+	await _settle(12)
 	await _check_disabled_skip()
 	await _check_submission("LanguageOption", 2)
 	await _check_submission("CodeHintsOption", 2)
@@ -43,6 +49,12 @@ func _run() -> void:
 	for node_name: String in ["LanguageOption", "CodeHintsOption", "WindowResolutionOption"]:
 		await _check_selected_menu(node_name, "restored")
 		await _check_pointer_open(node_name)
+	_set_platform("macOS")
+	_game.settings.set_language("zh_CN")
+	await _settle(12)
+	for node_name: String in ["LanguageOption", "CodeHintsOption", "WindowResolutionOption"]:
+		await _check_selected_menu(node_name, "macOS")
+		await _check_pointer_open(node_name)
 	await _dispose_game()
 	_finish()
 
@@ -56,6 +68,7 @@ func _check_selected_menu(node_name: String, context: String) -> void:
 	if not _check(popup.visible, "原生选择菜单可打开 " + node_name + " " + context):
 		return
 	_check_checked(popup, original, node_name + " " + context)
+	_check_anchor_alignment(option, context)
 	_check(popup.get_focused_item() == original, "重新打开焦点定位到当前设置 " + node_name + " " + context)
 	await _check_blue_selection(popup, node_name + " " + context)
 	await _capture("checkmark_" + context + "_" + node_name)
@@ -76,6 +89,20 @@ func _check_selected_menu(node_name: String, context: String) -> void:
 	await _open_option(option)
 	_check_checked(popup, original, node_name + " 再次打开")
 	await _key(root, KEY_ESCAPE)
+
+
+## 比较菜单与实际选项边缘，覆盖右对齐文字、父级缩放和画幅约束。
+func _check_anchor_alignment(option: OptionButton, context: String) -> void:
+	var popup := option.get_popup()
+	var popup_to_root := root.get_screen_transform().affine_inverse() * popup.get_screen_transform()
+	var menu_bounds := popup_to_root * popup.get_visible_rect()
+	var anchor := option.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, option.size)
+	var available := root.get_visible_rect().grow(-8.0)
+	if anchor.end.x <= available.end.x and anchor.end.x - menu_bounds.size.x >= available.position.x:
+		_check(absf(menu_bounds.end.x - anchor.end.x) <= 1.1, "菜单右边缘对齐当前选项，短文字菜单不落在整行左端 " + option.name + " " + context)
+	if anchor.end.y + menu_bounds.size.y <= available.end.y:
+		_check(absf(menu_bounds.position.y - anchor.end.y) <= 1.1, "下方有空间时菜单紧接当前选项下方 " + option.name + " " + context)
+	_check(available.grow(1.1).encloses(menu_bounds), "菜单保持完整且不超出窗口 " + option.name + " " + context)
 
 
 ## 只有保存项保留原生选中语义，确保视觉替换不变成多选或取消选中。
@@ -154,6 +181,7 @@ func _check_pointer_open(node_name: String) -> void:
 	var popup := option.get_popup()
 	_check(popup.visible and popup.get_focused_item() == option.selected, "鼠标打开时直接高亮已保存项 " + node_name)
 	_check_checked(popup, option.selected, node_name + " 鼠标打开")
+	_check_anchor_alignment(option, "鼠标打开")
 	await _check_blue_selection(popup, node_name + " 鼠标打开")
 	await _capture("checkmark_pointer_" + node_name)
 	await _key(root, KEY_ESCAPE)

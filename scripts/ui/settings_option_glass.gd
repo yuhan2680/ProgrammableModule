@@ -9,6 +9,7 @@ const MENU_CORNER_RADIUS := 14.0
 const CHECKMARK := preload("res://assets/ui/settings_option_check.svg")
 
 var option: OptionButton
+var fit_popup: Callable
 var _popup: PopupMenu
 var _glass: ColorRect
 var _native_content: TextureRect
@@ -176,6 +177,9 @@ func _process(_delta: float) -> void:
 
 ## 将原生窗口客户区换算到主视口，阴影和圆角也使用实际显示像素。
 func _update_surface() -> void:
+	# 原生菜单会在打开后按内容再次收缩；跟随最终尺寸重新锚定，避免首帧的临时高度留下偏移。
+	if fit_popup.is_valid():
+		fit_popup.call()
 	var popup_to_root := get_viewport().get_screen_transform().affine_inverse() * _popup.get_screen_transform()
 	var bounds := popup_to_root * _popup.get_visible_rect()
 	if bounds.is_equal_approx(_last_bounds):

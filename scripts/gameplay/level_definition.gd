@@ -36,7 +36,7 @@ var allow_for: bool = false
 # 玩家地图显式开放提示；粘贴规则与语言权限独立，旧地图继续允许粘贴。
 var allow_code_hints: bool = false
 var restrict_code_paste: bool = false
-# 新字段缺省时仅投影旧权限，解析器仍接收 null 并保留原有行为。
+# 纯旧教学仍走原有权限；显式指令或新模块限制策略会派生不可绕过的有效白名单。
 var has_command_policy: bool = false
 var enabled_commands := PackedStringArray()
 var max_ticks: int = 0
@@ -154,10 +154,13 @@ static func from_document(map_document: MapDocument, content: ContentRegistry, p
 	var command_policy := CommandPermissions.read(metadata)
 	if not command_policy.is_ok():
 		return command_policy
-	level.has_command_policy = metadata.has("enabled_commands")
+	level.has_command_policy = metadata.has("enabled_commands") or metadata.has("restricted_modules")
 	level.enabled_commands = command_policy.value
 	if level.has_command_policy:
-		# 布尔家族打开既有解析能力，精确的广播/具名/声明限制由显式 ID 再次校验。
+		# 只在运行快照扣除不可用模块指令；持久化手动偏好不变，解除模块限制即可恢复。
+		var blocked := CommandPermissions.module_blocked_commands(level.allowed_modules, content)
+		level.enabled_commands = CommandPermissions.effective_enabled(level.enabled_commands, blocked)
+		# 家族旗标和具体指令同源，解析器、补全与只读指令资料不能绕过模块联动。
 		var flags := CommandPermissions.legacy_flags(level.enabled_commands)
 		for flag: String in flags:
 			level.set(flag, flags[flag])

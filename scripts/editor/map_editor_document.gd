@@ -414,6 +414,18 @@ func get_enabled_commands(_content: ContentRegistry) -> PackedStringArray:
 	return checked.value.duplicate() if checked.is_ok() else PackedStringArray()
 
 
+## 按现有模块限制只读派生锁定指令，旧允许列表和未完成草稿都沿用同一表单投影。
+func get_module_blocked_commands(content: ContentRegistry) -> PackedStringArray:
+	if content == null:
+		return PackedStringArray()
+	var restricted := get_restricted_modules(content)
+	var allowed := PackedStringArray()
+	for module_id: String in content.modules:
+		if module_id not in restricted:
+			allowed.append(module_id)
+	return CommandPermissions.module_blocked_commands(allowed, content)
+
+
 ## 单项指令开关与依赖项同一事务提交，禁止主入口或未知项不会部分更改原文档。
 func set_command_enabled(identity: String, enabled: bool, content: ContentRegistry) -> DataResult:
 	if content == null:
@@ -424,13 +436,16 @@ func set_command_enabled(identity: String, enabled: bool, content: ContentRegist
 	var existing := CommandPermissions.read(metadata)
 	if not existing.is_ok():
 		return existing
+	# 模块锁定不能通过直接调用文档 API 绕过，原先保存的手动偏好仍保留用于解除后恢复。
+	if enabled and identity in get_module_blocked_commands(content):
+		return DataResult.failure("相关模块已被限制，无法开启指令：%s。" % identity)
 	var changed := CommandPermissions.toggle(existing.value, identity, enabled)
 	if not changed.is_ok():
 		return changed
 	return set_enabled_commands(changed.value, content)
 
 
-## 显式选择以稳定顺序保存新策略并派生旧家族开关，保留其他规则及所有扩展字段。
+## 批量编辑保留已有锁定项的手动偏好，但不能新开锁定能力；稳定保存策略、兼容旗标和扩展字段。
 func set_enabled_commands(value: Variant, content: ContentRegistry) -> DataResult:
 	if content == null:
 		return DataResult.failure("更改指令权限需要内容注册表。")
@@ -441,6 +456,12 @@ func set_enabled_commands(value: Variant, content: ContentRegistry) -> DataResul
 	if not checked.is_ok():
 		return checked
 	var ids: PackedStringArray = checked.value
+	var previous := CommandPermissions.read(existing)
+	if not previous.is_ok():
+		return previous
+	for identity in get_module_blocked_commands(content):
+		if identity in ids and identity not in previous.value:
+			return DataResult.failure("相关模块已被限制，无法开启指令：%s。" % identity)
 	var properties := document.properties.duplicate(true)
 	var metadata: Dictionary = existing.duplicate(true)
 	metadata["enabled_commands"] = Array(ids)
