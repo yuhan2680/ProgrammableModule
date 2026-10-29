@@ -79,7 +79,6 @@ var _brush: OptionButton
 var _undo_button: Button
 var _redo_button: Button
 var _play_button: Button
-var _save_level_button: Button
 var _test_feedback: Label
 var _test_feedback_errors := PackedStringArray()
 var _test_validation_active := false
@@ -98,6 +97,8 @@ var _metadata_color_mode := ""
 var _properties_card: PanelContainer
 var _presentation_scale := 1.0
 var _properties_workspace: Control
+var _property_pages: EditorPageSwitch
+var _edit_body: Control
 
 
 # 用途：先载入内容目录；明确指定时打开已有地图，普通入口创建独立空白草稿。
@@ -132,7 +133,7 @@ func set_presentation_scale(factor: float) -> void:
 	if not is_node_ready():
 		return
 	_header.set_presentation_scale(_presentation_scale)
-	for dialog: Window in [_dirty_dialog, _message_dialog, _metadata_dialog]:
+	for dialog: Window in [_dirty_dialog, _message_dialog, _metadata_dialog, _brush.get_popup()]:
 		dialog.content_scale_factor = _presentation_scale
 	for menu in [_actions_menu, _guide_menu, _restriction_picker, _command_menu, _enemy_panel._picker]:
 		if menu.is_open():
@@ -147,7 +148,7 @@ func set_presentation_scale(factor: float) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not is_visible_in_tree() or not event is InputEventKey or not event.pressed or event.echo:
 		return
-	if not (event.ctrl_pressed or event.meta_pressed) or _metadata_dialog.visible or _file_dialog.visible or _dirty_dialog.visible or _actions_menu.is_open() or _guide_menu.is_open() or _level_guide_editor.is_open() or _restriction_picker.is_open() or _command_menu.is_open():
+	if not (event.ctrl_pressed or event.meta_pressed) or _metadata_dialog.visible or _file_dialog.visible or _dirty_dialog.visible or _actions_menu.is_open() or _guide_menu.is_open() or _restriction_picker.is_open() or _command_menu.is_open():
 		return
 	if event.keycode == KEY_O:
 		_request_action("open")
@@ -252,7 +253,7 @@ func _on_property_card_blank_clicked() -> void:
 
 ## 浮层内部和模态窗口的点击不改变背景表单；收起后的空白点击可正常取消焦点。
 func _property_focus_blocked(include_menus: bool = true) -> bool:
-	if _file_dialog.visible or _dirty_dialog.visible or _message_dialog.visible or _metadata_dialog.visible or _level_guide_editor.is_open():
+	if _file_dialog.visible or _dirty_dialog.visible or _message_dialog.visible or _metadata_dialog.visible:
 		return true
 	return include_menus and (_actions_menu.is_open() or _guide_menu.is_open() or _restriction_picker.is_open() or _command_menu.is_open() or _enemy_panel._picker.is_open() or _brush.get_popup().visible)
 
@@ -264,10 +265,10 @@ func _build_properties(workspace: Control) -> void:
 	var card := PanelContainer.new()
 	_properties_card = card
 	card.name = "MapEditorPropertiesCard"
-	card.custom_minimum_size.x = 340
+	card.custom_minimum_size.x = 330
 	card.theme = _properties_theme()
 	var surface := GameTheme.card()
-	# 底部操作与白卡等距内缩，按钮圆角为白卡半径减去内缩，两个圆心保持重合。
+	# 顶部操作与内嵌内容共享同一张白卡，底部不再预留文字操作栏。
 	var footer_inset := 8
 	surface.set_content_margin_all(footer_inset)
 	card.add_theme_stylebox_override("panel", surface)
@@ -276,6 +277,7 @@ func _build_properties(workspace: Control) -> void:
 	layout.name = "MapEditorPropertiesLayout"
 	layout.add_theme_constant_override("separation", 8)
 	card.add_child(layout)
+	_build_property_navigation(layout)
 	var body_inset := MarginContainer.new()
 	body_inset.name = "MapEditorPropertiesBodyInset"
 	body_inset.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -283,6 +285,7 @@ func _build_properties(workspace: Control) -> void:
 	body_inset.add_theme_constant_override("margin_right", 2)
 	body_inset.add_theme_constant_override("margin_top", 6)
 	layout.add_child(body_inset)
+	_edit_body = body_inset
 	var scroll := ScrollContainer.new()
 	scroll.name = "MapEditorPropertiesScroll"
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -312,7 +315,7 @@ func _build_properties(workspace: Control) -> void:
 	_build_subtitle_field(fields, identity_inset)
 	_build_creator_field(fields, identity_inset)
 	_property_gap(fields, 6)
-	_build_dimensions(fields)
+	_build_dimensions(fields, identity_inset)
 	_property_gap(fields, 12)
 	_build_scene_controls(fields)
 	_property_gap(fields, 12)
@@ -324,25 +327,13 @@ func _build_properties(workspace: Control) -> void:
 	_test_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_test_feedback.add_theme_color_override("font_color", Color("bb3434"))
 	_test_feedback.hide()
-	var actions := ResponsivePropertyRow.new()
-	actions.name = "MapEditorFooterActions"
-	actions.group_sizes = [1, 1]
-	actions.equal_width = true
-	actions.add_theme_constant_override("separation", 16)
-	layout.add_child(actions)
-	_play_button = _add_button(actions, "开始测试", _start_playtest)
-	_play_button.name = "MapEditorStartTest"
-	_play_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_save_level_button = _add_button(actions, "保存关卡", _save_document.bind(false))
-	_save_level_button.name = "MapEditorSaveLevel"
-	_save_level_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	GameTheme.primary(_save_level_button)
-	# 主操作仍保留蓝色，仅缩小其本地留白，不影响其他页面的按钮样式。
-	for button in [_play_button, _save_level_button]:
-		for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
-			var style := _compact_field_style(button.get_theme_stylebox(state)) as StyleBoxFlat
-			style.set_corner_radius_all(surface.corner_radius_bottom_right - footer_inset)
-			button.add_theme_stylebox_override(state, style)
+	_level_guide_editor = MapGuideEditor.new()
+	_level_guide_editor.name = "MapGuideEditor"
+	_level_guide_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_level_guide_editor.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(_level_guide_editor)
+	_level_guide_editor.closed.connect(_on_level_guide_closed)
+	_level_guide_editor.hide()
 	_layout_properties_width.call_deferred()
 
 
@@ -351,7 +342,7 @@ func _layout_properties_width() -> void:
 	if not is_instance_valid(_properties_card) or not is_instance_valid(_properties_workspace):
 		return
 	var available := _properties_workspace.size.x
-	var width := minf(clampf(available * 0.36, 340.0, 460.0), maxf(240.0, available - 372.0))
+	var width := minf(clampf(available * 0.33, 330.0, 420.0), maxf(240.0, available - 372.0))
 	_properties_card.custom_minimum_size.x = floorf(width)
 
 
@@ -456,7 +447,7 @@ func _build_creator_field(parent: Node, leading_inset: float) -> void:
 	parent.add_child(margin)
 	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorCreatorRow"
-	row.group_sizes = [2, 2]
+	row.group_sizes = [2]
 	row.add_theme_constant_override("separation", 6)
 	margin.add_child(row)
 	var caption := GameTheme.label(row, "创作者", 12)
@@ -476,28 +467,70 @@ func _build_creator_field(parent: Node, leading_inset: float) -> void:
 	_creator_field.focus_exited.connect(_commit_identity)
 	_creator_field.text_submitted.connect(_on_identity_submitted)
 	_creator_field.text_changed.connect(_on_identity_text_changed)
-	var guide_label := GameTheme.label(row, "关卡引导", 12)
-	guide_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_level_guide_button = _view_button(row, "MapEditorLevelGuideButton", "assembly_add", _open_level_guide, 0, 1)
-	_level_guide_button.tooltip_text = tr("编辑关卡引导")
-	var guide_button_surface := GameTheme.box(GameTheme.SURFACE, Color.TRANSPARENT, 14)
-	guide_button_surface.set_content_margin_all(0)
-	_level_guide_button.add_theme_stylebox_override("normal", guide_button_surface)
 
 
-## 作者从属性行打开分页引导编辑，先提交身份表单并结束地图笔画。
+## 卡片顶部固定测试与页签，滚动表单不会挤走操作入口。
+func _build_property_navigation(parent: VBoxContainer) -> void:
+	var top := HBoxContainer.new()
+	top.name = "MapEditorCardActions"
+	top.alignment = BoxContainer.ALIGNMENT_END
+	parent.add_child(top)
+	_play_button = preload("res://scripts/ui/editor_confirm_button.gd").new()
+	_play_button.name = "MapEditorStartTest"
+	_play_button.tooltip_text = "开始测试"
+	_play_button.icon = load("res://assets/ui/editor_test_arrow.svg")
+	_play_button.pressed.connect(_start_playtest)
+	top.add_child(_play_button)
+	var inset := MarginContainer.new()
+	inset.add_theme_constant_override("margin_left", 14)
+	inset.add_theme_constant_override("margin_right", 14)
+	inset.add_theme_constant_override("margin_bottom", 8)
+	parent.add_child(inset)
+	_property_pages = EditorPageSwitch.new()
+	_property_pages.name = "MapEditorPageSwitch"
+	inset.add_child(_property_pages)
+	_level_guide_button = _property_pages.guide_button
+	_property_pages.page_requested.connect(_select_property_page)
+
+
+## 页签切换先完成当前输入；无效草稿保留在原页，不丢失待修改内容。
+func _select_property_page(index: int) -> void:
+	if index == 1:
+		_map_view.finish_interaction()
+		_commit_gate_timer()
+		_commit_module_limit()
+		if not _commit_identity():
+			_property_pages.set_page(0)
+			return
+		_actions_menu.close_menu(false)
+		_guide_menu.close_menu(false)
+		_command_menu.close_menu(false)
+		_restriction_picker.close_menu(false)
+		_enemy_panel._picker.close_menu(false)
+		_brush.get_popup().hide()
+		_edit_body.hide()
+		_level_guide_editor.open_document(editor_document, _level_guide_button, _map_view)
+		_property_pages.set_page(1)
+	else:
+		if not _level_guide_editor.close_dialog():
+			_property_pages.set_page(1)
+			return
+		_on_level_guide_closed()
+
+
+## 指引正常提交收起时还原编辑表单；Esc 和外部新建入口也走相同页面状态。
+func _on_level_guide_closed() -> void:
+	_edit_body.show()
+	_property_pages.set_page(0)
+
+
+## 保留统一的打开入口，调用者不需要了解页签的内部布局。
 func _open_level_guide() -> void:
-	_map_view.finish_interaction()
-	if not _commit_identity():
-		return
-	_actions_menu.close_menu(false)
-	_guide_menu.close_menu(false)
-	_command_menu.close_menu(false)
-	_level_guide_editor.open_document(editor_document, _level_guide_button, _map_view)
+	_select_property_page(1)
 
 
 ## 场景编辑将尺寸与地形工具放入同一折叠内容，英文用 W/H 留出输入空间。
-func _build_dimensions(parent: Node) -> void:
+func _build_dimensions(parent: Node, leading_inset: float) -> void:
 	var group := VBoxContainer.new()
 	group.name = "MapEditorSceneSize"
 	group.add_theme_constant_override("separation", 8)
@@ -507,12 +540,17 @@ func _build_dimensions(parent: Node) -> void:
 	body.add_theme_constant_override("separation", 14)
 	_build_section_heading(group, "场景编辑", body, "MapEditorSizeCollapse")
 	group.add_child(body)
+	# 补齐右侧滚动条及留白占位，让整组宽、高和确认按钮以白卡中心对齐。
+	var dimensions_inset := MarginContainer.new()
+	dimensions_inset.name = "MapEditorDimensionsInset"
+	dimensions_inset.add_theme_constant_override("margin_left", maxi(0, roundi(leading_inset)))
+	body.add_child(dimensions_inset)
 	var dimensions := ResponsivePropertyRow.new()
 	dimensions.name = "MapEditorDimensions"
 	dimensions.group_sizes = [1, 1, 1]
 	dimensions.alignment = BoxContainer.ALIGNMENT_CENTER
 	dimensions.add_theme_constant_override("separation", 10)
-	body.add_child(dimensions)
+	dimensions_inset.add_child(dimensions)
 	for caption: String in ["宽", "高"]:
 		var row := _property_row(dimensions, caption, 0)
 		if caption == "宽":
@@ -529,10 +567,19 @@ func _build_dimensions(parent: Node) -> void:
 		field.get_line_edit().text_changed.connect(_on_dimension_text_changed.bind(field))
 		field.value_changed.connect(_on_dimension_value_changed.bind(field))
 		field.get_line_edit().add_theme_constant_override("minimum_character_width", 0)
-	var apply := _add_button(dimensions, "应用尺寸", _resize_document)
-	apply.custom_minimum_size.x = 90
+	_build_apply_size_button(dimensions)
 	_build_paint_tools(body)
 	_build_timed_gate_controls(body)
+
+
+## 尺寸确认使用固定圆形白勾图标，名称交给本土化悬停说明，不占用长文本宽度。
+func _build_apply_size_button(parent: Control) -> void:
+	var button := preload("res://scripts/ui/editor_confirm_button.gd").new()
+	button.name = "MapEditorApplySizeButton"
+	button.tooltip_text = "应用尺寸"
+	button.icon = load("res://assets/ui/settings_option_check.svg")
+	button.pressed.connect(_resize_document)
+	parent.add_child(button)
 
 
 ## 在键入或粘贴时恢复最后有效内容；允许暂时留空，便于替换整段数字。
@@ -607,6 +654,40 @@ func _build_paint_tools(parent: Node) -> void:
 	_brush.add_theme_font_size_override("font_size", 12)
 	drawing.add_child(_brush)
 	_brush.item_selected.connect(_on_drawing_item_selected)
+	_brush.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var popup := _brush.get_popup()
+	popup.add_theme_font_size_override("font_size", 12)
+	popup.add_theme_constant_override("v_separation", 16)
+	popup.about_to_popup.connect(_fit_drawing_popup.call_deferred)
+	var glass := preload("res://scripts/ui/settings_option_glass.gd").new()
+	glass.name = "MapEditorDrawingItemGlass"
+	glass.option = _brush
+	glass.fit_popup = _fit_drawing_popup
+	glass.neutral_selection = true
+	glass.menu_corner_radius = 18.0
+	glass.shadow_padding = 16.0
+	glass.frost_amount = 0.90
+	glass.menu_depth = 1.0
+	add_child(glass)
+
+
+## 原生单选菜单跟随字段真实边界，缩放后仍对齐；空间不足时翻到上方并内部滚动。
+func _fit_drawing_popup() -> void:
+	var popup := _brush.get_popup()
+	if not popup.visible or not popup.is_embedded():
+		return
+	var bounds := get_viewport().get_visible_rect().grow(-8.0)
+	var anchor := _brush.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, _brush.size)
+	popup.max_size = Vector2i(floori(bounds.size.x), floori(bounds.size.y))
+	popup.min_size.x = mini(ceili(anchor.size.x), popup.max_size.x)
+	popup.size.x = clampi(maxi(popup.size.x, popup.min_size.x), 1, popup.max_size.x)
+	popup.size.y = mini(popup.size.y, popup.max_size.y)
+	var top := anchor.end.y + 4.0
+	if top + popup.size.y > bounds.end.y and anchor.position.y - 4.0 - popup.size.y >= bounds.position.y:
+		top = anchor.position.y - 4.0 - popup.size.y
+	popup.position = Vector2i(
+		roundi(clampf(anchor.position.x, bounds.position.x, maxf(bounds.position.x, bounds.end.x - popup.size.x))),
+		roundi(clampf(top, bounds.position.y, maxf(bounds.position.y, bounds.end.y - popup.size.y))))
 
 
 ## 玩法分类统一折叠起终点、限时、模块数量及玩家耐久设置。
@@ -866,9 +947,10 @@ func _build_player_limits(parent: Control) -> void:
 	modules.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	modules.add_theme_constant_override("separation", 6)
 	row.add_child(modules)
-	_scene_label(modules, "玩家模块数量上限")
+	_scene_label(modules, "玩家模块数量上限").size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_module_limit_field = _add_spin(modules, 1, 256, 1, 1, false)
-	_module_limit_field.custom_minimum_size.x = 44
+	_module_limit_field.custom_minimum_size.x = 48
+	_module_limit_field.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_module_limit_field.get_line_edit().add_theme_constant_override("minimum_character_width", 0)
 	_module_limit_field.tooltip_text = "组装时允许安装的模块总数（1..256）。"
 	_module_limit_field.value_changed.connect(_on_module_limit_changed)
@@ -876,8 +958,9 @@ func _build_player_limits(parent: Control) -> void:
 	health.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	health.add_theme_constant_override("separation", 6)
 	row.add_child(health)
-	_scene_label(health, "玩家耐久度上限")
-	_player_health_field = _add_line_edit(health, 44)
+	_scene_label(health, "玩家耐久度上限").size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_player_health_field = _add_line_edit(health, 88)
+	_player_health_field.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_player_health_field.name = "MapEditorPlayerHealthInput"
 	_player_health_field.add_theme_constant_override("minimum_character_width", 0)
 	_player_health_field.text = "1"
@@ -892,6 +975,24 @@ func _build_player_limits(parent: Control) -> void:
 			style.content_margin_left = 8
 			style.content_margin_right = 8
 			input.add_theme_stylebox_override(state, style)
+		input.theme_changed.connect(_fit_player_limit_widths.call_deferred)
+	_fit_player_limit_widths.call_deferred()
+
+
+## 数值框按合法整数上限和字号保留紧凑宽度，剩余空间留给可换行的说明文字。
+func _fit_player_limit_widths() -> void:
+	if not is_instance_valid(_module_limit_field) or not is_instance_valid(_player_health_field):
+		return
+	for definition: Array in [[_module_limit_field, _module_limit_field.get_line_edit(), 48.0, 3], [_player_health_field, _player_health_field, 88.0, 10]]:
+		var control: Control = definition[0]
+		var input: LineEdit = definition[1]
+		var font := input.get_theme_font("font")
+		var font_size := input.get_theme_font_size("font_size")
+		var width := 0.0
+		for digit in range(10):
+			width = maxf(width, font.get_string_size(str(digit).repeat(definition[3]), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+		var style := input.get_theme_stylebox("normal")
+		control.custom_minimum_size.x = maxf(definition[2], ceilf(width + style.get_margin(SIDE_LEFT) + style.get_margin(SIDE_RIGHT) + 2))
 
 
 ## 标题旁提供独立SVG折叠按钮，只控制该分类内容的可见性。
@@ -1537,7 +1638,7 @@ func _on_editor_visibility_changed() -> void:
 	if not is_visible_in_tree() and _actions_menu != null:
 		_actions_menu.close_menu(false)
 		_guide_menu.close_menu(false)
-		_level_guide_editor.close_dialog()
+		_level_guide_editor.commit_draft()
 		_restriction_picker.close_menu(false)
 		_command_menu.close_menu(false)
 
@@ -1548,16 +1649,12 @@ func _notification(what: int) -> void:
 		_update_document_title()
 		_update_zoom_buttons(_map_view.zoom)
 		_refresh_drawing_item_labels()
-		_level_guide_button.tooltip_text = tr("编辑关卡引导")
 		_command_button.tooltip_text = tr("管理关卡中允许使用的指令集")
 		_refresh_gate_timer_rules()
 
 
 # 用途：创建文件选择、未保存确认、错误提示和元数据输入对话框。
 func _build_dialogs() -> void:
-	_level_guide_editor = MapGuideEditor.new()
-	_level_guide_editor.name = "MapGuideEditor"
-	add_child(_level_guide_editor)
 	_file_dialog = FileDialog.new()
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
 	# macOS/Windows 优先使用系统文件窗口；不支持原生窗口的平台自动使用圆角后备界面。
@@ -2008,24 +2105,30 @@ func _set_zoom(value: float) -> void:
 
 # 用途：撤销一次地图修改。
 func _undo() -> void:
+	if not _level_guide_editor.commit_draft():
+		return
 	_commit_gate_timer()
 	_canvas.finish_stroke()
 	if editor_document.undo():
+		_level_guide_editor.refresh_from_document()
 		_status.text = "已撤销。"
 
 
 # 用途：重做一次地图修改。
 func _redo() -> void:
+	if not _level_guide_editor.commit_draft():
+		return
 	_commit_gate_timer()
 	_canvas.finish_stroke()
 	if editor_document.redo():
+		_level_guide_editor.refresh_from_document()
 		_status.text = "已重做。"
 
 
 # 用途：在替换文档或关闭窗口前统一保护未保存的修改。
 func _request_action(action: String) -> void:
 	_commit_gate_timer()
-	if not _level_guide_editor.close_dialog():
+	if not _level_guide_editor.commit_draft():
 		return
 	_canvas.finish_stroke()
 	if _time_limit_field.has_focus():
@@ -2064,6 +2167,8 @@ func _new_document() -> void:
 	if not allocated.is_ok():
 		_show_errors("无法创建地图", allocated.errors)
 		return
+	if not _level_guide_editor.close_dialog():
+		return
 	var document := MapDocument.new()
 	document.id = allocated.value
 	document.display_name = "新地图"
@@ -2090,6 +2195,8 @@ func _load_document(path: String, report_errors: bool = true) -> bool:
 		else:
 			initial_map_error = result.errors.duplicate()
 		return false
+	if not _level_guide_editor.close_dialog():
+		return false
 	_managed_save_path = _player_level_store().managed_path(path)
 	_assigned_new_id = ""
 	editor_document.replace_document(result.value as MapDocument, path)
@@ -2101,7 +2208,7 @@ func _load_document(path: String, report_errors: bool = true) -> bool:
 # 用途：普通保存写入玩家关卡目录，只有另存为才允许选择外部文件。
 func _save_document(save_as: bool) -> void:
 	_commit_gate_timer()
-	if not _level_guide_editor.close_dialog():
+	if not _level_guide_editor.commit_draft():
 		save_finished.emit(false)
 		return
 	_canvas.finish_stroke()
@@ -2208,6 +2315,8 @@ func _validate_document() -> void:
 
 # 用途：将地图扩展数据呈现为可编辑 JSON，不依赖尚未制作的专门 UI。
 func _open_metadata() -> void:
+	if not _level_guide_editor.commit_draft():
+		return
 	_commit_gate_timer()
 	_canvas.finish_stroke()
 	_command_menu.close_menu(false)
@@ -2265,6 +2374,7 @@ func _apply_metadata() -> void:
 		_show_errors("元数据校验失败", result.errors)
 		return
 	editor_document.apply_metadata(data)
+	_level_guide_editor.refresh_from_document()
 	_metadata_dialog.hide()
 	_status.text = "元数据已应用。开始测试将使用当前地图与关卡规则进入组装和编程。"
 
@@ -2299,7 +2409,7 @@ func _prepare_test_validation() -> bool:
 	_clear_test_feedback()
 	_test_validation_active = true
 	_commit_gate_timer()
-	var guide_valid := _level_guide_editor.close_dialog()
+	var guide_valid := _level_guide_editor.commit_draft()
 	_canvas.finish_stroke()
 	if _time_limit_field.has_focus():
 		_commit_time_limit()

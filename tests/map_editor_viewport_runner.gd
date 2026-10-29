@@ -86,10 +86,10 @@ func _test_properties(editor: MapEditor) -> void:
 				_check(absf(label.get_global_rect().get_center().y - field.get_global_rect().get_center().y) < 1.0 and label.get_global_rect().end.x < field.global_position.x, "属性标签与输入框同行且不重叠 " + context)
 				_check(field.size.y <= 34.0 and scroll.get_global_rect().encloses(field.get_global_rect()), "紧凑输入控件滚入后完整显示 " + str(field.name) + " " + context)
 			_check(absf(editor._width_field.global_position.y - editor._height_field.global_position.y) < 1.0 and editor._width_field.get_global_rect().end.x < editor._height_field.global_position.x, "宽高在同一行且可分别输入 " + context)
-			# 新增敌人表单允许纵向滚动；底部按钮固定可见，正文仍可独立纵向滚动。
+			# 新增敌人表单允许纵向滚动；顶部测试图标固定可见，正文仍可独立纵向滚动。
 			var original_scroll := scroll.scroll_vertical
 			await _settle()
-			_check(card.get_global_rect().encloses(editor._play_button.get_global_rect()) and editor._play_button.size.y <= 34.0, "最小窗口完整显示固定的紧凑测试按钮 " + context)
+			_check(card.get_global_rect().encloses(editor._play_button.get_global_rect()) and editor._play_button.size.y <= 34.0 and editor._play_button.get_global_rect().end.y <= scroll.global_position.y and editor._play_button.text.is_empty() and editor._play_button.icon != null and not editor._play_button.tooltip_text.is_empty(), "测试图标固定在卡片顶部，正文滚动后仍可见且不占底部空间 " + context)
 			scroll.scroll_vertical = original_scroll
 			await _settle()
 			scroll.ensure_control_visible(editor._brush)
@@ -403,7 +403,7 @@ func _test_document_fit(editor: MapEditor) -> void:
 	view.set_zoom(2.0)
 	editor._width_field.value = 64
 	editor._height_field.value = 60
-	_find_button(editor, "应用尺寸").pressed.emit()
+	(editor.find_child("MapEditorApplySizeButton", true, false) as Button).pressed.emit()
 	await _settle()
 	_check(view.zoom < 1.0 and _is_centered(view) and view.get_global_rect().encloses(editor._canvas.get_global_rect()), "应用更大地图尺寸后自动适配新范围")
 	editor._undo_button.pressed.emit()
@@ -421,7 +421,7 @@ func _test_playtest(editor: MapEditor) -> void:
 	await _settle()
 	editor._width_field.value = 64
 	editor._height_field.value = 48
-	_find_button(editor, "应用尺寸").pressed.emit()
+	(editor.find_child("MapEditorApplySizeButton", true, false) as Button).pressed.emit()
 	var view := editor._map_view
 	view.set_zoom(1.25)
 	view._h_scroll.value += 64
@@ -529,14 +529,6 @@ func _space(pressed: bool, viewport: Viewport = null) -> void:
 	event.pressed = pressed
 	var target := root if viewport == null else viewport
 	target.push_input(event)
-
-
-## 按原有文字查找尺寸按钮，确保测试仍经用户可访问的操作入口提交。
-func _find_button(parent: Node, text: String) -> Button:
-	for node in parent.find_children("*", "Button", true, false):
-		if node.text == text:
-			return node
-	return null
 
 
 ## 使用排序后的完整地图快照，未知扩展字段也包含在视图无副作用检查内。

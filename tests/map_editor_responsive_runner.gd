@@ -102,8 +102,9 @@ func _check_geometry(expected_width: float, context: String) -> void:
 				_check(label.get_line_count() <= label.get_visible_line_count(), "换行后全部文字行可见 " + context + " " + label.text)
 	var scroll := _editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
 	_check(scroll.get_v_scroll_bar().global_position.x - fields.get_global_rect().end.x >= 17.9, "重排后滚动条与正文仍有独立留白 " + context)
-	for button: Button in [_editor._play_button, _editor._save_level_button]:
-		_check(card.get_global_rect().grow(1).encloses(button.get_global_rect()) and root.get_visible_rect().grow(1).encloses(button.get_global_rect()) and not scroll.get_global_rect().intersects(button.get_global_rect()), "底部操作常驻且避开滚动正文 " + context + " " + str(button.name))
+	for button: Button in [_editor._play_button, _editor.find_child("MapEditorEditTab", true, false), _editor.find_child("MapEditorGuideTab", true, false)]:
+		_check(card.get_global_rect().grow(1).encloses(button.get_global_rect()) and root.get_visible_rect().grow(1).encloses(button.get_global_rect()) and not scroll.get_global_rect().intersects(button.get_global_rect()), "顶部测试与页签常驻且避开滚动正文 " + context + " " + str(button.name))
+	_check(_editor._header.get_global_rect().encloses(_editor._header.save_button.get_global_rect()), "保存图标仍固定在页头并完整可达 " + context)
 	if GameTheme.font_scale(_editor) >= 2.0:
 		var player := _editor.find_child("MapEditorPlayerLimits", true, false) as ResponsivePropertyRow
 		var enemy := _editor.find_child("MapEditorEnemyLimits", true, false) as ResponsivePropertyRow

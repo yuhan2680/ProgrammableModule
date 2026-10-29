@@ -10,6 +10,8 @@ uniform float corner_radius = 18.0;
 uniform float shadow_padding = 14.0;
 uniform float blur_step : hint_range(0.5, 6.0, 0.1) = 3.2;
 uniform float frost_amount : hint_range(0.0, 1.0, 0.01) = 0.68;
+// 编辑器选择菜单可单独增加中性玻璃的薄边与悬浮阴影，默认保留设置页外观。
+uniform float menu_depth : hint_range(0.0, 1.0) = 0.0;
 
 float rounded_distance(vec2 point, vec2 half_size, float radius) {
 	vec2 corner = abs(point) - half_size + vec2(radius);
@@ -53,14 +55,17 @@ void fragment() {
 	}
 
 	float top_light = 1.0 - smoothstep(0.0, safe_size.y * 0.85, point.y + safe_size.y * 0.5);
-	vec3 glass = mix(blurred, vec3(0.985, 0.990, 1.0), frost_amount);
+	vec3 tint = mix(vec3(0.985, 0.990, 1.0), vec3(0.985), menu_depth);
+	vec3 glass = mix(blurred, tint, frost_amount);
 	glass = mix(glass, vec3(1.0), top_light * 0.055);
 	float luminous_edge = 1.0 - smoothstep(0.0, 1.25, max(-edge_distance, 0.0));
 	glass = mix(glass, vec3(1.0), luminous_edge * (0.36 + top_light * 0.35));
+	float inner_rim = exp(-pow((-edge_distance - 1.7) / 0.8, 2.0));
+	glass = mix(glass, vec3(0.60, 0.63, 0.68), inner_rim * menu_depth * (0.06 + (1.0 - top_light) * 0.10));
 
 	// 阴影只出现在卡片轮廓以外，不叠加深色描边，也不压暗玻璃内部。
-	float shadow_distance = max(rounded_distance(point - vec2(0.0, 3.0), safe_size * 0.5, radius), 0.0);
-	float shadow_alpha = 0.10 * exp(-0.5 * pow(shadow_distance / 4.2, 2.0));
+	float shadow_distance = max(rounded_distance(point - vec2(0.0, mix(3.0, 5.0, menu_depth)), safe_size * 0.5, radius), 0.0);
+	float shadow_alpha = mix(0.10, 0.18, menu_depth) * exp(-0.5 * pow(shadow_distance / mix(4.2, 6.0, menu_depth), 2.0));
 	shadow_alpha *= 1.0 - card_mask;
 	// 还原透明圆角外的页面，避免部分桌面嵌入窗口合成器在透明客户区留下黑底。
 	vec3 backdrop = texture(backdrop_texture, (SCREEN_UV - backdrop_origin) / backdrop_extent).rgb;

@@ -174,6 +174,6 @@ func _fit_label(label: Label, width: float) -> float:
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.clip_text = false
 	label.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
-	var measured := font.get_multiline_string_size(label.atr(label.text), HORIZONTAL_ALIGNMENT_LEFT, maxf(1, width), font_size)
-	var line_count := maxi(1, roundi(measured.y / font.get_height(font_size)))
-	return maxf(font.get_height(font_size), measured.y + (line_count - 1) * label.get_theme_constant("line_spacing"))
+	# 使用 Label 自身的智能换行结果，长词拆分与主题行距才和实际绘制一致。
+	label.size.x = maxf(1.0, width)
+	return maxf(font.get_height(font_size), label.get_minimum_size().y)

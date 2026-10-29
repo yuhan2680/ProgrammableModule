@@ -145,36 +145,31 @@ func _check_initial_large_headings() -> void:
 	await _settle(8)
 
 
-## Windows 各画幅与三语大字号核验正文上移、预览同矩形及标题与底部真实按钮的安全留白。
+## Windows 各画幅与三语大字号核验内嵌指引正文、换行工具栏和分页命中区互不遮挡。
 func _check_guide_content(editor: MapEditor, context: String, percentage: int) -> void:
 	var snapshot := _signature(editor)
 	var undo_count := editor.editor_document._undo_stack.size()
-	var scroll := editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
-	scroll.ensure_control_visible(editor._level_guide_button)
-	await _settle(8)
 	await _click(editor._level_guide_button)
 	await _settle(8)
 	var guide := editor._level_guide_editor
 	if not _check(guide.is_open(), "Windows 字号路径真实打开关卡引导 " + context):
 		return
-	var factor := guide._panel.get_global_transform().get_scale().y
 	var body := guide._text.get_global_rect()
 	var title := guide._title.get_global_rect()
-	var panel := guide._panel.get_global_rect()
-	_check(root.get_visible_rect().grow(1).encloses(panel) and panel.grow(1).encloses(body), "关卡引导正文和弹窗留在实际视口内 " + context)
+	var panel := guide.get_global_rect()
+	var card := editor._properties_card.get_global_rect()
+	_check(root.get_visible_rect().grow(1).encloses(card) and card.grow(1).encloses(panel) and panel.grow(1).encloses(body), "关卡指引正文内嵌属性卡片且留在实际视口内 " + context)
 	_check(guide._text.get_theme_font_size("font_size") == roundi(16 * percentage / 100.0), "引导正文使用当前真实字号 " + context)
-	if percentage == 100:
-		_check(absf((body.position.y - panel.position.y) / factor - 64.0) < 0.1, "100%正文顶部从旧100上移至64逻辑像素 " + context)
-	_check(body.position.y >= title.end.y + 16.0 * factor - 0.1 and not body.intersects(title), "150%/200%正文仍避开实际标题行高 " + context)
-	_check(not body.intersects(guide._close.get_global_rect()) and not body.intersects(guide._preview_button.get_global_rect()), "正文避开顶部关闭与预览模式按钮 " + context)
+	_check(body.position.y >= guide._toolbar.get_global_rect().end.y and not body.intersects(guide._toolbar.get_global_rect()) and title.position.y >= body.end.y and not body.intersects(title), "工具栏按真实行高换行，正文与底部页码仍互不遮挡 " + context)
+	_check(panel.grow(1).encloses(guide._preview_button.get_global_rect()) and not body.intersects(guide._preview_button.get_global_rect()), "预览模式按钮仍在卡片内且避开正文 " + context)
 	for button: Button in [guide._previous, guide._next]:
 		var bounds := button.get_global_rect()
-		_check(panel.grow(1).encloses(bounds) and not body.intersects(bounds) and bounds.position.y >= body.end.y + 18.0 * factor - 0.1, "正文及底部导航完整分离 " + context + " " + str(button.name))
+		_check(guide._toolbar.get_global_rect().grow(1).encloses(bounds) and not body.intersects(bounds), "翻页按钮在顶部工具栏内且与正文完整分离 " + context + " " + str(button.name))
 	_check(not guide._previous.get_global_rect().intersects(guide._next.get_global_rect()), "三语大字号上一页与下一页保持独立命中区 " + context)
 	await _click(guide._preview_button)
 	await _settle(8)
-	_check(guide._preview.visible and not guide._text.visible and guide._preview.get_global_rect().is_equal_approx(body), "切到预览后正文仍使用同一上移矩形 " + context)
-	await _click(guide._close)
+	_check(guide._preview.visible and not guide._text.visible and guide._preview.get_global_rect().is_equal_approx(body), "切到预览后正文仍使用同一内嵌矩形 " + context)
+	await _click(editor.find_child("MapEditorEditTab", true, false) as Button)
 	await _settle(8)
 	_check(_signature(editor) == snapshot and editor.editor_document._undo_stack.size() == undo_count, "大字号引导浏览与预览不改变地图或历史 " + context)
 
@@ -199,12 +194,11 @@ func _check_popups(editor: MapEditor, factor: float, context: String) -> void:
 	_check_popup(editor._guide_menu, factor, context + " 指引")
 	await _key(root, KEY_ESCAPE)
 	var scroll := editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
-	scroll.ensure_control_visible(editor._level_guide_button)
-	await _settle(8)
 	await _click(editor._level_guide_button)
 	await _settle(8)
-	_check_popup(editor._level_guide_editor, factor, context + " 关卡引导")
-	await _click(editor._level_guide_editor._close)
+	var guide := editor._level_guide_editor
+	_check(guide.is_open() and guide.get_global_transform().get_scale().is_equal_approx(Vector2.ONE * factor) and editor._properties_card.get_global_rect().grow(1).encloses(guide.get_global_rect()), "关卡指引继承属性卡片几何缩放且不创建独立浮窗 " + context)
+	await _click(editor.find_child("MapEditorEditTab", true, false) as Button)
 	scroll.ensure_control_visible(editor._restriction_choice)
 	await _settle(8)
 	await _click(editor._restriction_choice)

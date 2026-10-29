@@ -10,6 +10,11 @@ const CHECKMARK := preload("res://assets/ui/settings_option_check.svg")
 
 var option: OptionButton
 var fit_popup: Callable
+var neutral_selection := false
+var menu_corner_radius := MENU_CORNER_RADIUS
+var shadow_padding := SHADOW_PADDING
+var frost_amount := 0.72
+var menu_depth := 0.0
 var _popup: PopupMenu
 var _glass: ColorRect
 var _native_content: TextureRect
@@ -29,7 +34,8 @@ func _ready() -> void:
 	_glass.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var glass_material := ShaderMaterial.new()
 	glass_material.shader = GLASS_SHADER
-	glass_material.set_shader_parameter("frost_amount", 0.72)
+	glass_material.set_shader_parameter("frost_amount", frost_amount)
+	glass_material.set_shader_parameter("menu_depth", menu_depth)
 	_glass.material = glass_material
 	add_child(_glass)
 	# 以窗口实际输出像素显示原生前景，不修改字号或放大一张低分辨率文字图。
@@ -86,7 +92,7 @@ func _prepare_popup() -> void:
 	surface.shadow_offset = Vector2.ZERO
 	# 菜单四边统一内缩；真实容器一起调整，滚动条的显示与命中位置保持一致。
 	surface.set_content_margin_all(MENU_PADDING)
-	surface.set_corner_radius_all(int(MENU_CORNER_RADIUS))
+	surface.set_corner_radius_all(int(menu_corner_radius))
 	_popup.add_theme_stylebox_override("panel", surface)
 	_popup.transparent_bg = true
 	_popup.transparent = true
@@ -103,11 +109,11 @@ func _style_selection() -> void:
 	for state in ["unchecked", "radio_unchecked", "unchecked_disabled", "radio_unchecked_disabled"]:
 		_popup.add_theme_icon_override(state, empty_icon)
 	var highlight := StyleBoxFlat.new()
-	highlight.bg_color = Color("3488FA")
+	highlight.bg_color = Color(0.57, 0.63, 0.72, 0.14) if neutral_selection else Color("3488FA")
 	highlight.set_corner_radius_all(7)
 	highlight.set_content_margin_all(0)
 	_popup.add_theme_stylebox_override("hover", highlight)
-	_popup.add_theme_color_override("font_hover_color", Color.WHITE)
+	_popup.add_theme_color_override("font_hover_color", _popup.get_theme_color("font_color") if neutral_selection else Color.WHITE)
 
 
 ## 弹出时先突出已保存选项，之后完全由原生鼠标与键盘导航移动蓝色焦点行。
@@ -122,7 +128,7 @@ func _prepare_selection() -> void:
 func _sync_checkmark_tint() -> void:
 	var focused := _popup.get_focused_item()
 	for index in _popup.item_count:
-		var color := _popup.get_theme_color("font_disabled_color") if _popup.is_item_disabled(index) else Color.WHITE if index == focused else _popup.get_theme_color("font_color")
+		var color := _popup.get_theme_color("font_disabled_color") if _popup.is_item_disabled(index) else Color.WHITE if index == focused and not neutral_selection else _popup.get_theme_color("font_color")
 		if not _popup.get_item_icon_modulate(index).is_equal_approx(color):
 			_popup.set_item_icon_modulate(index, color)
 
@@ -186,14 +192,14 @@ func _update_surface() -> void:
 		return
 	_last_bounds = bounds
 	var layout_scale := popup_to_root.get_scale().abs().x
-	var padding := SHADOW_PADDING * layout_scale
+	var padding := shadow_padding * layout_scale
 	_glass.position = bounds.position - Vector2.ONE * padding
 	_glass.size = bounds.size + Vector2.ONE * padding * 2.0
 	_native_content.position = bounds.position
 	_native_content.size = bounds.size
 	var glass_material := _glass.material as ShaderMaterial
 	glass_material.set_shader_parameter("panel_size", bounds.size)
-	glass_material.set_shader_parameter("corner_radius", MENU_CORNER_RADIUS * layout_scale)
+	glass_material.set_shader_parameter("corner_radius", menu_corner_radius * layout_scale)
 	glass_material.set_shader_parameter("shadow_padding", padding)
 	glass_material.set_shader_parameter("blur_step", 3.2 * layout_scale)
 	_crop_backdrop(Rect2(_glass.position, _glass.size))

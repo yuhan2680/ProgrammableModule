@@ -7,6 +7,9 @@ uniform vec2 panel_size = vec2(296.0, 320.0);
 uniform float corner_radius = 22.0;
 uniform float frost = 0.84;
 uniform float highlighted = 0.0;
+// 中性菜单可单独增强立体边缘；默认值保留既有装配玻璃外观。
+uniform float neutral_tint = 0.0;
+uniform float menu_depth = 0.0;
 
 // 紧密高斯采样保持高分屏下的细节，边缘另外叠加轻薄亮边。
 float gaussian_weight(int tap) {
@@ -33,8 +36,13 @@ void fragment() {
 	}
 	float top_light = 1.0 - smoothstep(0.0, 1.0, UV.y);
 	vec3 tint = mix(vec3(0.975, 0.988, 1.0), vec3(0.79, 0.89, 1.0), highlighted * 0.25);
+	tint = mix(tint, vec3(0.985), clamp(neutral_tint, 0.0, 1.0));
 	vec3 glass = mix(backdrop, tint, clamp(frost + top_light * 0.035, 0.0, 1.0));
 	float rim = 1.0 - smoothstep(0.0, 0.9, max(-edge, 0.0));
 	glass = mix(glass, vec3(1.0), rim * (0.18 + top_light * 0.24));
+	// 外沿下侧略深、内沿上侧略亮，配合控件柔影表现薄玻璃厚度。
+	float inner_rim = smoothstep(-2.2, -1.2, edge) * (1.0 - smoothstep(-1.2, -0.2, edge));
+	glass = mix(glass, vec3(0.60, 0.63, 0.67), rim * (1.0 - top_light) * menu_depth * 0.20);
+	glass = mix(glass, vec3(1.0), inner_rim * menu_depth * (0.16 + top_light * 0.22));
 	COLOR = vec4(glass, mask * 0.99 * COLOR.a);
 }

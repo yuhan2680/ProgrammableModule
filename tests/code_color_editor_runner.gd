@@ -219,8 +219,15 @@ func _check_assist_appearance(bench: GameWorkbench, dark: bool, context: String)
 		var style := button.get_theme_stylebox("normal") as StyleBoxFlat
 		var matches_fill := false
 		if style != null:
-			matches_fill = Color(style.bg_color, 1.0).is_equal_approx(expected_fill)
-			matches_fill = matches_fill and (style.bg_color.a > 0 and style.bg_color.a < 1 if dark else is_equal_approx(style.bg_color.a, 1.0))
+			var fill := style.bg_color
+			var pointer_light := button.get_node_or_null("ToolbarPointerLight") as ColorRect
+			# 局部高光接管底面后原生样式透明，颜色断言应读取实际绘制材质，不能把透明视作正确底色。
+			if is_zero_approx(fill.a) and pointer_light != null and pointer_light.material is ShaderMaterial:
+				var shader_fill: Variant = (pointer_light.material as ShaderMaterial).get_shader_parameter("base_color")
+				if shader_fill is Color:
+					fill = shader_fill
+			matches_fill = Color(fill, 1.0).is_equal_approx(expected_fill)
+			matches_fill = matches_fill and (fill.a > 0 and fill.a < 1 if dark else is_equal_approx(fill.a, 1.0))
 		_check(button.icon != null and button.icon.resource_path == expected_path and matches_fill, "提示与撤销使用当前模式的轮廓SVG和圆底：" + asset + " " + context)
 		var glass := button.get_node_or_null("CodeAssistGlass") as ColorRect
 		_check(glass != null and glass.mouse_filter == Control.MOUSE_FILTER_IGNORE and glass.show_behind_parent, "玻璃圆底位于SVG之后且不拦截提示或撤销点击：" + asset + " " + context)

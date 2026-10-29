@@ -39,6 +39,16 @@ const NATIVE_MENU_CHINESE: Dictionary = {
 }
 
 const ENGLISH: Dictionary = {
+	"支持 Markdown：# 标题、## 小标题、### 小节。": "Supports Markdown: # Heading, ## Subheading, ### Section.",
+	"加粗": "Bold",
+	"斜体": "Italic",
+	"下划线": "Underline",
+	"删除线": "Strikethrough",
+	"无序列表": "Bulleted list",
+	"有序列表": "Numbered list",
+	"任务列表": "Checklist",
+	"指引 %d/%d": "Guide %d/%d",
+	"在这里编写关卡引导…": "Write the level guide here…",
 	"运行数据保存位置已改变，请恢复原目录后重试。": "The runtime data location has changed. Restore the original directory and try again.",
 	"无法使用游戏保存目录": "Cannot access the game save directory",
 	"运行数据目录必须来自已确认的玩家保存位置。": "The runtime data directory must use a confirmed player save location.",

@@ -148,7 +148,7 @@ func _test_playtest_round_trip(game: GameShell, editor: MapEditor) -> void:
 	# 扩大视图并留下可撤销和可重做两侧历史，避免仅验证一个空历史编辑器。
 	editor._width_field.value = 40
 	editor._height_field.value = 30
-	_find_button(editor, "应用尺寸").pressed.emit()
+	(editor.find_child("MapEditorApplySizeButton", true, false) as Button).pressed.emit()
 	_stroke(editor._canvas, Vector2(16, 16), MOUSE_BUTTON_LEFT)
 	_stroke(editor._canvas, Vector2(16, 48), MOUSE_BUTTON_LEFT)
 	editor._undo_button.pressed.emit()

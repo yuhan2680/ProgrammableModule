@@ -77,7 +77,7 @@ def main() -> int:
         ('layout_runner', r'布局回归完成：.+0 项失败。'),
     ]:
         # 交互回归等待真实动画与弹窗时长，限制帧率并留足帧预算，避免 headless 提前退出。
-        if filename in ('editor_native_exit_runner', 'editor_timed_gate_runner', 'editor_footer_runner', 'shark_easter_egg_runner', 'startup_runner', 'code_color_ui_runner', 'code_color_editor_runner', 'code_hint_ui_runner', 'level_search_runner', 'scroll_content_fade_runner', 'game_ui_smoke', 'functions_ui_runner'):
+        if filename in ('editor_native_exit_runner', 'editor_timed_gate_runner', 'editor_footer_runner', 'shark_easter_egg_runner', 'startup_runner', 'code_color_ui_runner', 'code_color_editor_runner', 'code_hint_ui_runner', 'level_search_runner', 'scroll_content_fade_runner', 'game_ui_smoke', 'functions_ui_runner', 'layout_runner'):
             timing = ['--max-fps', '120', '--quit-after', '2400' if filename == 'level_search_runner' else '7200']
         else:
             timing = ['--quit-after', '600']

@@ -1,5 +1,5 @@
 extends SceneTree
-## 底部双按钮与按需红字使用真实点击，保存与试玩均在独占用户目录内完成。
+## 顶部图标操作与按需红字使用真实点击，保存与试玩均在独占用户目录内完成。
 
 var _checks := 0
 var _failures := 0
@@ -43,7 +43,7 @@ func _run() -> void:
 func _fixture() -> MapDocument:
 	var document := MapDocument.new()
 	document.id = "footer_fixture"
-	document.display_name = "底部按钮测试"
+	document.display_name = "编辑操作测试"
 	document.width = 8
 	document.height = 6
 	for y in document.height:
@@ -54,7 +54,7 @@ func _fixture() -> MapDocument:
 	return document
 
 
-## 无效测试只出现卡内红字；灰色按钮仍能测试，蓝色保存可直接写入未完成玩家草稿。
+## 无效测试只出现卡内红字；顶部测试图标与页头保存仍沿原有业务流程执行。
 func _test_actions() -> void:
 	_check(not _editor._test_feedback.visible, "初始隐藏底部说明和检测提示")
 	var document := _fixture()
@@ -69,10 +69,10 @@ func _test_actions() -> void:
 	_check(_editor._test_feedback.text == "This level has no player spawn point", "已有检测结果跟随语言切换")
 	_game.settings.set_language("zh_CN")
 	await _settle()
-	await _click(_editor._save_level_button)
+	await _click(_editor._header.save_button)
 	var path := _editor._managed_save_path
 	var saved := MapCodec.load_file(path, _editor.registry, false)
-	_check(path.begins_with(_temporary.path_join("levels")) and saved.is_ok() and saved.value.player_spawn == null and not _editor.editor_document.is_dirty(), "蓝色保存按钮复用普通保存并允许未完成草稿")
+	_check(path.begins_with(_temporary.path_join("levels")) and saved.is_ok() and saved.value.player_spawn == null and not _editor.editor_document.is_dirty(), "页头保存按钮沿用普通保存并允许未完成草稿")
 	_check(saved.is_ok() and saved.value.properties.extension == "keep", "保存保留全部扩展字段")
 	_editor.editor_document.replace_document(_fixture())
 	await _settle()
@@ -102,7 +102,7 @@ func _test_actions() -> void:
 	await _settle()
 
 
-## 固定底部左右操作在滚动和缩放后仍可见，内圆弧与白卡对应角具有同一圆心。
+## 顶部蓝色圆形测试入口在滚动和缩放后仍可见，页签与错误反馈保留独立空间。
 func _test_geometry() -> void:
 	_game.window_controller.platform_name = "Windows"
 	_game.window_controller.screen_size_provider = func() -> Vector2i: return Vector2i(3840, 2160)
@@ -119,25 +119,26 @@ func _test_geometry() -> void:
 				var context: String = resolution + language + str(percentage)
 				var card := _editor._properties_card
 				var bounds := card.get_global_rect()
-				var left := _editor._play_button.get_global_rect()
-				var right := _editor._save_level_button.get_global_rect()
-				_check(bounds.encloses(left) and bounds.encloses(right) and root.get_visible_rect().grow(1).encloses(bounds) and left.end.x < right.position.x, "两个按钮完整位于卡内并左右排列 " + context)
-				_check(absf(left.size.x - right.size.x) <= card.get_global_transform().get_scale().x + 0.01 and is_equal_approx(left.position.y, right.position.y), "双按钮等宽同排（允许1逻辑像素舍入） " + context)
-				var outer := card.get_theme_stylebox("panel") as StyleBoxFlat
-				var save_style := _editor._save_level_button.get_theme_stylebox("normal") as StyleBoxFlat
-				var test_style := _editor._play_button.get_theme_stylebox("normal") as StyleBoxFlat
-				_check(save_style.bg_color == GameTheme.ACCENT and test_style.bg_color != GameTheme.ACCENT and save_style.corner_radius_bottom_right > 10, "左灰右蓝且R角略大 " + context)
+				var play := _editor._play_button.get_global_rect()
+				var save := _editor._header.save_button.get_global_rect()
+				_check(bounds.encloses(play) and _editor._header.get_global_rect().encloses(save) and root.get_visible_rect().grow(1).encloses(bounds), "测试位于属性卡片顶部，保存位于页头且均完整显示 " + context)
 				var scale := card.get_global_transform().get_scale().x
-				var outer_center := bounds.end - Vector2.ONE * outer.corner_radius_bottom_right * scale
-				var inner_center := right.end - Vector2.ONE * save_style.corner_radius_bottom_right * scale
-				_check(outer_center.distance_to(inner_center) < 1.1, "右下圆弧严格同心 " + context)
+				_check(play.size.is_equal_approx(Vector2(32, 32) * scale) and _editor._play_button.text.is_empty() and _editor._play_button.icon != null and not _editor._play_button.tooltip_text.is_empty(), "测试为固定32px纯图标圆形入口并保留提示 " + context)
+				var glass := _editor._play_button.find_child("BlueConfirmationGlass", true, false) as ColorRect
+				var material := glass.material as ShaderMaterial if glass != null else null
+				_check(glass != null and material != null and material.shader.resource_path.ends_with("editor_confirm_glass.gdshader") and glass.get_global_rect().is_equal_approx(play) and glass.mouse_filter == Control.MOUSE_FILTER_IGNORE and _editor._play_button.get_theme_color("icon_normal_color") == Color.WHITE, "蓝色玻璃材质覆盖圆形入口，白图标保留且背景不抢点击 " + context)
+				_check(_editor.find_child("MapEditorSaveLevel", true, false) == null, "底部不再残留重复保存按钮 " + context)
 				var scroll := _editor.find_child("MapEditorPropertiesScroll", true, false) as ScrollContainer
+				_check(play.end.y <= scroll.global_position.y, "测试图标在滚动表单上方，不占用正文或底部空间 " + context)
+				for node_name in ["MapEditorEditTab", "MapEditorGuideTab"]:
+					var tab := _editor.find_child(node_name, true, false) as Control
+					_check(tab != null and bounds.encloses(tab.get_global_rect()) and not play.intersects(tab.get_global_rect()), "顶部页签与测试图标各有独立命中区 " + context + " " + node_name)
 				scroll.scroll_vertical = roundi(scroll.get_v_scroll_bar().max_value)
 				await _settle()
-				_check(_editor._play_button.get_global_rect() == left and _editor._save_level_button.get_global_rect() == right, "正文滚动不移动底部按钮 " + context)
+				_check(_editor._play_button.get_global_rect() == play and _editor._header.save_button.get_global_rect() == save, "正文滚动不移动顶部测试和页头保存入口 " + context)
 				_editor._show_test_feedback(PackedStringArray(["此关卡缺乏出生点"] ))
 				await _settle()
-				_check(bounds.encloses(_editor._test_feedback.get_global_rect()) and _editor._test_feedback.get_global_rect().end.y < _editor._play_button.get_global_rect().position.y, "红字自动换行且不覆盖操作 " + context)
+				_check(bounds.encloses(_editor._test_feedback.get_global_rect()) and not _editor._test_feedback.get_global_rect().intersects(_editor._play_button.get_global_rect()), "红字自动换行且不覆盖顶部操作 " + context)
 				await _capture("footer_%s_%s_%d" % [resolution, language, percentage])
 				_editor._clear_test_feedback()
 				scroll.scroll_vertical = 0

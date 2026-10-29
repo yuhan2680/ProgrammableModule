@@ -58,7 +58,7 @@ func _run() -> void:
 		await _settle()
 		_check(picker.is_open() and id in model.get_restricted_modules(editor.registry), "真实点击连续多选：" + id)
 	_check(model.get_restricted_modules(editor.registry).size() == 2 and choice._caption.text.contains(", "), "字段显示两个实际名字并以逗号分隔")
-	await _test_lock_animation(picker)
+	await _test_checkmark_selection(editor, picker)
 	var before := model.document.to_dict()
 	_key(KEY_S, true)
 	await _settle()
@@ -171,25 +171,49 @@ func _test_focus_modes(editor: MapEditor, choice: ModuleRestrictionChoice, picke
 	_check(choice.get_theme_stylebox("focus") is StyleBoxEmpty, "键盘关闭后移回预览框也立即去除蓝框")
 
 
-## 动画显示真实限制状态，重复同步不重播，快速切换平滑反向且不改变菜单尺寸。
-func _test_lock_animation(picker: ModuleRestrictionPicker) -> void:
+## 左侧勾选与真实多选及撤销同步，列表只保留文字，不再显示模块图标或开合锁。
+func _test_checkmark_selection(editor: MapEditor, picker: ModuleRestrictionPicker) -> void:
+	var model := editor.editor_document
 	var index := picker._ids.find("radar")
-	var lock := picker._locks[index]
+	var item := picker._items[index]
+	var mark := item.find_child("ModuleRestrictionCheck%d" % index, true, false) as Control
+	_check(mark != null, "多选行提供独立左侧勾选标记")
+	if mark == null:
+		return
 	var original_size := picker._panel.size
-	await create_timer(0.25).timeout
-	_check(lock.locked and is_zero_approx(lock._openness), "受限模块显示完全锁上的锁头")
-	_click(picker._items[index].get_global_rect().get_center())
-	await create_timer(0.08).timeout
-	_check(not lock.locked and lock._openness > 0 and lock._openness < 1, "取消限制时锁梁正在平滑抬起")
-	_click(picker._items[index].get_global_rect().get_center())
-	await create_timer(0.25).timeout
-	_check(lock.locked and is_zero_approx(lock._openness), "动画途中重新限制可平滑反向并完全锁上")
-	_click(picker._items[index].get_global_rect().get_center())
-	await create_timer(0.25).timeout
-	_check(not lock.locked and is_equal_approx(lock._openness, 1.0), "未受限模块显示完全开启的锁头")
-	_click(picker._items[index].get_global_rect().get_center())
-	await create_timer(0.25).timeout
-	_check(picker._panel.size == original_size, "锁头开合不改变菜单布局")
+	var selected_before := model.document.to_dict()
+	for row_index in picker._items.size():
+		var row := picker._items[row_index]
+		var row_mark := row.find_child("ModuleRestrictionCheck%d" % row_index, true, false) as Control
+		_check(row.icon == null and not row.text.is_empty(), "限制菜单使用纯文字行，不显示模块图标：" + picker._ids[row_index])
+		_check(row_mark != null, "每行保留统一勾选位置：" + picker._ids[row_index])
+		if row_mark != null:
+			_check(row_mark.visible == (picker._ids[row_index] in model.get_restricted_modules(editor.registry)), "勾选只显示真实受限模块：" + picker._ids[row_index])
+			var style := row.get_theme_stylebox("normal")
+			var text_left := row.global_position.x + style.get_content_margin(SIDE_LEFT)
+			_check(row.alignment == HORIZONTAL_ALIGNMENT_LEFT and row.get_global_rect().grow(1).encloses(row_mark.get_global_rect()) and row_mark.get_global_rect().end.x <= text_left + 1.0, "勾选位于文字左侧独立位置且不会挤压名称：" + picker._ids[row_index])
+		for child in row.find_children("*", "Control", true, false):
+			var child_script := child.get_script() as Script
+			_check(child_script == null or not child_script.resource_path.ends_with("module_restriction_lock.gd"), "列表不再保留开合锁控件：" + picker._ids[row_index])
+			if child is TextureRect:
+				_check(child == row_mark or not child.is_visible_in_tree(), "行内除勾选外不显示额外图片：" + picker._ids[row_index])
+	picker._scroll.ensure_control_visible(item)
+	await _settle()
+	_check(mark.is_visible_in_tree(), "已限制雷达在菜单中显示左侧勾选")
+	_click(item.get_global_rect().get_center())
+	await _settle()
+	var unselected := model.document.to_dict()
+	_check(picker.is_open() and not mark.visible and not "radar" in model.get_restricted_modules(editor.registry) and "rangefinder" in model.get_restricted_modules(editor.registry), "真实点击取消雷达勾选，其他选择不受影响且菜单保持打开")
+	_click(item.get_global_rect().get_center())
+	await _settle()
+	_check(mark.is_visible_in_tree() and model.document.to_dict() == selected_before, "真实点击重新勾选恢复同一禁止列表")
+	_check(model.undo(), "最新一次勾选可以通过模型历史撤销")
+	await _settle()
+	_check(picker.is_open() and picker._items[index] == item and item.has_focus() and not mark.visible and model.document.to_dict() == unselected, "菜单内撤销立即清除左侧勾选，保留同一行与键盘焦点")
+	_check(model.redo(), "菜单仍打开时可以重做勾选")
+	await _settle()
+	_check(mark.is_visible_in_tree() and picker._items[index] == item and model.document.to_dict() == selected_before, "重做立即恢复勾选且不重建列表")
+	_check(picker._panel.size == original_size, "选择、取消和历史同步均不改变菜单尺寸")
 
 
 ## 真实鼠标移动用于验证进入和离开悬停，而不是直接调用内部动画。

@@ -52,6 +52,7 @@ func _ready() -> void:
 	mouse_entered.connect(_begin_hover)
 	mouse_exited.connect(_end_hover)
 	visibility_changed.connect(_end_hover)
+	_caption.theme_changed.connect(_refresh_metrics.call_deferred)
 	set_process(false)
 	_refresh_caption()
 
@@ -73,7 +74,18 @@ func _refresh_caption() -> void:
 	_caption.text = tr("不限制") if names.is_empty() else ", ".join(names)
 	_repeat.text = _caption.text
 	tooltip_text = _caption.text
-	_text_width = ceilf(_caption.get_theme_font("font").get_string_size(_caption.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x)
+	_refresh_metrics()
+
+
+## 按实际字号测量；短默认值完整显示，多个模块的长列表仍只在裁剪区走字。
+func _refresh_metrics() -> void:
+	if not is_node_ready() or _caption == null:
+		return
+	var font := _caption.get_theme_font("font")
+	var font_size := _caption.get_theme_font_size("font_size")
+	_text_width = ceilf(font.get_string_size(_caption.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+	var default_width := ceilf(font.get_string_size(tr("不限制"), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
+	custom_minimum_size = Vector2(maxf(96.0, default_width + 34.0), maxf(32.0, font.get_height(font_size) + 8.0))
 	_end_hover()
 	_layout_content()
 	# 语言或选项更新可能发生在鼠标仍停留框内时；无需先移出再进入才开始走字。

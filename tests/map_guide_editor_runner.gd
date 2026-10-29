@@ -1,5 +1,5 @@
 extends SceneTree
-## 引导编辑回归覆盖真实分页输入、一次提交、保存试玩往返与三语窄屏布局。
+## 内嵌指引回归覆盖格式工具、真实分页输入、事务提交、保存试玩往返与三语窄屏布局。
 
 var _checks := 0
 var _failures := 0
@@ -38,52 +38,147 @@ func _run() -> void:
 	document.id = "guide_ui_fixture"
 	document.dialogue = []
 	model.replace_document(document)
+	await _test_page_switch_glass(editor)
 	var guide := editor._level_guide_editor
 	await _click(editor._level_guide_button)
-	_check(guide.is_open() and guide._title.text == "引导 1/1" and guide._next.disabled and guide._previous.disabled, "空地图通过圆形入口显示单个占位页，禁止无限添加空页")
+	_check(guide.is_open() and guide._title.text == "指引 1/1" and guide._next.disabled and guide._previous.disabled, "空地图通过指引页签显示单个占位页，禁止无限添加空页")
 	_check(not model.is_dirty() and not model.can_undo(), "打开空引导不改地图和历史")
 	await _key(KEY_ESCAPE)
 	_check(not guide.is_open() and model.document.dialogue.is_empty() and not model.is_dirty(), "Esc关闭空占位不会落盘或变脏")
 	await _click(editor._level_guide_button)
 	_input_text(guide, "# 第一页\n欢迎 **Muna**，请向终点移动。")
-	_check(guide._title.text == "引导 1/1" and not guide._next.disabled and model.document.dialogue.is_empty(), "输入第一页即时更新状态，仍保留为本地草稿")
+	_check(guide._title.text == "指引 1/1" and not guide._next.disabled and model.document.dialogue.is_empty(), "输入第一页即时更新状态，仍保留为本地草稿")
 	await _click(guide._next)
-	_check(guide._title.text == "引导 · 新页（已有 1 页）" and guide._next.disabled, "新增空页不增加有效页数")
+	_check(guide._title.text == "指引 2/2" and guide._next.disabled, "新草稿有准确页码且不允许连续新增空页")
 	await _click(guide._previous)
 	_check(guide._pages.size() == 1 and guide._text.text.begins_with("# 第一页"), "返回上一页删除空草稿而不丢正文")
 	await _click(guide._next)
 	_input_text(guide, "## 第二页\n- 装配移动模块\n- 点击 `开始`")
 	await _click(guide._next)
 	_input_text(guide, "### 第三页\n完成后返回编辑器。")
-	_check(guide._title.text == "引导 3/3", "三张有正文的页数即时成为3/3")
+	_check(guide._title.text == "指引 3/3", "三张有正文的页数即时成为3/3")
 	await _click(guide._previous)
 	await _click(guide._previous)
-	_check(guide._title.text == "引导 1/3", "返回首张显示1/3，不累计翻页次数")
+	_check(guide._title.text == "指引 1/3", "返回首张显示1/3，不累计翻页次数")
 	await _click(guide._preview_button)
 	_check(guide._preview.visible and not guide._text.visible and guide._preview.get_parsed_text().contains("第一页") and not guide._preview.get_parsed_text().contains("# "), "预览渲染标题与正文，并保留编辑源文")
 	await _capture("map-guide-preview.png")
 	await _click(guide._preview_button)
-	await _key(KEY_S, true)
-	_check(guide.is_open() and model.path.is_empty() and not editor._file_dialog.visible and not model.can_undo(), "弹窗内保存快捷键不会穿透写盘或提交地图")
-	await _click(guide._close)
-	_check(not guide.is_open() and model.document.dialogue.size() == 3 and model._undo_stack.size() == 1, "右上X一次提交三页，仅新增一个撤销事务")
+	_check(model.path.is_empty() and not editor._file_dialog.visible and not model.can_undo(), "翻页与预览仍仅操作本地草稿")
+	await _show_edit_tab(editor)
+	_check(not guide.is_open() and model.document.dialogue.size() == 3 and model._undo_stack.size() == 1, "切回编辑页签一次提交三页，仅新增一个撤销事务")
 	_check(model.document.dialogue[0].format == "markdown" and model.document.dialogue[0].speaker == "引导", "新引导正文与Markdown标记写入现有dialogue字段")
 	var accepted := model.document.dialogue.duplicate(true)
 	model.undo()
 	_check(model.document.dialogue.is_empty() and not model.is_dirty(), "一次撤销回到原地图保存点")
 	model.redo()
 	_check(model.document.dialogue == accepted, "一次重做完整恢复所有引导页")
+	await _test_format_toolbar(editor)
 	await _test_portable_input(editor)
 	await _test_preview_links(editor)
 	await _test_legacy_and_empty(editor)
 	await _test_layout(editor)
 	await _test_save_and_play(editor)
+	await _test_canceled_document_actions(editor)
 	_game.queue_free()
 	await _settle()
 	TranslationServer.set_locale(locale)
 	_cleanup(_temporary)
 	print("关卡引导编辑界面回归完成：%d 项检查，%d 项失败。" % [_checks, _failures])
 	quit(0 if _failures == 0 else 1)
+
+
+## 按住真实页签后比较最终渲染区域，父级位移和缩放不能让玻璃采到屏幕左上角的旧位置。
+func _test_page_switch_glass(editor: MapEditor) -> void:
+	var tabs := editor._property_pages
+	var original_position := tabs.position
+	var original_scale := tabs.scale
+	var original_viewport_scale := root.content_scale_factor
+	await _hold_switch_button(tabs.guide_button, true)
+	_check_switch_sampling(tabs, "按住指引页签")
+	var initial_bounds := root.get_final_transform() * tabs._glass.get_global_rect()
+	tabs.position += Vector2(-73, 17)
+	tabs.scale = original_scale * 0.85
+	await _settle()
+	var moved_bounds := root.get_final_transform() * tabs._glass.get_global_rect()
+	_check(moved_bounds.position.distance_to(initial_bounds.position) > 20.0 and moved_bounds.size.x < initial_bounds.size.x * 0.95, "按住期间玻璃确实移动并缩放，覆盖非默认页面变换")
+	_check_switch_sampling(tabs, "按住期间移动及缩放")
+	root.content_scale_factor = original_viewport_scale * 1.25
+	await _settle()
+	_check(not root.get_final_transform().get_scale().is_equal_approx(Vector2.ONE), "取样回归包含真实视口像素比例而非仅逻辑坐标")
+	_check_switch_sampling(tabs, "按住期间视口比例变化")
+	await _hold_switch_button(tabs.guide_button, false)
+	var deadline := Time.get_ticks_msec() + 1500
+	while tabs.is_processing() and Time.get_ticks_msec() < deadline:
+		await process_frame
+	_check(not tabs._pointer_held and not tabs._glass.visible and tabs._backdrop.copy_mode == BackBufferCopy.COPY_MODE_DISABLED and not tabs.is_processing(), "松开页签并完成回弹后停止玻璃复制与逐帧处理")
+	root.content_scale_factor = original_viewport_scale
+	tabs.scale = original_scale
+	await _settle()
+	tabs.position = original_position
+	await _hold_switch_button(tabs.edit_button, true)
+	_check_switch_sampling(tabs, "再次按住编辑页签")
+	tabs.hide()
+	await _settle()
+	_check(not tabs._pointer_held and not tabs._glass.visible and tabs._backdrop.copy_mode == BackBufferCopy.COPY_MODE_DISABLED and not tabs.is_processing(), "按住时隐藏页签立即清理手势及屏幕复制")
+	await _hold_switch_button(tabs.edit_button, false)
+	tabs.show()
+	await _settle()
+	_check(tabs.get_page() == 0 and not editor._level_guide_editor.is_open() and not tabs._glass.visible, "重新显示页签保留已选编辑页且不会复活按住玻璃")
+
+
+## 直接使用最终玻璃控件的目标像素边界，不重算组件内部的滑块形状、留白或复制公式。
+func _check_switch_sampling(tabs: EditorPageSwitch, context: String) -> void:
+	var rendered_bounds := root.get_final_transform() * tabs._glass.get_global_rect()
+	_check(tabs._pointer_held and tabs._glass.is_visible_in_tree() and tabs._backdrop.copy_mode == BackBufferCopy.COPY_MODE_RECT, "真实按住启用可见玻璃及局部取样：" + context)
+	_check(rendered_bounds.has_area() and tabs._backdrop.rect.grow(0.5).encloses(rendered_bounds), "复制范围覆盖实际玻璃像素区域：" + context + " copy=" + str(tabs._backdrop.rect) + " rendered=" + str(rendered_bounds))
+
+
+## 分开发送原生按下和释放，让交互材质在检查时持续处于按住状态。
+func _hold_switch_button(button: Button, pressed: bool) -> void:
+	var point := root.get_final_transform() * button.get_global_rect().get_center()
+	var event := InputEventMouseButton.new()
+	event.position = point
+	event.global_position = point
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+	event.pressed = pressed
+	Input.parse_input_event(event)
+	await _settle()
+
+
+## 原生文本选择经真实格式按钮生成可持久化源文，单次撤销恢复且预览不泄漏格式标记。
+func _test_format_toolbar(editor: MapEditor) -> void:
+	var model := editor.editor_document
+	var document := model.document.duplicate_document()
+	document.dialogue = []
+	model.replace_document(document)
+	await _click(editor._level_guide_button)
+	var guide := editor._level_guide_editor
+	var marks := {"bold": "**", "italic": "*", "underline": "++", "strike": "~~"}
+	for key: String in marks:
+		_input_text(guide, "Alpha")
+		guide._text.select_all()
+		await _click(guide._format_buttons[key])
+		_check(guide._text.text == str(marks[key]) + "Alpha" + str(marks[key]) and guide._text.has_focus(), "格式按钮修改真实选中文本并返回输入焦点：" + key + " actual=" + guide._text.text)
+		await _click(guide._preview_button)
+		_check(guide._preview.get_parsed_text() == "Alpha", "预览正确消费格式标记而保留正文：" + key + " actual=" + guide._preview.get_parsed_text())
+		await _click(guide._preview_button)
+		guide._text.undo()
+		await _settle()
+		_check(guide._text.text == "Alpha", "一次原生文本撤销恢复格式前正文：" + key)
+	var lists := {"bullet": "- Alpha\n- Beta", "numbered": "1. Alpha\n2. Beta", "task": "- [ ] Alpha\n- [ ] Beta"}
+	for key: String in lists:
+		_input_text(guide, "Alpha\nBeta")
+		guide._text.select_all()
+		await _click(guide._format_buttons[key])
+		_check(guide._text.text == lists[key], "列表工具处理所选全部行并保存明确标记：" + key + " actual=" + guide._text.text.replace("\n", "\\n"))
+		guide._text.undo()
+		await _settle()
+		_check(guide._text.text == "Alpha\nBeta", "列表操作作为一个文本事务撤销：" + key)
+	_check(model.document.dialogue.is_empty() and not model.can_undo(), "格式编辑仍只修改指引草稿，不拆成地图历史")
+	await _show_edit_tab(editor)
+	_check(model.document.dialogue.size() == 1 and model._undo_stack.size() == 1, "格式工具编辑结束后由切页统一提交一次地图事务")
 
 
 ## 混合输入在原生文本历史中清除三段私用区，emoji及连接序列保留，非法输入不能重做复活。
@@ -205,7 +300,7 @@ func _test_preview_links(editor: MapEditor) -> void:
 		var local := Vector2(style.get_margin(SIDE_LEFT) + font.get_string_size(caption, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x * 0.5, style.get_margin(SIDE_TOP) + label.get_line_offset(index) + font.get_height(font_size) * 0.5)
 		await _click_at(label.get_global_transform() * local)
 		_check(opened.size() == index + 1 and opened[index] == urls[index], "真实鼠标点击网页标签调用注入打开器一次：" + urls[index])
-	_check(guide.is_open() and guide._previewing and not guide._error.visible and model.document.dialogue.is_empty() and not model.can_undo(), "点击网页后窗口保持预览，草稿与文档提交边界不变")
+	_check(guide.is_open() and guide._previewing and not guide._error.visible and model.document.dialogue.is_empty() and not model.can_undo(), "点击网页后内嵌页保持预览，草稿与文档提交边界不变")
 	await _click(guide._preview_button)
 	_check(guide._text.text == source, "点击链接再返回编辑保留完整 Markdown 源文")
 	await _key(KEY_ESCAPE)
@@ -244,13 +339,16 @@ func _test_legacy_and_empty(editor: MapEditor) -> void:
 	await _key(KEY_ESCAPE)
 	_check(model.document.dialogue.size() == 1 and model.document.dialogue[0].future == {"keep": [1, 2]} and model.document.dialogue[0].format == "markdown", "清空页不保存，修改非空页保留未知扩展字段")
 	await _click(editor._level_guide_button)
-	_input_text(guide, "# 外部关闭\n正文依然保存")
+	_input_text(guide, "# 切页提交\n正文依然保存")
 	var cells_before := model.document.cells.duplicate(true)
-	await _click_at(Vector2(30, 150))
-	_check(not guide.is_open() and model.document.dialogue[0].text.begins_with("# 外部关闭") and model.document.cells == cells_before, "点击外部提交草稿且完整鼠标事件不会穿透绘制地图")
+	var saved_before := model.document.dialogue.duplicate(true)
+	await _click(editor._zoom_in_button)
+	_check(guide.is_open() and model.document.dialogue == saved_before and model.document.cells == cells_before, "指引不占用模态浮层，使用地图工具不会关闭或提交草稿")
+	await _show_edit_tab(editor)
+	_check(not guide.is_open() and model.document.dialogue[0].text.begins_with("# 切页提交") and model.document.cells == cells_before, "切回编辑页签提交草稿而不修改地图格子")
 
 
-## 窄屏和三种语言保留同行创作者及引导按钮，弹窗只围绕地图取中心且不超出视口。
+## 窄屏三语下指引位于属性卡片内，编辑/指引页签与正文导航保留独立点击区域。
 func _test_layout(editor: MapEditor) -> void:
 	for dimensions in [Vector2i(1000, 740), Vector2i(1280, 800)]:
 		root.size = dimensions
@@ -258,29 +356,67 @@ func _test_layout(editor: MapEditor) -> void:
 		for locale in ["zh_CN", "zh_HK", "en"]:
 			_game.settings.set_language(locale)
 			await _settle()
-			var creator := editor._creator_field.get_global_rect()
-			var trigger := editor._level_guide_button.get_global_rect()
-			_check(absf(creator.get_center().y - trigger.get_center().y) <= 2 and trigger.position.x >= creator.end.x and root.get_visible_rect().encloses(trigger), "创作者和圆形引导按钮同排且不溢出：" + locale + str(dimensions))
+			var edit_tab := editor.find_child("MapEditorEditTab", true, false) as Button
+			var guide_tab := editor.find_child("MapEditorGuideTab", true, false) as Button
+			var card := editor._properties_card.get_global_rect()
+			_check(edit_tab != null and guide_tab == editor._level_guide_button and card.encloses(edit_tab.get_global_rect()) and card.encloses(guide_tab.get_global_rect()) and not edit_tab.get_global_rect().intersects(guide_tab.get_global_rect()), "编辑和指引页签在卡片内独立且不溢出：" + locale + str(dimensions))
 			await _click(editor._level_guide_button)
 			var guide := editor._level_guide_editor
-			_check(root.get_visible_rect().encloses(guide._panel.get_global_rect()) and guide._panel.get_global_rect().encloses(guide._text.get_global_rect()), "引导弹窗和正文完整位于视口：" + locale + str(dimensions))
-			_check(guide._text.text == "# 外部关闭\n正文依然保存" and guide._text.auto_translate_mode == Node.AUTO_TRANSLATE_MODE_DISABLED, "切换界面语言不翻译用户正文：" + locale)
-			_check(not guide._previous.get_global_rect().intersects(guide._preview_button.get_global_rect()) and not guide._next.get_global_rect().intersects(guide._preview_button.get_global_rect()) and not guide._text.get_global_rect().intersects(guide._preview_button.get_global_rect()), "三种语言下顶部模式按钮不遮挡正文和底部导航：" + locale)
-			await _key(KEY_ESCAPE)
+			_check(root.get_visible_rect().grow(1).encloses(card) and card.grow(1).encloses(guide.get_global_rect()) and guide.get_global_rect().grow(1).encloses(guide._text.get_global_rect()) and not editor._creator_field.is_visible_in_tree(), "指引正文内嵌卡片并替换编辑表单：" + locale + str(dimensions))
+			_check(guide._text.text == "# 切页提交\n正文依然保存" and guide._text.auto_translate_mode == Node.AUTO_TRANSLATE_MODE_DISABLED, "切换界面语言不翻译用户正文：" + locale)
+			for control: Control in [guide._toolbar, guide._previous, guide._next, guide._preview_button, guide._title]:
+				_check(card.grow(1).encloses(control.get_global_rect()) and not guide._text.get_global_rect().intersects(control.get_global_rect()), "工具栏和分页不遮挡正文或越出卡片：" + locale + " " + str(control.name))
+			_check_toolbar_centered(guide, locale + str(dimensions))
+			await _show_edit_tab(editor)
+			_check(editor._creator_field.is_visible_in_tree() and not guide.is_visible_in_tree(), "切回编辑后表单恢复，指引正文不残留：" + locale)
 	_game.settings.set_language("zh_CN")
 	await _settle()
 	await _click(editor._level_guide_button)
 	await _capture("map-guide-editor.png")
-	await _key(KEY_ESCAPE)
+	await _show_edit_tab(editor)
+
+
+## 按控件最终矩形合并同一工具行，检查每一行实际居中而非只检查容器配置。
+func _check_toolbar_centered(guide: MapGuideEditor, context: String) -> void:
+	var rows: Array[Rect2] = []
+	for child in guide._toolbar.get_children():
+		if not child is Control or not child.is_visible_in_tree():
+			continue
+		var bounds: Rect2 = child.get_rect()
+		var row_index := -1
+		for index in rows.size():
+			if bounds.position.y < rows[index].end.y - 0.1 and bounds.end.y > rows[index].position.y + 0.1:
+				row_index = index
+				break
+		if row_index < 0:
+			rows.append(bounds)
+		else:
+			rows[row_index] = rows[row_index].merge(bounds)
+	_check(not rows.is_empty(), "工具栏包含真实可见控件行：" + context)
+	for index in rows.size():
+		_check(absf(rows[index].get_center().x - guide._toolbar.size.x * 0.5) <= 1.1, "工具栏各行内容沿卡片中线居中：" + context + " row=" + str(index + 1))
 
 
 ## 保存、另存为、重新打开和未保存试玩使用同一引导数据，不读写正式游玩记录。
 func _test_save_and_play(editor: MapEditor) -> void:
 	var model := editor.editor_document
-	editor._save_document(false)
+	await _click(editor._level_guide_button)
+	var guide := editor._level_guide_editor
+	var saved_source := "# 当前页直接保存\n++下划线++ 和 ~~删除线~~"
+	_input_text(guide, saved_source)
+	guide._text.select(1, 2, 1, 5)
+	var selected_text := guide._text.get_selected_text()
+	var before_save_undo := model._undo_stack.size()
+	await _key(KEY_S, true)
 	var managed_path := model.path
 	var loaded := MapCodec.load_file(managed_path, editor.registry, false)
-	_check(loaded.is_ok() and loaded.value.dialogue == JSON.parse_string(JSON.stringify(model.document.dialogue)) and not model.is_dirty(), "普通保存保留Markdown引导及扩展字段")
+	_check(loaded.is_ok() and loaded.value.dialogue == JSON.parse_string(JSON.stringify(model.document.dialogue)) and loaded.value.dialogue[0].text == saved_source and not model.is_dirty(), "指引中保存快捷键先提交当前草稿再写入隔离地图")
+	_check(guide.is_open() and guide._text.text == saved_source and guide._text.has_focus() and guide._text.get_selected_text() == selected_text and model._undo_stack.size() == before_save_undo + 1, "保存保留当前指引页、输入焦点及选区，只新增一个地图事务")
+	await _click(guide._preview_button)
+	await _click(editor._header.save_button)
+	_check(guide.is_open() and guide._previewing and model._undo_stack.size() == before_save_undo + 1, "预览中再次保存不重复提交且不跳出当前预览")
+	await _show_edit_tab(editor)
+	_check(model._undo_stack.size() == before_save_undo + 1, "保存后切回编辑不重复提交已经保存的草稿")
 	editor._file_dialog.use_native_dialog = false
 	editor._save_document(true)
 	var export_path := _temporary.path_join("exports/guide.json")
@@ -292,20 +428,66 @@ func _test_save_and_play(editor: MapEditor) -> void:
 	_check(model.get_guide_pages().is_empty(), "新建地图不会继承上一地图的引导")
 	editor._load_document(export_path)
 	await _click(editor._level_guide_button)
-	var guide := editor._level_guide_editor
 	_input_text(guide, "# 未保存试玩\n## 小标题\n### 小节\n玩家正文")
-	await _key(KEY_ESCAPE)
-	var before := JSON.stringify(model.document.to_dict())
 	var undo_count := model._undo_stack.size()
 	var path := model.path
-	editor._start_playtest()
-	await _settle()
+	await _click(editor._play_button)
 	_check(_game.page == GameShell.Page.ASSEMBLY and _game.session.level.document.dialogue[0].text.begins_with("# 未保存试玩"), "试玩使用当前未保存引导快照进入空装配")
-	_check(not guide.is_open(), "编辑器引导浮层不会带入试玩")
+	_check(not guide.is_visible_in_tree() and model._undo_stack.size() == undo_count + 1, "试玩隐藏编辑卡片并且只提交一次当前引导草稿")
+	var before := JSON.stringify(model.document.to_dict())
 	_game._dialogue_dialog.hide()
 	_game._return_to_editor()
 	await _settle()
-	_check(_game._editor == editor and JSON.stringify(model.document.to_dict()) == before and model.path == path and model._undo_stack.size() == undo_count and model.is_dirty(), "试玩返回保留同一文档、引导、路径和撤销历史")
+	_check(_game._editor == editor and JSON.stringify(model.document.to_dict()) == before and model.path == path and model._undo_stack.size() == undo_count + 1 and model.is_dirty(), "试玩返回保留同一文档、引导、路径和撤销历史")
+	_check(guide.is_open() and guide.is_visible_in_tree() and guide._text.text.begins_with("# 未保存试玩"), "试玩返回保留作者所在的指引页与当前正文")
+	await _show_edit_tab(editor)
+	_check(model._undo_stack.size() == undo_count + 1, "试玩返回后切页不重复提交已接受的草稿")
+
+
+## 新建和打开的取消路径保留当前指引页、预览与已提交草稿，不把询问当作离开编辑器。
+func _test_canceled_document_actions(editor: MapEditor) -> void:
+	var model := editor.editor_document
+	var document := model.document.duplicate_document()
+	document.dialogue = [{"speaker": "引导", "text": "# 第一页", "format": "markdown"}, {"speaker": "引导", "text": "# 第二页", "format": "markdown"}]
+	model.replace_document(document)
+	await _click(editor._level_guide_button)
+	var guide := editor._level_guide_editor
+	await _click(guide._next)
+	var source := "# 保留第二页\n取消操作后仍可继续编辑。"
+	_input_text(guide, source)
+	await _click(guide._preview_button)
+	await _click(editor._header.new_button)
+	_check(editor._dirty_dialog.visible and guide.is_open() and guide._previewing and guide._page_index == 1 and model.document.dialogue[1].text == source and model._undo_stack.size() == 1, "新建先提交当前草稿并询问，保留指引第二页预览")
+	var snapshot := model.document.to_dict()
+	editor._dirty_dialog.get_cancel_button().pressed.emit()
+	editor._dirty_dialog.hide()
+	await _settle()
+	_check(guide.is_visible_in_tree() and guide.is_open() and guide._previewing and guide._page_index == 1 and guide._text.text == source and model.document.to_dict() == snapshot and model._undo_stack.size() == 1, "取消新建保持当前指引、预览、正文与历史")
+	await _click(editor._header.more_button)
+	await _click(editor._actions_menu.find_child("MapEditorOpenMenuItem", true, false) as Button)
+	_check(editor._dirty_dialog.visible and not editor._file_dialog.visible, "未保存时打开地图先走保护询问")
+	editor._dirty_dialog.get_cancel_button().pressed.emit()
+	editor._dirty_dialog.hide()
+	await _settle()
+	_check(guide.is_open() and guide._previewing and guide._page_index == 1 and guide._text.text == source and model.document.to_dict() == snapshot and model._undo_stack.size() == 1, "取消打开地图询问不会收起或清空指引草稿")
+	await _click(editor._header.save_button)
+	var saved_path := model.path
+	var saved_bytes := FileAccess.get_file_as_bytes(saved_path)
+	editor._file_dialog.use_native_dialog = false
+	await _click(editor._header.more_button)
+	await _click(editor._actions_menu.find_child("MapEditorOpenMenuItem", true, false) as Button)
+	_check(editor._file_dialog.visible and not editor._dirty_dialog.visible and guide.is_open(), "保存后打开文件选择器仍保留原指引页")
+	editor._file_dialog.canceled.emit()
+	editor._file_dialog.hide()
+	await _settle()
+	_check(guide.is_visible_in_tree() and guide._previewing and guide._page_index == 1 and guide._text.text == source and not model.is_dirty() and FileAccess.get_file_as_bytes(saved_path) == saved_bytes, "取消文件选择保留第二页预览与已经保存的地图文件")
+	_check(not editor._load_document(_temporary.path_join("missing-guide-map.json"), false) and guide.is_open() and guide._text.text == source, "打开失败保留当前指引页与正文")
+	_check(editor._load_document(saved_path) and not guide.is_open() and not guide.is_visible_in_tree(), "成功打开地图才离开旧指引并恢复编辑页")
+
+
+## 通过真实页签命中离开指引，提交边界不依赖已经移除的浮窗关闭按钮。
+func _show_edit_tab(editor: MapEditor) -> void:
+	await _click(editor.find_child("MapEditorEditTab", true, false) as Button)
 
 
 ## 以原生TextEdit输入接口更新当前页面，保持真实text_changed信号路径。
@@ -343,7 +525,7 @@ func _click_at(position: Vector2) -> void:
 	await _settle()
 
 
-## 快捷键通过实际事件分发，弹窗必须主动阻止它们影响底层地图。
+## 快捷键经过真实输入分发，文本编辑与外层保存沿各自的正常处理链执行。
 func _key(code: Key, control: bool = false, meta: bool = false) -> void:
 	for down in [true, false]:
 		var event := InputEventKey.new()

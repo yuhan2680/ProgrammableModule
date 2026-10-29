@@ -1483,7 +1483,7 @@ func _request_editor_exit(quit_game: bool) -> void:
 	if (page != Page.EDITOR and not (quit_game and _editor_playtest)) or not is_instance_valid(_editor) or _closing or _editor_exit_save_pending or _editor_discard_dialog.visible:
 		return
 	_editor._commit_gate_timer()
-	if not _editor._level_guide_editor.close_dialog():
+	if not _editor._level_guide_editor.commit_draft():
 		return
 	_editor._canvas.finish_stroke()
 	if _editor._time_limit_field.has_focus():

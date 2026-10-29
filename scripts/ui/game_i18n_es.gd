@@ -3,6 +3,16 @@ extends RefCounted
 ## 西班牙语静态显示词典；不改写玩家代码、名称、关卡 ID 或持久化数据。
 
 const MESSAGES: Dictionary = {
+	"支持 Markdown：# 标题、## 小标题、### 小节。": "Compatible con Markdown: # Título, ## Subtítulo, ### Sección.",
+	"加粗": "Negrita",
+	"斜体": "Cursiva",
+	"下划线": "Subrayado",
+	"删除线": "Tachado",
+	"无序列表": "Lista con viñetas",
+	"有序列表": "Lista numerada",
+	"任务列表": "Lista de tareas",
+	"指引 %d/%d": "Guía %d/%d",
+	"在这里编写关卡引导…": "Escribe aquí la guía del nivel…",
 	"运行数据保存位置已改变，请恢复原目录后重试。": "La ubicación de los datos del juego ha cambiado. Restaura el directorio original e inténtalo de nuevo.",
 	"无法使用游戏保存目录": "No se puede acceder al directorio de guardado",
 	"运行数据目录必须来自已确认的玩家保存位置。": "El directorio de datos del juego debe usar una ubicación de guardado confirmada.",

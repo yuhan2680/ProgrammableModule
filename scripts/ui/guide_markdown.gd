@@ -36,7 +36,13 @@ static func render(label: RichTextLabel, text: String) -> void:
 			label.pop()
 			label.pop()
 		else:
-			if line.begins_with("- ") or line.begins_with("* "):
+			if line.begins_with("- [ ] ") or line.begins_with("* [ ] "):
+				label.add_text("☐ ")
+				line = line.substr(6)
+			elif line.begins_with("- [x] ") or line.begins_with("- [X] ") or line.begins_with("* [x] ") or line.begins_with("* [X] "):
+				label.add_text("☑ ")
+				line = line.substr(6)
+			elif line.begins_with("- ") or line.begins_with("* "):
 				label.add_text("• ")
 				line = line.substr(2)
 			_append_inline(label, line)
@@ -60,7 +66,7 @@ static func _append_inline(label: RichTextLabel, text: String, bold: bool = fals
 	var offset := 0
 	while offset < text.length():
 		var character := text.substr(offset, 1)
-		if character == "\\" and offset + 1 < text.length() and text.substr(offset + 1, 1) in ["*", "_", "`", "\\", "[", "]", "(", ")"]:
+		if character == "\\" and offset + 1 < text.length() and text.substr(offset + 1, 1) in ["*", "_", "+", "~", "`", "\\", "[", "]", "(", ")"]:
 			_add_portable_text(label, text.substr(offset + 1, 1))
 			offset += 2
 			continue
@@ -83,6 +89,17 @@ static func _append_inline(label: RichTextLabel, text: String, bold: bool = fals
 				label.pop()
 				label.pop()
 				offset = link.end
+				continue
+		if character in ["+", "~"] and text.substr(offset, 2) == character.repeat(2):
+			var closing := _find_decoration_end(text, offset, character.repeat(2))
+			if closing > offset + 2:
+				if character == "+":
+					label.push_underline()
+				else:
+					label.push_strikethrough()
+				_append_inline(label, text.substr(offset + 2, closing - offset - 2), bold, italic, depth + 1)
+				label.pop()
+				offset = closing + 2
 				continue
 		if character in ["*", "_"]:
 			var width := _marker_width(text, offset)
@@ -111,9 +128,32 @@ static func _append_inline(label: RichTextLabel, text: String, bold: bool = fals
 			continue
 		var start := offset
 		offset += 1
-		while offset < text.length() and text.substr(offset, 1) not in ["*", "_", "`", "\\", "["]:
+		while offset < text.length() and text.substr(offset, 1) not in ["*", "_", "+", "~", "`", "\\", "["]:
 			offset += 1
 		_add_portable_text(label, text.substr(start, offset - start))
+
+
+## 下划线与删除线只识别成对的纯文本标记，跳过转义、行内代码与链接目标。
+static func _find_decoration_end(text: String, start: int, marker: String) -> int:
+	var offset := start + marker.length()
+	while offset < text.length():
+		if text.substr(offset, 1) == "\\":
+			offset += 2
+			continue
+		if text.substr(offset, 1) == "`":
+			var closing := text.find("`", offset + 1)
+			if closing >= 0:
+				offset = closing + 1
+				continue
+		if text.substr(offset, 1) == "[":
+			var link := _inline_link(text, offset)
+			if not link.is_empty():
+				offset = link.end
+				continue
+		if text.substr(offset, marker.length()) == marker:
+			return offset
+		offset += 1
+	return -1
 
 
 ## 显示旧引导时隐藏平台私用字形，但链接仍按未改写的原网址校验，避免改变跳转目标。
