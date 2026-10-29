@@ -122,6 +122,7 @@ func _icon_button(parent: Node, node_name: String, icon_path: String, action: Ca
 		button.add_theme_stylebox_override(state, _button_style(color, Color("A7CDFF") if state == "focus" else Color.TRANSPARENT))
 	button.pressed.connect(action)
 	parent.add_child(button)
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 
@@ -136,6 +137,9 @@ func _button_style(color: Color, border: Color = Color.TRANSPARENT, radius: int 
 func _style_segment(button: Button, index: int, count: int) -> void:
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		# 鼠标模式使用空焦点样式，仅重排实际具有圆角的底面。
+		if style == null:
+			continue
 		style.corner_radius_top_left = 22 if index == 0 else 0
 		style.corner_radius_bottom_left = 22 if index == 0 else 0
 		style.corner_radius_top_right = 22 if index == count - 1 else 0

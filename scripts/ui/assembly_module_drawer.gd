@@ -99,6 +99,7 @@ func _ready() -> void:
 	focus_style.set_content_margin_all(0)
 	details_button.add_theme_stylebox_override("focus", focus_style)
 	_content_clip.add_child(details_button)
+	GameTheme.toolbar_highlight.call_deferred(details_button)
 	_scroll = ScrollContainer.new()
 	_scroll.name = "AssemblyDrawerScroll"
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -124,6 +125,7 @@ func _ready() -> void:
 		_collapse_button.add_theme_color_override("icon_" + state + "_color", Color.WHITE if state == "normal" else GameTheme.ACCENT)
 	_collapse_button.pressed.connect(close_drawer)
 	_panel.add_child(_collapse_button)
+	GameTheme.toolbar_highlight.call_deferred(_collapse_button)
 	_collapse_button.position = Vector2.ZERO
 	_collapse_button.size = _initial_size
 	content_container.minimum_size_changed.connect(_queue_placement)

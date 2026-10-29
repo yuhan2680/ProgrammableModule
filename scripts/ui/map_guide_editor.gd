@@ -80,6 +80,7 @@ func _ready() -> void:
 		_close.add_theme_stylebox_override(state, style)
 	_close.pressed.connect(close_dialog)
 	_panel.add_child(_close)
+	GameTheme.toolbar_highlight.call_deferred(_close)
 	_text = TextEdit.new()
 	_text.name = "MapGuideEditorText"
 	_text.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
@@ -144,6 +145,7 @@ func _mode_button() -> Button:
 		button.add_theme_stylebox_override(state, style)
 	button.pressed.connect(_toggle_preview)
 	_panel.add_child(button)
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 

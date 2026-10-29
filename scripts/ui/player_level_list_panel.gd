@@ -382,6 +382,7 @@ func _search_icon_button(node_name: String, icon_path: String, tooltip: String, 
 	button.add_theme_stylebox_override("focus", _search_style(Color.TRANSPARENT))
 	button.pressed.connect(action)
 	_search_area.add_child(button)
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 

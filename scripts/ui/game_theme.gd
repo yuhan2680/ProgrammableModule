@@ -354,6 +354,7 @@ static func navigation_pill(parent: Node, back_action: Callable, tooltip: String
 		if left:
 			button.pressed.connect(back_action)
 		panel.add_child(button)
+		toolbar_highlight.call_deferred(button)
 	var separator := ColorRect.new()
 	separator.name = "NavigationSeparator"
 	separator.color = Color("DCE1E8")
@@ -362,6 +363,17 @@ static func navigation_pill(parent: Node, back_action: Callable, tooltip: String
 	separator.size = Vector2(1, 20)
 	panel.add_child(separator)
 	return panel
+
+
+## 仅显式标记真实工具栏入口；重复调用共用同一局部高光，不改普通内容按钮或开关。
+static func toolbar_highlight(button: Variant) -> void:
+	# 延迟接入前页面可能已经释放；先验证对象再读取 Button，避免参数类型转换报错。
+	if not is_instance_valid(button) or not button is Button or button.has_node("ToolbarHoverHighlight"):
+		return
+	var highlight := preload("res://scripts/ui/toolbar_hover_highlight.gd").new()
+	highlight.name = "ToolbarHoverHighlight"
+	highlight.button = button
+	button.add_child(highlight)
 
 
 ## CanvasLayer 不继承入口的控件变换；浮层使用相同逻辑比例，遮挡与输入区域仍覆盖完整视口。

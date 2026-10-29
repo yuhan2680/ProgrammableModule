@@ -168,6 +168,7 @@ func _icon_button(parent: Node, node_name: String, icon_path: String, action: Ca
 		button.add_theme_stylebox_override(state, _capsule_style(color, Color("A7CDFF") if state == "focus" else Color.TRANSPARENT))
 	button.pressed.connect(action)
 	parent.add_child(button)
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 

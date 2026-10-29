@@ -221,6 +221,7 @@ func _icon_button(parent: Node, node_name: String, icon_path: String, tooltip: S
 		button.pressed.connect(action)
 	parent.add_child(button)
 	_register_focus_button(button)
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 

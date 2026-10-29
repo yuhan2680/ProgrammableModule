@@ -290,18 +290,23 @@ func _test_playtest_round_trip(game: GameShell, editor: MapEditor) -> void:
 	game._back_button.pressed.emit()
 	await process_frame
 	_check(game.page == GameShell.Page.EDITOR and game._editor == editor and editor_model.document.get_tile_id(Vector2i(0, 2)) == "floor", "直接从试玩组装页也能返回当前编辑地图")
-	# 系统关闭请求必须先返回有未保存地图的编辑器；取消原确认框后继续保留文档。
+	# 系统关闭保护未保存地图；取消后继续保留原试玩页面和同一会话。
 	editor._play_button.pressed.emit()
 	await process_frame
 	_finish_dialogue(game)
 	game._editor_discard_dialog.use_native_dialog = false
+	var closing_playtest_session := game.session
+	var closing_playtest_page := game.page
 	game.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
 	await process_frame
-	_check(game.page == GameShell.Page.EDITOR and game._editor == editor and game._editor_discard_dialog.visible, "试玩收到关闭窗口请求会返回编辑器并保护未保存地图")
+	_check(game.page == closing_playtest_page and game.session == closing_playtest_session and game._editor == editor and game._editor_discard_dialog.visible, "试玩收到关闭窗口请求保留会话并询问未保存地图")
 	game._editor_discard_dialog.get_cancel_button().pressed.emit()
 	game._editor_discard_dialog.hide()
-	_check(game._editor == editor and editor_model.is_dirty() and editor_model.document.get_tile_id(Vector2i(0, 2)) == "floor", "取消关闭请求后未保存地图与编辑器仍然保留")
+	_check(game.page == closing_playtest_page and game.session == closing_playtest_session and game._editor == editor and editor_model.is_dirty() and editor_model.document.get_tile_id(Vector2i(0, 2)) == "floor" and not paused, "取消关闭请求后同一试玩会话、未保存地图与编辑器仍然保留")
 	_check(_draft_snapshot(game.drafts.directory) == saved_files, "多轮试玩及返回后同 ID 正式存档原文完全不变")
+	# 后续用例继续编辑地图；取消关闭本身不再隐式替玩家结束试玩。
+	game._return_to_editor()
+	await process_frame
 
 
 ## 读取隔离草稿目录的原始文件，比较试玩前后是否发生任何持久化副作用。

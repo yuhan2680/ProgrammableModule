@@ -1098,6 +1098,7 @@ const MESSAGES: Dictionary = {
 	"地图编辑器": "Editor de mapas",
 	"设置": "Ajustes",
 	"离开游戏": "Salir del juego",
+	"确定要退出游戏吗？": "¿Seguro que quieres salir del juego?",
 	"← 开始页面": "← Menú principal",
 	"← 关卡": "← Niveles",
 	"← 地图编辑器": "← Editor de mapas",

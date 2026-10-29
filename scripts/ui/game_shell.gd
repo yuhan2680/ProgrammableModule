@@ -40,6 +40,9 @@ var guide_link_opener: Callable
 # 自动化界面验证可替换试听入口，不调用系统程序或播放真实声音。
 var system_sound_preview_handler: Callable
 var quit_handler: Callable
+var quit_native_dialog_handler: Callable
+# 启动层在交接之前独占系统关闭请求，避免同一通知弹出两次询问。
+var quit_requests_managed_by_startup := false
 # 仅由轻量启动场景注入；直接运行游戏或编辑器场景仍在 _ready 中同步初始化。
 var startup_reporter: Callable
 var startup_complete := false
@@ -146,6 +149,9 @@ var _editor: MapEditor
 var _editor_playtest: bool = false
 var _dialogue_index: int = 0
 var _closing: bool = false
+var _quit_dialog: QuitGameDialog
+var _quit_prompt_active := false
+var _quit_tree_was_paused := false
 # 回退到初始内容不代表玩家修改了作品。只查看并返回时，必须保留旧草稿原件。
 var _draft_needs_recovery: bool = false
 var _draft_edited: bool = false
@@ -620,15 +626,8 @@ func _notification(what: int) -> void:
 		if is_instance_valid(_rename_input):
 			_on_player_level_name_changed(_rename_input.text)
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
-		if _closing or _editor_exit_save_pending or _editor_discard_dialog.visible:
-			return
-		if _editor != null:
-			# 试玩期间编辑器隐藏但仍有未保存地图，关闭窗口也必须经过它的保护。
-			if _editor_playtest:
-				_return_to_editor()
-			_request_editor_exit(true)
-		else:
-			_leave_game()
+		if not quit_requests_managed_by_startup:
+			_request_quit()
 
 
 ## 创建全局页头与页面容器，关卡列表、工作台和旧编辑器共用返回入口。
@@ -741,10 +740,18 @@ func _build_ui() -> void:
 	_build_markdown_dialogue()
 	_editor_discard_dialog = MapExitDialog.new()
 	_editor_discard_dialog.name = "MapExitDialog"
+	_editor_discard_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
 	_editor_discard_dialog.save_requested.connect(_save_editor_and_return)
 	_editor_discard_dialog.confirmed.connect(_discard_editor_and_return)
 	_editor_discard_dialog.canceled.connect(_cancel_editor_exit)
 	add_child(_editor_discard_dialog)
+	_quit_dialog = QuitGameDialog.new()
+	_quit_dialog.name = "QuitGameDialog"
+	_quit_dialog.native_dialog_handler = quit_native_dialog_handler
+	_quit_dialog.confirmed.connect(_confirm_quit)
+	_quit_dialog.canceled.connect(_cancel_quit_request)
+	add_child(_quit_dialog)
+	_quit_dialog._fallback.theme = theme
 	_save_timer = Timer.new()
 	_save_timer.wait_time = 0.8
 	_save_timer.one_shot = true
@@ -754,6 +761,9 @@ func _build_ui() -> void:
 
 ## 清理旧页面并停止会话，页面切换不能让旧程序继续运行。
 func _clear_page(keep_level_header: bool = false, keep_menu_card: bool = false) -> void:
+	if is_instance_valid(_quit_dialog):
+		_quit_dialog.close_dialog()
+	_end_quit_prompt()
 	if _profile_tracker != null:
 		_profile_tracker.end_level()
 	_editor_exit_save_pending = false
@@ -894,7 +904,7 @@ func _show_main_page() -> void:
 	menu.anchor_bottom = 0.345
 	_add_menu_button(menu, "开始游戏", "StartGameButton", _open_page_from_main.bind(Page.LEVELS))
 	_add_menu_button(menu, "地图编辑器", "MapEditorButton", _open_page_from_main.bind(Page.EDITOR))
-	var leave := _add_menu_button(panel, "离开游戏", "LeaveGameButton", _leave_game)
+	var leave := _add_menu_button(panel, "离开游戏", "LeaveGameButton", _request_quit)
 	var preferences := _add_menu_button(panel, "设置", "SettingsButton", _open_settings_from_main)
 	for button in [leave, preferences]:
 		button.custom_minimum_size = Vector2(150, 48)
@@ -1359,9 +1369,67 @@ func _confirm_clear_progress() -> void:
 		_recovery_backup_path = ""
 
 
-## 退出按钮与窗口关闭共用保存保护，测试通过替身观察退出请求而不终止测试进程。
+## 菜单、窗口关闭与系统退出请求共用此入口，询问前不保存草稿或终止试玩。
+func _request_quit() -> void:
+	if _closing or _quit_prompt_active or _editor_exit_save_pending or _editor_discard_dialog.visible:
+		return
+	_cancel_menu_transition()
+	if is_instance_valid(_editor):
+		_request_editor_exit(true)
+	else:
+		_open_quit_confirmation()
+
+
+## 干净页面使用系统退出询问，所有存档提交继续留在明确确认之后。
+func _open_quit_confirmation() -> void:
+	_begin_quit_prompt()
+	_quit_dialog.open_confirmation()
+
+
+## 暂停场景而不改会话状态，墙钟只结算内存区间，不因打开询问提前写盘。
+func _begin_quit_prompt() -> void:
+	if _quit_prompt_active:
+		return
+	_quit_prompt_active = true
+	_quit_tree_was_paused = get_tree().paused
+	get_tree().paused = true
+	if _profile_tracker != null:
+		_profile_tracker.set_active(false)
+	if _activity_tracker != null:
+		_activity_tracker.set_active(false)
+
+
+## 恢复打开前的场景暂停值，已经暂停的玩家会话不会被取消询问意外继续。
+func _end_quit_prompt() -> void:
+	if not _quit_prompt_active:
+		return
+	_quit_prompt_active = false
+	get_tree().paused = _quit_tree_was_paused
+	_sync_profile_timer()
+	_sync_activity_timer()
+
+
+## 取消只释放本次退出意图，运行状态、页面、装配与程序都保持原样。
+func _cancel_quit_request() -> void:
+	_editor_exit_quit_requested = false
+	_end_quit_prompt()
+
+
+## 通用询问的明确退出信号才进入原有草稿与统计提交路径。
+func _confirm_quit() -> void:
+	_editor_exit_quit_requested = false
+	_end_quit_prompt()
+	_leave_game()
+
+
+## 明确确认后共用保存保护，测试通过替身观察退出请求而不终止测试进程。
 func _leave_game() -> void:
-	if _closing or not _save_current_draft():
+	if _closing:
+		return
+	if is_instance_valid(_quit_dialog):
+		_quit_dialog.close_dialog()
+	_end_quit_prompt()
+	if not _save_current_draft():
 		return
 	if page == Page.PLAYER_PROFILE and is_instance_valid(player_profile_panel) and not player_profile_panel.commit_username():
 		return
@@ -1381,7 +1449,7 @@ func _leave_game() -> void:
 
 ## 根据当前页面选择返回目标；地图未保存确认只在编辑器返回时触发。
 func _go_back() -> void:
-	if _menu_transitioning:
+	if _menu_transitioning or _quit_prompt_active:
 		return
 	if is_instance_valid(shark_game):
 		_close_shark_game()
@@ -1412,7 +1480,7 @@ func _go_back() -> void:
 
 ## 返回开始页和关闭窗口共用保存询问，先提交尚未失焦的编辑再判断dirty。
 func _request_editor_exit(quit_game: bool) -> void:
-	if page != Page.EDITOR or not is_instance_valid(_editor) or _closing or _editor_exit_save_pending or _editor_discard_dialog.visible:
+	if (page != Page.EDITOR and not (quit_game and _editor_playtest)) or not is_instance_valid(_editor) or _closing or _editor_exit_save_pending or _editor_discard_dialog.visible:
 		return
 	_editor._commit_gate_timer()
 	if not _editor._level_guide_editor.close_dialog():
@@ -1432,7 +1500,11 @@ func _request_editor_exit(quit_game: bool) -> void:
 		_editor._enemy_panel._picker.close_menu(false)
 		_editor._restriction_picker.close_menu(false)
 		_editor._command_menu.close_menu(false)
+		if quit_game:
+			_begin_quit_prompt()
 		_editor_discard_dialog.open_for_map(_editor.editor_document.document.display_name)
+	elif quit_game:
+		_open_quit_confirmation()
 	else:
 		_complete_editor_exit()
 
@@ -1440,6 +1512,7 @@ func _request_editor_exit(quit_game: bool) -> void:
 ## 取消只清除本次退出目标，保留地图、路径和历史。
 func _cancel_editor_exit() -> void:
 	_editor_exit_quit_requested = false
+	_end_quit_prompt()
 
 
 ## 用户确认放弃或写盘成功后，执行原先请求的返回或退出目标。
@@ -1447,6 +1520,7 @@ func _complete_editor_exit() -> void:
 	var quit_game := _editor_exit_quit_requested
 	_editor_exit_quit_requested = false
 	if quit_game:
+		_end_quit_prompt()
 		_leave_game()
 	else:
 		_return_from_map_editor()
@@ -1454,7 +1528,7 @@ func _complete_editor_exit() -> void:
 
 ## 保存按钮沿用编辑器的校验和文件选择；只有本次写盘成功才返回开始页。
 func _save_editor_and_return() -> void:
-	if page != Page.EDITOR or not is_instance_valid(_editor) or _editor_exit_save_pending:
+	if (page != Page.EDITOR and not (_editor_exit_quit_requested and _editor_playtest)) or not is_instance_valid(_editor) or _editor_exit_save_pending:
 		return
 	_editor_discard_dialog.hide()
 	_editor_exit_save_pending = true
@@ -1463,7 +1537,7 @@ func _save_editor_and_return() -> void:
 
 ## 不保存是明确的放弃动作，仅在地图编辑页面执行，避免旧弹窗影响其它页面。
 func _discard_editor_and_return() -> void:
-	if page != Page.EDITOR or _editor_exit_save_pending:
+	if (page != Page.EDITOR and not (_editor_exit_quit_requested and _editor_playtest)) or _editor_exit_save_pending:
 		return
 	_complete_editor_exit()
 
@@ -1475,10 +1549,11 @@ func _on_editor_save_finished(success: bool) -> void:
 	if not _editor_exit_save_pending:
 		return
 	_editor_exit_save_pending = false
-	if success and page == Page.EDITOR and is_instance_valid(_editor) and not _editor.editor_document.is_dirty():
+	if success and (page == Page.EDITOR or (_editor_exit_quit_requested and _editor_playtest)) and is_instance_valid(_editor) and not _editor.editor_document.is_dirty():
 		_complete_editor_exit()
 	else:
 		_editor_exit_quit_requested = false
+		_end_quit_prompt()
 
 
 ## 刷新只更新列表；坏地图在目录中保留并提供错误，不阻挡其他有效关卡。
@@ -2451,7 +2526,7 @@ func _sync_activity_timer() -> void:
 	var content_active := page not in [Page.MAIN, Page.SETTINGS, Page.CODE_COLORS, Page.PLAYER_LEVEL_LIST, Page.PLAYER_PROFILE]
 	if is_instance_valid(shark_game) and shark_game.is_visible_in_tree() and not _shark_entry_pending:
 		content_active = true
-	var active := _runtime_storage_ready and startup_complete and not _closing and _application_active and not _application_suspended and not _is_activity_window_minimized() and content_active
+	var active := _runtime_storage_ready and startup_complete and not _closing and not _quit_prompt_active and _application_active and not _application_suspended and not _is_activity_window_minimized() and content_active
 	_activity_tracker.set_active(active)
 	if was_active and not active:
 		_activity_save_elapsed = 0.0
@@ -2497,7 +2572,7 @@ func _sync_profile_timer() -> void:
 		return
 	if _profile_tracker.is_completed() and session.state != GameSession.State.SUCCEEDED:
 		_profile_tracker.begin_level(_application_active and not _application_suspended)
-	var active := _application_active and not _application_suspended and page in [Page.ASSEMBLY, Page.PLAY] and session.state not in [GameSession.State.PAUSED, GameSession.State.SUCCEEDED]
+	var active := not _quit_prompt_active and _application_active and not _application_suspended and page in [Page.ASSEMBLY, Page.PLAY] and session.state not in [GameSession.State.PAUSED, GameSession.State.SUCCEEDED]
 	_profile_tracker.set_active(active)
 
 
@@ -2551,6 +2626,9 @@ func _show_profile_save_error(result: DataResult) -> void:
 ## 外壳释放也停止墙钟，不将离开游戏后的等待计入下一次挑战。
 func _exit_tree() -> void:
 	_closing = true
+	if _quit_prompt_active:
+		_quit_prompt_active = false
+		get_tree().paused = _quit_tree_was_paused
 	_sync_activity_timer()
 	_flush_activity_statistics()
 	if _profile_tracker != null:

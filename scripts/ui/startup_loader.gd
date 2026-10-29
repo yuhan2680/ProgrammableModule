@@ -7,6 +7,7 @@ signal completed(game: Node)
 signal failed(message: String)
 
 const GAME_SCENE := "res://scenes/game.tscn"
+const QUIT_DIALOG_SCRIPT := preload("res://scripts/ui/quit_game_dialog.gd")
 # 启动失败时仍需本土化提示；静态小词典不引入完整游戏依赖。
 const HONG_KONG_ERRORS := {
 	"找不到启动资源。": "找不到啟動資源。",
@@ -15,6 +16,10 @@ const HONG_KONG_ERRORS := {
 	"启动场景格式不正确。": "啟動場景格式不正確。",
 	"启动场景缺少必要的界面。": "啟動場景缺少必要的介面。",
 	"重试": "重試",
+	"离开游戏": "離開遊戲",
+	"确定要退出游戏吗？": "確定要退出遊戲嗎？",
+	"取消": "取消",
+	"退出": "退出",
 }
 const SPANISH_ERRORS := {
 	"找不到启动资源。": "No se ha encontrado un recurso de inicio.",
@@ -23,6 +28,10 @@ const SPANISH_ERRORS := {
 	"启动场景格式不正确。": "El formato de la escena de inicio no es válido.",
 	"启动场景缺少必要的界面。": "Falta una interfaz necesaria en la escena de inicio.",
 	"重试": "Reintentar",
+	"离开游戏": "Salir del juego",
+	"确定要退出游戏吗？": "¿Seguro que quieres salir del juego?",
+	"取消": "Cancelar",
+	"退出": "Salir",
 }
 const JAPANESE_ERRORS := {
 	"找不到启动资源。": "起動用リソースが見つかりません。",
@@ -31,6 +40,10 @@ const JAPANESE_ERRORS := {
 	"启动场景格式不正确。": "起動シーンの形式が正しくありません。",
 	"启动场景缺少必要的界面。": "起動シーンに必要なインターフェースがありません。",
 	"重试": "再試行",
+	"离开游戏": "ゲームを終了",
+	"确定要退出游戏吗？": "ゲームを終了しますか？",
+	"取消": "キャンセル",
+	"退出": "終了",
 }
 const WARM_RESOURCES := [
 	"res://assets/fonts/NotoSansSC.ttf",
@@ -43,6 +56,8 @@ var scene_path := GAME_SCENE
 var settings_path := "user://settings.json"
 var user_levels_directory := ""
 var drafts_directory := "user://solutions"
+var quit_handler: Callable
+var quit_native_dialog_handler: Callable
 var progress := 0.0
 var phase := "waiting"
 var _screen: Control
@@ -55,11 +70,22 @@ var _loaded: Dictionary = {}
 var _pending: Array[String] = []
 var _game: Node
 var _transition: Tween
+var _quit_dialog: Node
+var _quit_prompt_active := false
+var _quit_tree_was_paused := false
+var _closing := false
 
 
 ## 创建无需字体、图片或游戏主题的白底细进度条，先给首帧一次呈现机会。
 func _ready() -> void:
 	layer = 100
+	get_tree().auto_accept_quit = false
+	_quit_dialog = QUIT_DIALOG_SCRIPT.new()
+	_quit_dialog.name = "StartupQuitGameDialog"
+	_quit_dialog.native_dialog_handler = quit_native_dialog_handler
+	_quit_dialog.confirmed.connect(_confirm_startup_quit)
+	_quit_dialog.canceled.connect(_cancel_startup_quit)
+	add_child(_quit_dialog)
 	get_window().unresizable = true
 	_screen = Control.new()
 	_screen.name = "StartupSurface"
@@ -95,6 +121,8 @@ func _ready() -> void:
 ## 引擎开始绘图后才发起资源请求，确保加载期间有真实可见的反馈。
 func _begin() -> void:
 	await _draw_frame()
+	if not await _wait_for_quit_decision():
+		return
 	_set_phase("resources")
 	_paths.assign(WARM_RESOURCES)
 	if not _paths.has(scene_path):
@@ -148,6 +176,8 @@ func _process(_delta: float) -> void:
 
 ## 在主线程建立节点；完整游戏以可让出帧的初始化里程碑反馈剩余工作。
 func _start_game() -> void:
+	if not await _wait_for_quit_decision():
+		return
 	var packed: Resource = _loaded.get(scene_path)
 	if not packed is PackedScene:
 		_fail("启动场景格式不正确。", "The startup scene has an invalid format.")
@@ -162,6 +192,9 @@ func _start_game() -> void:
 	_game.set("user_levels_directory", user_levels_directory)
 	_game.set("drafts_directory", drafts_directory)
 	_game.set("startup_reporter", _on_game_progress)
+	_game.set("quit_requests_managed_by_startup", true)
+	_game.set("quit_native_dialog_handler", quit_native_dialog_handler)
+	_game.set("quit_handler", quit_handler)
 	_set_phase("initializing")
 	get_tree().root.add_child(_game)
 	set_process(true)
@@ -174,16 +207,25 @@ func _on_game_progress(value: float) -> void:
 
 ## 背景已经绘制后才到满格，先显露模糊背景，再弹出菜单窗口。
 func _reveal() -> void:
+	if not await _wait_for_quit_decision():
+		return
 	_set_progress(1.0)
 	await _draw_frame()
+	if not await _wait_for_quit_decision():
+		return
 	_set_phase("background")
 	_transition = create_tween()
 	_transition.tween_property(_screen, "modulate:a", 0.0, 0.22).set_trans(Tween.TRANS_SINE)
 	await _transition.finished
+	if not await _wait_for_quit_decision():
+		return
 	_set_phase("menu")
 	await _game.call("reveal_startup_menu")
+	if not await _wait_for_quit_decision():
+		return
 	# 游戏脱离启动层独立存在；启动控制器和资源缓存随后释放。
 	var game := _game
+	game.set("quit_requests_managed_by_startup", false)
 	_game = null
 	get_tree().current_scene = game
 	_set_phase("complete")
@@ -244,7 +286,7 @@ func _fail(chinese: String, english: String) -> void:
 
 ## 资源故障允许再次请求；已完成缓存继续由 Godot 复用，不重复进入游戏。
 func _retry() -> void:
-	if phase != "failed":
+	if phase != "failed" or _closing or _quit_prompt_active:
 		return
 	_error_box.hide()
 	_set_phase("waiting")
@@ -316,14 +358,58 @@ func _input(_event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
-## 游戏会关闭自动退出；启动尚未完成时仍允许用户关闭窗口。
+## 启动期间独占系统退出通知，游戏完成交接之后由外壳继续同样的确认流程。
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_CLOSE_REQUEST and is_inside_tree():
+		_request_quit()
+
+
+## 启动加载及错误页面也必须明确确认退出，重复系统请求不叠加原生窗口。
+func _request_quit() -> void:
+	if _closing or _quit_prompt_active or phase == "complete" or not is_instance_valid(_quit_dialog):
+		return
+	_quit_prompt_active = true
+	_quit_tree_was_paused = get_tree().paused
+	get_tree().paused = true
+	_quit_dialog.open_confirmation(_localized("离开游戏", "Leave Game"), _localized("确定要退出游戏吗？", "Are you sure you want to quit the game?"), _localized("取消", "Cancel"), _localized("退出", "Exit"))
+
+
+## 取消恢复原来的暂停值，后台已完成的资源继续复用，不重置启动进度。
+func _cancel_startup_quit() -> void:
+	if not _quit_prompt_active:
+		return
+	_quit_prompt_active = false
+	get_tree().paused = _quit_tree_was_paused
+
+
+## 确认后阻止所有迟到启动阶段交接，再调用可注入的进程退出边界。
+func _confirm_startup_quit() -> void:
+	if _closing:
+		return
+	_closing = true
+	_cancel_startup_quit()
+	set_process(false)
+	if _transition != null and _transition.is_running():
+		_transition.kill()
+	if is_instance_valid(_game) and _game.has_method("cancel_startup"):
+		_game.call("cancel_startup")
+	if quit_handler.is_valid():
+		quit_handler.call()
+	else:
 		get_tree().quit()
+
+
+## 协程可在场景暂停时收到帧信号，因此每个启动交接边界都等待询问结束。
+func _wait_for_quit_decision() -> bool:
+	while _quit_prompt_active and not _closing:
+		await get_tree().process_frame
+	return not _closing and is_inside_tree() and not is_queued_for_deletion()
 
 
 ## 中途关闭或测试移除启动页时释放尚未交接的游戏，避免残留第二个菜单。
 func _exit_tree() -> void:
+	_closing = true
+	_cancel_startup_quit()
 	if _transition != null and _transition.is_running():
 		_transition.kill()
 	if is_instance_valid(_game):

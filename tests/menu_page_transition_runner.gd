@@ -7,6 +7,7 @@ var _checks := 0
 var _failures := 0
 var _capture_directory := ""
 var _quit_requests := 0
+var _quit_confirmation: Callable
 
 
 ## 截图只来自实际 GPU 视口，普通 headless 不产生伪造画面。
@@ -29,6 +30,7 @@ func _run() -> void:
 	_game.settings_path = _temporary.path_join("settings.json")
 	_game.user_levels_directory = _temporary.path_join("levels")
 	_game.drafts_directory = _temporary.path_join("solutions")
+	_game.quit_native_dialog_handler = _record_quit_confirmation
 	root.add_child(_game)
 	await _settle()
 	for profile: Dictionary in [
@@ -202,6 +204,8 @@ func _check_close() -> void:
 	_game.quit_handler = func() -> void: _quit_requests += 1
 	_click(_game.find_child("MapEditorButton", true, false) as Control)
 	_game._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
+	_check(_quit_requests == 0 and _quit_confirmation.is_valid(), "转场中的窗口关闭先询问")
+	_quit_confirmation.call(1)
 	await create_timer(0.8).timeout
 	_check(_quit_requests == 1 and not _game._menu_transitioning and _game._menu_page_transition == null and _game.page == GameShell.Page.MAIN, "系统关闭取消动画，不能在退出后迟到地打开编辑器")
 
@@ -269,3 +273,9 @@ func _remove_tree(path: String) -> void:
 	for directory in DirAccess.get_directories_at(path):
 		_remove_tree(path.path_join(directory))
 	DirAccess.remove_absolute(path)
+
+
+## 测试仅记录系统确认，明确回复后才允许关闭转场与退出。
+func _record_quit_confirmation(_title: String, _description: String, _buttons: PackedStringArray, callback: Callable) -> int:
+	_quit_confirmation = callback
+	return OK

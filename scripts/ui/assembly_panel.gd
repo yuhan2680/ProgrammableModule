@@ -373,6 +373,7 @@ func _build_rules_button(parent: Node) -> void:
 	for state: String in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
 		_rules_button.add_theme_color_override(state, Color.WHITE)
 	parent.add_child(_rules_button)
+	GameTheme.toolbar_highlight.call_deferred(_rules_button)
 	_rules_menu = WorkbenchGuideMenu.new()
 	_rules_menu.name = "AssemblyRulesMenu"
 	_rules_menu.expand_from_top_right = true

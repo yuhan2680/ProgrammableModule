@@ -83,6 +83,9 @@ func _ready() -> void:
 	subtitle_label.theme_changed.connect(_layout_header.call_deferred)
 	_update_tooltips()
 	_layout_header()
+	# 样式及分段圆角建立后再附加局部高光，不改变原生命中区和功能连接。
+	for button in _focus_buttons:
+		GameTheme.toolbar_highlight(button)
 
 
 ## 导航小 SVG 按显示比例重新栅格化；保留原逻辑图标与命中区，不修改共享纹理。

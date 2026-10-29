@@ -58,6 +58,7 @@ func _ready() -> void:
 	button_up.connect(_sync_highlight)
 	_sync_surface()
 	_sync_highlight()
+	GameTheme.toolbar_highlight.call_deferred(self)
 
 
 ## 几何变化只更新圆形遮罩和采样范围，不修改按钮的可点击区域。
@@ -70,10 +71,10 @@ func _sync_surface() -> void:
 	_backdrop.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT if is_visible_in_tree() else BackBufferCopy.COPY_MODE_DISABLED
 
 
-## 悬停和按下沿用圆形玻璃，只改变轻微的冷色反光。
+## 按下或选中保留玻璃反光，悬停交给独立的鼠标局部光层。
 func _sync_highlight() -> void:
 	if _glass_material != null:
-		_glass_material.set_shader_parameter("highlighted", 1.0 if is_hovered() or button_pressed else 0.0)
+		_glass_material.set_shader_parameter("highlighted", 1.0 if button_pressed else 0.0)
 
 
 ## 切换按钮同步选中反光，参数由标准按钮信号提供。

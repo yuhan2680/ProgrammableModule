@@ -5,6 +5,7 @@ var _native_requests: Array[Dictionary] = []
 var _native_result := OK
 var _immediate_choice := -999
 var _quit_count := 0
+var _quit_confirmation: Callable
 
 
 ## 创建正常外壳，只替换需要人点击的操作系统窗口，不依赖真实玩家存档。
@@ -17,6 +18,7 @@ func _run() -> void:
 	_game.drafts_directory = _temporary.path_join("drafts")
 	_game.settings_path = _temporary.path_join("settings.json")
 	_game.quit_handler = _record_quit
+	_game.quit_native_dialog_handler = _record_quit_confirmation
 	root.add_child(_game)
 	await _settle()
 	_game._editor_discard_dialog.native_dialog_handler = _record_native
@@ -179,5 +181,14 @@ func _test_native_window_close() -> void:
 	_check(_quit_count == 2 and _game.page == GameShell.Page.EDITOR and not model.is_dirty(), "关闭保存失败后的普通保存成功仍保留编辑页面")
 	var count := _native_requests.size()
 	_game._notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
-	_check(_quit_count == 3 and _native_requests.size() == count, "已保存干净地图关闭无需再次询问")
+	_check(_quit_count == 2 and _native_requests.size() == count and _quit_confirmation.is_valid(), "干净地图关闭使用独立退出确认，不再询问地图保存")
+	_quit_confirmation.call(1)
+	await _settle()
+	_check(_quit_count == 3, "干净地图明确确认后退出一次")
 	_game._closing = false
+
+
+## 通用退出确认与地图保存确认使用不同替身，避免混淆两种按钮索引。
+func _record_quit_confirmation(_title: String, _description: String, _buttons: PackedStringArray, callback: Callable) -> int:
+	_quit_confirmation = callback
+	return OK

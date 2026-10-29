@@ -1170,6 +1170,7 @@ const ENGLISH: Dictionary = {
 	"地图编辑器": "Map Editor",
 	"设置": "Settings",
 	"离开游戏": "Leave Game",
+	"确定要退出游戏吗？": "Are you sure you want to quit the game?",
 	"← 开始页面": "← Main Menu",
 	"← 关卡": "← Levels",
 	"← 地图编辑器": "← Map Editor",

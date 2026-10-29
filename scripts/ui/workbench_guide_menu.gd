@@ -130,6 +130,7 @@ func _build_anchor_morph() -> void:
 		_collapse_button.add_theme_color_override("icon_" + state + "_color", Color.WHITE if state == "normal" else GameTheme.ACCENT)
 	_collapse_button.pressed.connect(close_menu)
 	_panel.add_child(_collapse_button)
+	GameTheme.toolbar_highlight.call_deferred(_collapse_button)
 
 
 ## 指引独立释放时恢复入口外观，避免留下不可见的问号。

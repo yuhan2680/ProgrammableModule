@@ -52,6 +52,8 @@ func _ready() -> void:
 	increase_button = _make_button(row, true)
 	_apply_colors()
 	_sync_buttons()
+	for button: Button in [decrease_button, increase_button]:
+		GameTheme.toolbar_highlight.call_deferred(button)
 
 
 ## 中间细线属于整个胶囊，不占自动布局宽度，也不截获鼠标事件。

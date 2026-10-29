@@ -91,6 +91,7 @@ func _ready() -> void:
 		style.set_content_margin_all(0)
 		place_button.add_theme_stylebox_override(state, style)
 	tools.add_child(place_button)
+	GameTheme.toolbar_highlight.call_deferred(place_button)
 	place_button.pressed.connect(_request_placement)
 	remove_button = Button.new()
 	remove_button.name = "MapEditorRemoveEnemies"
@@ -109,6 +110,7 @@ func _ready() -> void:
 		style.set_content_margin_all(0)
 		remove_button.add_theme_stylebox_override(state, style)
 	tools.add_child(remove_button)
+	GameTheme.toolbar_highlight.call_deferred(remove_button)
 	remove_button.pressed.connect(_request_removal)
 	_slots = GridContainer.new()
 	_slots.name = "MapEditorEnemyModuleSlots"

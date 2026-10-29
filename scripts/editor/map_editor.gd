@@ -1503,6 +1503,7 @@ func _view_button(parent: Node, node_name: String, icon_name: String, action: Ca
 		button.add_theme_stylebox_override(state, style)
 	button.pressed.connect(action)
 	parent.add_child(button)
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 

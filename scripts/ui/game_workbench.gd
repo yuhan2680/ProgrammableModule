@@ -333,6 +333,7 @@ func _world_icon_button(parent: Control, node_name: String, icon_path: String, h
 	button.offset_left = -24 - right_inset
 	button.offset_right = -right_inset
 	button.offset_bottom = 24
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 
@@ -590,6 +591,7 @@ func _code_assist_button(node_name: String, caption: String, asset: String, righ
 	button.offset_right = right
 	button.offset_top = 10
 	button.offset_bottom = 38
+	GameTheme.toolbar_highlight.call_deferred(button)
 	return button
 
 

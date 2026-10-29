@@ -8,6 +8,7 @@ var _failures: int = 0
 var _opened_paths: Array[String] = []
 var _test_directory: String
 var _quit_requests: int = 0
+var _quit_confirmation: Callable
 
 
 ## 等待场景树进入可添加节点的阶段，再启动 UI 测试。
@@ -25,6 +26,7 @@ func _run() -> void:
 	game.settings_path = _test_directory.path_join("settings.json")
 	game.folder_opener = _record_folder_open
 	game.quit_handler = _record_quit
+	game.quit_native_dialog_handler = _record_quit_confirmation
 	root.add_child(game)
 	await process_frame
 	await process_frame
@@ -265,7 +267,11 @@ func _run() -> void:
 	game._editor_discard_dialog.hide()
 	_check(game._editor == null and game.page == GameShell.Page.MAIN, "确认后地图编辑器返回开始页面")
 	game.find_child("LeaveGameButton", true, false).pressed.emit()
-	_check(_quit_requests == 1, "离开游戏按钮发出一次退出请求")
+	_check(_quit_requests == 0 and _quit_confirmation.is_valid(), "离开游戏按钮先请求确认，不直接退出")
+	_quit_confirmation.call(1)
+	await process_frame
+	await process_frame
+	_check(_quit_requests == 1, "明确确认后离开游戏发出一次退出请求")
 	game.queue_free()
 	await process_frame
 	_cleanup(_test_directory)
@@ -2399,3 +2405,9 @@ func _test_fourteenth_level(game: GameShell) -> void:
 	game.settings.set_code_hints("normal")
 	_press_back(game)
 	await process_frame
+
+
+## 记录系统退出确认供测试明确回答，避免打开真实系统窗口。
+func _record_quit_confirmation(_title: String, _description: String, _buttons: PackedStringArray, callback: Callable) -> int:
+	_quit_confirmation = callback
+	return OK
