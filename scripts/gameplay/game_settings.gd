@@ -10,6 +10,8 @@ const SYSTEM_SOUND_BUS: String = "SystemSounds"
 const DEFAULT_LANGUAGE: String = "zh_CN"
 const DEFAULT_TAB_COMPLETION: bool = true
 const DEFAULT_ASSEMBLY_FREE_ZOOM: bool = false
+const DEFAULT_LEVEL_SHOW_AUTHOR: bool = true
+const DEFAULT_LEVEL_SHOW_COMPLETION: bool = true
 const DEFAULT_WINDOW_RESOLUTION: String = "1280x800"
 # 跨平台同时提供常见宽屏与原有 16:10 尺寸；按宽、高递增，屏幕回退仍能选择最大可容纳窗口。
 const SUPPORTED_WINDOW_RESOLUTIONS: Array[String] = [
@@ -41,6 +43,8 @@ var system_sound_volume: float = DEFAULT_SYSTEM_SOUND_VOLUME
 var language: String = DEFAULT_LANGUAGE
 var tab_completion: bool = DEFAULT_TAB_COMPLETION
 var assembly_free_zoom: bool = DEFAULT_ASSEMBLY_FREE_ZOOM
+var level_show_author: bool = DEFAULT_LEVEL_SHOW_AUTHOR
+var level_show_completion: bool = DEFAULT_LEVEL_SHOW_COMPLETION
 var window_resolution: String = DEFAULT_WINDOW_RESOLUTION
 var ui_scale: int = DEFAULT_UI_SCALE
 var code_hints: String = DEFAULT_CODE_HINTS
@@ -98,10 +102,15 @@ func load_settings() -> DataResult:
 	var resolution_value: Variant = loaded["interface"].get("window_resolution", DEFAULT_WINDOW_RESOLUTION)
 	# 旧配置默认 100%，平台与显示器可用性由窗口控制器决定，不在数据层查询系统。
 	var scale_value: Variant = loaded["interface"].get("ui_scale", DEFAULT_UI_SCALE)
+	# 旧配置沿用作者与完成状态均显示，只补内存默认值，不在载入时写盘。
+	var show_author_value: Variant = loaded["interface"].get("level_show_author", DEFAULT_LEVEL_SHOW_AUTHOR)
+	var show_completion_value: Variant = loaded["interface"].get("level_show_completion", DEFAULT_LEVEL_SHOW_COMPLETION)
 	var validation := _validate_values(volume_value, language_value, completion_value, hints_value, color_mode_value, free_zoom_value, resolution_value, system_sound_value, scale_value)
 	var background_mode: Variant = loaded["interface"].get("menu_background_mode", DEFAULT_MENU_BACKGROUND_MODE)
 	var background_id: Variant = loaded["interface"].get("menu_background_id", "")
 	var backgrounds: Variant = loaded["interface"].get("custom_backgrounds", [])
+	if validation.is_ok():
+		validation = _validate_level_display_options(show_author_value, show_completion_value)
 	if validation.is_ok():
 		validation = _validate_background_values(background_mode, background_id, backgrounds)
 	if not validation.is_ok():
@@ -111,6 +120,8 @@ func load_settings() -> DataResult:
 	language = language_value
 	tab_completion = completion_value
 	assembly_free_zoom = free_zoom_value
+	level_show_author = show_author_value
+	level_show_completion = show_completion_value
 	window_resolution = resolution_value
 	ui_scale = int(scale_value)
 	code_hints = hints_value
@@ -125,6 +136,8 @@ func load_settings() -> DataResult:
 ## 将当前设置写入同目录临时文件，回读成功后才替换已有配置。
 func save_settings() -> DataResult:
 	var validation := _validate_values(volume, language, tab_completion, code_hints, code_color_mode, assembly_free_zoom, window_resolution, system_sound_volume, ui_scale)
+	if validation.is_ok():
+		validation = _validate_level_display_options(level_show_author, level_show_completion)
 	if validation.is_ok():
 		validation = _validate_background_values(menu_background_mode, menu_background_id, custom_backgrounds)
 	if validation.is_ok():
@@ -142,6 +155,8 @@ func save_settings() -> DataResult:
 	interface_data["language"] = language
 	interface_data["tab_completion"] = tab_completion
 	interface_data["assembly_free_zoom"] = assembly_free_zoom
+	interface_data["level_show_author"] = level_show_author
+	interface_data["level_show_completion"] = level_show_completion
 	interface_data["window_resolution"] = window_resolution
 	interface_data["ui_scale"] = ui_scale
 	interface_data["code_hints"] = code_hints
@@ -233,6 +248,18 @@ func set_assembly_free_zoom(value: Variant) -> DataResult:
 	if not validation.is_ok():
 		return _remember_result(validation)
 	assembly_free_zoom = value
+	var result := save_settings()
+	changed.emit()
+	return result
+
+
+## 关卡作者与完成状态作为一组校验后即时应用，写盘失败也通知界面采用本次选择。
+func set_level_display_options(show_author: Variant, show_completion: Variant) -> DataResult:
+	var validation := _validate_level_display_options(show_author, show_completion)
+	if not validation.is_ok():
+		return _remember_result(validation)
+	level_show_author = show_author
+	level_show_completion = show_completion
 	var result := save_settings()
 	changed.emit()
 	return result
@@ -526,6 +553,8 @@ func _reset_defaults() -> void:
 	language = DEFAULT_LANGUAGE
 	tab_completion = DEFAULT_TAB_COMPLETION
 	assembly_free_zoom = DEFAULT_ASSEMBLY_FREE_ZOOM
+	level_show_author = DEFAULT_LEVEL_SHOW_AUTHOR
+	level_show_completion = DEFAULT_LEVEL_SHOW_COMPLETION
 	window_resolution = DEFAULT_WINDOW_RESOLUTION
 	ui_scale = DEFAULT_UI_SCALE
 	code_hints = DEFAULT_CODE_HINTS
@@ -590,6 +619,15 @@ func _validate_values(volume_value: Variant, language_value: Variant, completion
 		return DataResult.failure("窗口分辨率必须为预设尺寸或最大化。")
 	if not DataValidation.is_integer(scale_value, 100, 200) or not int(scale_value) in SUPPORTED_UI_SCALES:
 		return DataResult.failure("界面缩放必须为 100%、110%、125%、150% 或 200%。")
+	return DataResult.success()
+
+
+## 两个显示偏好只接受真实布尔值，任一无效都不能部分采用另一项。
+func _validate_level_display_options(show_author: Variant, show_completion: Variant) -> DataResult:
+	if not show_author is bool:
+		return DataResult.failure("关卡作者显示必须为布尔值。")
+	if not show_completion is bool:
+		return DataResult.failure("关卡完成状态显示必须为布尔值。")
 	return DataResult.success()
 
 

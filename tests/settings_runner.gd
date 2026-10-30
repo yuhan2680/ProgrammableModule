@@ -33,6 +33,7 @@ func _run() -> void:
 	_test_save_failure()
 	_test_code_hint_setting()
 	_test_assembly_free_zoom_setting()
+	_test_level_display_options()
 	_test_error_localization()
 	await _test_live_translation_and_panel()
 	await _test_navigation_row_corners()
@@ -183,7 +184,7 @@ func _test_live_translation_and_panel() -> void:
 		_check(settings.language == "en" and native.tr("离开游戏") == "Leave Game", "语言选项立即切换英文")
 		_check(native.text == "离开游戏", "原生控件保留中文源串，玩家数据不会被改写")
 		_check(not is_equal_approx(native.get_minimum_size().x, chinese_width), "原生Label收到翻译通知并重新排版")
-		_check(native.tr("开始游戏") == "Start Game" and native.tr("地图编辑器") == "Map Editor" and native.tr("设置") == "Settings", "开始页四个入口都有英文翻译")
+		_check(native.tr("开始游戏") == "Start Game" and native.tr("地图编辑器") == "Map Editor" and native.tr("选项") == "Options", "开始页四个入口都有英文翻译")
 		languages.select(0)
 		languages.item_selected.emit(0)
 		await process_frame
@@ -676,3 +677,60 @@ func _test_assembly_free_zoom_switch() -> void:
 		_check(label.atr(label.text) == "装配图尺寸自由缩放", "缩放标签可恢复中文")
 	panel.queue_free()
 	await process_frame
+
+
+## 关卡显示偏好覆盖旧文件只读兼容、独立组合、未知字段、原子拒绝及写盘失败即时生效。
+func _test_level_display_options() -> void:
+	var path := _test_root.path_join("level_display.json")
+	var settings := GameSettings.new(path)
+	_check(settings.level_show_author and settings.level_show_completion, "新设置对象默认显示关卡作者与完成状态")
+	_check(settings.load_settings().is_ok() and settings.level_show_author and settings.level_show_completion, "缺失配置默认显示关卡作者与完成状态")
+	_check(not FileAccess.file_exists(path), "载入关卡显示默认值不生成配置文件")
+	var legacy := {"format_version": 1, "audio": {"master_volume": 0.3, "future_device": "retain"}, "interface": {"language": "en", "tab_completion": false, "future_display": {"retain": true}}, "future": [1, 2]}
+	_write_text(path, JSON.stringify(legacy))
+	var legacy_bytes := FileAccess.get_file_as_bytes(path)
+	# JSON 数字读回为浮点值，与同样经过 JSON 解析的基线比较完整扩展结构。
+	var legacy_loaded: Dictionary = JSON.parse_string(legacy_bytes.get_string_from_utf8())
+	settings.level_show_author = false
+	settings.level_show_completion = false
+	_check(settings.load_settings().is_ok() and settings.level_show_author and settings.level_show_completion and settings.volume == 0.3 and settings.language == "en" and not settings.tab_completion, "旧文件缺显示字段时完整恢复开启默认值并保留其它偏好")
+	_check(FileAccess.get_file_as_bytes(path) == legacy_bytes, "旧关卡显示配置只读载入，不自动迁移或改写")
+	settings.changed.connect(_on_changed)
+	var changes_before := _changed_count
+	for values: Array in [[false, false], [false, true], [true, false], [true, true]]:
+		_check(settings.set_level_display_options(values[0], values[1]).is_ok(), "关卡显示的四种独立组合均可保存")
+		var reloaded := GameSettings.new(path)
+		_check(reloaded.load_settings().is_ok() and reloaded.level_show_author == values[0] and reloaded.level_show_completion == values[1], "关卡作者与完成状态跨模型完整往返，不混淆两个开关")
+	_check(_changed_count == changes_before + 4, "每次有效组合只发一次changed通知")
+	var saved: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path))
+	_check(saved.interface.level_show_author is bool and saved.interface.level_show_completion is bool, "两个关卡显示字段写成真实JSON布尔值")
+	_check(saved.future == legacy_loaded.future and saved.audio.future_device == legacy_loaded.audio.future_device and saved.interface.future_display == legacy_loaded.interface.future_display, "保存关卡显示保留顶层及已知分组中的未知扩展字段")
+	_check(settings.set_level_display_options(false, false).is_ok(), "非法输入测试先建立全部关闭的有效基线")
+	var before := FileAccess.get_file_as_bytes(path)
+	changes_before = _changed_count
+	for value: Variant in [0, 1, 0.0, "false", "true", null, [], {}]:
+		_check(not settings.set_level_display_options(value, true).is_ok() and not settings.level_show_author and not settings.level_show_completion, "作者参数无效时也不部分启用完成状态")
+		_check(not settings.set_level_display_options(true, value).is_ok() and not settings.level_show_author and not settings.level_show_completion, "完成状态参数无效时也不部分启用作者")
+	_check(FileAccess.get_file_as_bytes(path) == before and _changed_count == changes_before, "非法关卡显示输入既不写盘也不发送changed")
+	_check(not settings.last_error.is_empty(), "非法显示选项保留可显示的错误")
+	_check(settings.set_level_display_options(false, true).is_ok() and settings.last_error.is_empty(), "合法显示选择清除旧错误")
+	for field: String in ["level_show_author", "level_show_completion"]:
+		for value: Variant in [0, "false", null]:
+			var invalid_path := _test_root.path_join("invalid_%s_%s.json" % [field, str(value)])
+			var invalid := legacy.duplicate(true)
+			invalid.interface.level_show_author = false
+			invalid.interface.level_show_completion = false
+			invalid.interface[field] = value
+			_write_text(invalid_path, JSON.stringify(invalid))
+			var invalid_bytes := FileAccess.get_file_as_bytes(invalid_path)
+			var loaded := GameSettings.new(invalid_path)
+			_check(not loaded.load_settings().is_ok() and loaded.level_show_author and loaded.level_show_completion and loaded.volume == 1.0 and loaded.language == "zh_CN", "坏显示字段回退完整默认值，不部分载入另一开关或其它偏好")
+			_check(FileAccess.get_file_as_bytes(invalid_path) == invalid_bytes, "坏显示配置保持原始文件供排查")
+	var blocked := _test_root.path_join("level_display_blocked")
+	_write_text(blocked, "保留旧文件")
+	var unsaved := GameSettings.new(blocked.path_join("settings.json"))
+	unsaved.changed.connect(_on_changed)
+	changes_before = _changed_count
+	_check(not unsaved.set_level_display_options(false, false).is_ok() and not unsaved.level_show_author and not unsaved.level_show_completion, "写盘失败仍保留本次关闭的作者与完成状态")
+	_check(_changed_count == changes_before + 1 and not unsaved.last_error.is_empty(), "显示偏好保存失败仍一次通知界面并返回错误")
+	_check(FileAccess.get_file_as_string(blocked) == "保留旧文件", "显示偏好保存失败不覆盖阻挡路径的原文件")

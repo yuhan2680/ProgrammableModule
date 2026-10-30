@@ -61,7 +61,7 @@ func _test_dictionary_completeness() -> void:
 	for source: String in GameI18n.NATIVE_MENU_CHINESE:
 		_check(GameI18nHK.NATIVE_MENU.has(source) and not str(GameI18nHK.NATIVE_MENU.get(source, "")).is_empty(), "香港原生菜单覆盖：" + source)
 	TranslationServer.set_locale("zh_HK")
-	for pair: Array in [["开始游戏", "開始遊戲"], ["地图编辑器", "地圖編輯器"], ["设置", "設定"], ["雷达模块", "雷達模組"]]:
+	for pair: Array in [["开始游戏", "開始遊戲"], ["地图编辑器", "地圖編輯器"], ["选项", "選項"], ["雷达模块", "雷達模組"]]:
 		_check(str(TranslationServer.translate(pair[0])) == pair[1], "香港静态界面显示地区译文：" + pair[0])
 	for source: String in GameI18nHK.MESSAGES:
 		_check(str(TranslationServer.translate(source)) == GameI18nHK.MESSAGES[source], "香港语言实际资源与静态词典一致：" + source)

@@ -32,6 +32,8 @@ func _run() -> void:
 	await _test_search_focus_inputs()
 	await _test_matching_and_state()
 	await _test_sorting_and_state()
+	await _test_display_options()
+	await _test_menu_hover()
 	for dimensions: Vector2i in [Vector2i(1280, 800), Vector2i(1000, 740)]:
 		root.size = dimensions
 		for locale: String in ["zh_CN", "en"]:
@@ -162,6 +164,7 @@ func _add_import(identity: String, title: String) -> void:
 	imported.display_name = title
 	var level_properties: Dictionary = imported.properties.get("level", {})
 	level_properties["description"] = "仅说明隐藏词 description_only_marker"
+	level_properties["creator"] = "Muna_" + identity
 	imported.properties["level"] = level_properties
 	_check(MapCodec.save_file(imported, _game.user_levels_directory.path_join(identity + ".json"), _game.registry).is_ok(), "搜索导入夹具保存成功：" + identity)
 
@@ -319,6 +322,269 @@ func _test_sorting_and_state() -> void:
 	await _settle()
 
 
+## 显示开关只改变同一批卡片的可见信息，鼠标和键盘操作均保持搜索、排序及真实存档。
+func _test_display_options() -> void:
+	for identity in ["level_001", "a_import"]:
+		_check(_game.drafts.mark_completed(identity).is_ok(), "显示夹具写入独立完成状态：" + identity)
+	_check(_game.drafts.save_draft("a_import", "// 作者和完成标记仅影响显示\nmain() {}\n", []).is_ok(), "显示夹具保留独立代码及空装配草稿")
+	_game._show_level_page()
+	await _settle()
+	await _activate(_button("TutorialToggleButton"), "显示回归保留全部教学展开")
+	await _activate(_button("LevelMoreButton"), "显示回归先启用真实完成状态排序")
+	await create_timer(0.24).timeout
+	await _activate(_button("LevelSortMenuItem"), "显示回归展开排序")
+	await _activate(_button("LevelSortUncompletedMenuItem"), "显示回归按未通关优先")
+	var header := _game._level_header
+	header.set_search_open(true, false)
+	_set_query(" ")
+	await _settle()
+	var tutorial_order := _grid_level_ids("LevelGrid")
+	var player_order := _grid_level_ids("ImportedLevelGrid")
+	var player := _card_by_id("a_import").get_parent() as Control
+	var author := player.get_node("LevelCardCaption") as Label
+	var completed := player.get_node("PlayerLevelCompleted") as Label
+	var tutorial := _card_by_id("level_001").get_parent().get_node("LevelCardCaption") as Label
+	var author_text := author.text
+	var completion_text := completed.text
+	var data_before := _display_data_snapshot()
+	var menu := header._actions_menu
+	var changes: Array = []
+	var record_change := func(show_author: bool, show_completion: bool) -> void: changes.append([show_author, show_completion])
+	menu.display_changed.connect(record_change)
+	_check(_game.settings.level_show_author and _game.settings.level_show_completion and author.is_visible_in_tree() and completed.is_visible_in_tree() and tutorial.is_visible_in_tree() and author_text.contains("Muna_a_import"), "两项显示默认开启，玩家署名和两类完成标记均使用真实数据")
+	await _open_display_menu(false)
+	_check_display_marks(true, true)
+	await _click_at(_button("LevelShowAuthorMenuItem").get_global_rect().get_center())
+	_check(not menu.is_open() and changes == [[false, true]] and not author.visible and completed.visible and tutorial.visible, "鼠标关闭作者仅隐藏整条玩家信息并立即关菜单，完成标记不受影响")
+	_check(_card_by_id("a_import").get_parent() == player and player.get_node("LevelCardCaption") == author and author.text == author_text, "显示切换复用原卡片和署名节点，不清空作者原文")
+	await _open_display_menu(true)
+	_check_display_marks(false, true)
+	_key(KEY_DOWN)
+	await _settle()
+	_check(_button("LevelShowCompletionMenuItem").has_focus(), "显示子菜单方向键定位第二个独立选项")
+	_key(KEY_ENTER)
+	await _settle()
+	_check(not menu.is_open() and changes == [[false, true], [false, false]] and not author.visible and not completed.visible and not tutorial.visible, "键盘关闭完成后教学与玩家标记立即隐藏，作者仍独立关闭")
+	_check(_card_by_id("a_import").get_parent() == player and player.get_node("PlayerLevelCompleted") == completed and completed.text == completion_text, "隐藏完成状态保留原节点与真实完成文案")
+	_check(header.get_query() == " " and header._search_open and _game._tutorials_expanded and _game._unfinished_first and _grid_level_ids("LevelGrid") == tutorial_order and _grid_level_ids("ImportedLevelGrid") == player_order, "隐藏信息不重排卡片、不收起搜索或教学，也不改变未通关优先状态")
+	_check(player_order == ["b_import", "c_import", "a_import"] and tutorial_order.back() == "level_001", "隐藏完成标记后已完成关卡仍按真实进度排在后面")
+	var restored := GameSettings.new(_game.settings_path)
+	_check(restored.load_settings().is_ok() and not restored.level_show_author and not restored.level_show_completion, "独立设置模型从磁盘恢复两项关闭偏好")
+	_set_query("练习")
+	await _settle()
+	_expect_ids(["a_import", "b_import"], "隐藏署名后搜索仍匹配关卡原始名称")
+	await _activate(_button("LevelMoreButton"), "关闭显示信息后刷新目录")
+	await create_timer(0.24).timeout
+	await _activate(_button("LevelRefreshMenuItem"), "实际刷新保留显示偏好")
+	_check(_game._level_header == header and header.get_query() == "练习" and _game._tutorials_expanded and _game._unfinished_first and _grid_level_ids("ImportedLevelGrid") == player_order, "刷新保留查询、展开和排序，隐藏信息不影响真实目录")
+	_check(not _card_by_id("a_import").get_parent().get_node("LevelCardCaption").visible and not _card_by_id("a_import").get_parent().get_node("PlayerLevelCompleted").visible and not _card_by_id("level_001").get_parent().get_node("LevelCardCaption").visible, "刷新创建的卡片继续遵守两项关闭偏好")
+	await _activate(_button("LevelBackButton"), "显示回归实际返回开始页面")
+	await _activate(_button("StartGameButton"), "再次进入关卡列表恢复显示偏好")
+	var deadline := Time.get_ticks_msec() + 5000
+	while _game._menu_transitioning and Time.get_ticks_msec() < deadline:
+		await process_frame
+	await _settle()
+	_check(not _game._menu_transitioning and _game.page == GameShell.Page.LEVELS and header.get_query() == "练习" and _game._tutorials_expanded and _game._unfinished_first, "真实页面往返保留搜索、展开及排序状态")
+	_check(not _card_by_id("a_import").get_parent().get_node("LevelCardCaption").visible and not _card_by_id("a_import").get_parent().get_node("PlayerLevelCompleted").visible, "返回列表后作者与完成信息仍隐藏")
+	await _open_display_menu(false)
+	_check_display_marks(false, false)
+	await _click_at(_button("LevelShowAuthorMenuItem").get_global_rect().get_center())
+	author = _card_by_id("a_import").get_parent().get_node("LevelCardCaption") as Label
+	completed = _card_by_id("a_import").get_parent().get_node("PlayerLevelCompleted") as Label
+	_check(author.visible and author.text == author_text and not completed.visible and changes.back() == [true, false], "单独恢复作者立即显示原署名，完成选项保持关闭")
+	await _open_display_menu(true)
+	_check_display_marks(true, false)
+	_key(KEY_DOWN)
+	_key(KEY_ENTER)
+	await _settle()
+	_check(not menu.is_open() and author.visible and completed.visible and completed.text == completion_text and changes == [[false, true], [false, false], [true, false], [true, true]], "再次键盘确认恢复完成标记，每次操作仅发一次完整独立状态")
+	_check(_display_data_snapshot() == data_before, "显示、刷新、排序和返回不改变地图原件、作者、代码装配草稿及完成记录字节")
+	menu.display_changed.disconnect(record_change)
+	header.set_search_open(false, false)
+	await _settle()
+	await _activate(_button("TutorialToggleButton"), "显示回归恢复教学折叠")
+	await _activate(_button("LevelMoreButton"), "显示回归恢复原排序")
+	await create_timer(0.24).timeout
+	await _activate(_button("LevelSortMenuItem"), "显示回归打开默认排序")
+	await _activate(_button("LevelSortDefaultMenuItem"), "显示回归恢复默认顺序")
+	for identity in ["level_001", "a_import"]:
+		DirAccess.remove_absolute(_game.drafts._path(identity, "progress"))
+	DirAccess.remove_absolute(_game.drafts._path("a_import", "draft"))
+	_game._show_level_page()
+	await _settle()
+
+
+## 真实指针停留只展开分支；跨层、取消及静止等待不提交排序、设置或底层卡片操作。
+func _test_menu_hover() -> void:
+	var menu := _game._level_header._actions_menu
+	var main_panel := _game.find_child("LevelActionsPanel", true, false) as Control
+	var sort_panel := _game.find_child("LevelSortPanel", true, false) as Control
+	var display_panel := _game.find_child("LevelDisplayPanel", true, false) as Control
+	var sort_item := _button("LevelSortMenuItem")
+	var display_item := _button("LevelDisplayMenuItem")
+	var refresh_item := _button("LevelRefreshMenuItem")
+	var settings_before := FileAccess.get_file_as_bytes(_game.settings_path)
+	var data_before := _display_data_snapshot()
+	var tutorial_order := _grid_level_ids("LevelGrid")
+	var player_order := _grid_level_ids("ImportedLevelGrid")
+	var sort_before := _game._unfinished_first
+	var author_before := _game.settings.level_show_author
+	var completion_before := _game.settings.level_show_completion
+	var signals: Array = []
+	var on_refresh := func() -> void: signals.append(["refresh"])
+	var on_sort := func(enabled: bool) -> void: signals.append(["sort", enabled])
+	var on_display := func(author: bool, completion: bool) -> void: signals.append(["display", author, completion])
+	menu.refresh_requested.connect(on_refresh)
+	menu.sort_changed.connect(on_sort)
+	menu.display_changed.connect(on_display)
+	await _click_at(_button("LevelMoreButton").get_global_rect().get_center())
+	await create_timer(0.24).timeout
+	_check(menu.is_open() and not sort_panel.visible and not display_panel.visible, "打开更多菜单不会因默认键盘焦点自行展开分支")
+
+	# 短暂经过后离开，等待超过展开延迟，防止迟到回调把已离开的分支打开。
+	_move_pointer(sort_item.get_global_rect().get_center())
+	_check(not sort_panel.visible, "指针进入排序行时不会零延迟弹出二级菜单")
+	await create_timer(0.03).timeout
+	_move_pointer(refresh_item.get_global_rect().get_center())
+	await create_timer(0.28).timeout
+	_check(not sort_panel.visible and not display_panel.visible, "快速掠过排序行再离开不会迟到展开")
+	_move_pointer(sort_item.get_global_rect().get_center())
+	await create_timer(0.28).timeout
+	_check(menu.is_open() and sort_panel.is_visible_in_tree() and not display_panel.visible, "仅停留排序行便自动展开排序，无需点击")
+	_key(KEY_UP)
+	await _settle()
+	_check(_button("LevelSortUncompletedMenuItem").has_focus(), "悬停展开后首次向上进入子菜单末项")
+	_key(KEY_DOWN)
+	await _settle()
+	_check(_button("LevelSortDefaultMenuItem").has_focus(), "悬停与键盘衔接后方向键继续循环导航")
+	if sort_panel.is_visible_in_tree():
+		var main_rect := main_panel.get_global_rect()
+		var submenu_rect := sort_panel.get_global_rect()
+		var gap := Vector2((submenu_rect.end.x + main_rect.position.x) * 0.5, sort_item.get_global_rect().get_center().y)
+		_check(not main_rect.has_point(gap) and not submenu_rect.has_point(gap), "回归指针实际经过主菜单与左侧子菜单的间隔")
+		_move_pointer(gap)
+		await create_timer(0.28).timeout
+		_check(sort_panel.is_visible_in_tree(), "指针停在主菜单到子菜单之间的小间隔时保持分支")
+		_move_pointer(_button("LevelSortUncompletedMenuItem").get_global_rect().get_center())
+		await create_timer(0.28).timeout
+		_check(sort_panel.is_visible_in_tree() and not display_panel.visible, "指针进入二级选项后菜单持续显示且没有触发选择")
+
+	_move_pointer(display_item.get_global_rect().get_center())
+	await create_timer(0.40).timeout
+	_check(display_panel.is_visible_in_tree() and not sort_panel.visible, "移到显示内容并停留会切换分支，不叠开两份子菜单")
+	_move_pointer(_button("LevelShowCompletionMenuItem").get_global_rect().get_center())
+	await create_timer(0.28).timeout
+	_check(display_panel.is_visible_in_tree(), "悬停显示子项不收起菜单也不切换勾选")
+	_move_pointer(display_item.get_global_rect().get_center())
+	await _settle()
+	_key(KEY_ESCAPE)
+	await create_timer(0.30).timeout
+	_check(menu.is_open() and not display_panel.visible and not sort_panel.visible, "Esc 关闭子层后指针静止在原入口不会自动重开")
+	_move_pointer(refresh_item.get_global_rect().get_center())
+	await _settle()
+	_move_pointer(display_item.get_global_rect().get_center())
+	await create_timer(0.28).timeout
+	_check(display_panel.is_visible_in_tree(), "Esc 后移离再重新进入显示行仍可正常悬停展开")
+	_key(KEY_ESCAPE)
+	_key(KEY_ESCAPE)
+	await create_timer(0.30).timeout
+	_check(not menu.is_open() and not display_panel.is_visible_in_tree() and not sort_panel.is_visible_in_tree(), "连续 Esc 关闭整组菜单后没有残留分支或迟到重开")
+
+	await _click_at(_button("LevelMoreButton").get_global_rect().get_center())
+	await create_timer(0.24).timeout
+	_move_pointer(sort_item.get_global_rect().get_center())
+	_key(KEY_ESCAPE)
+	await create_timer(0.30).timeout
+	_check(not menu.is_open() and not sort_panel.is_visible_in_tree(), "等待悬停展开期间关闭菜单会取消待处理动作")
+	await _click_at(_button("LevelMoreButton").get_global_rect().get_center())
+	await create_timer(0.24).timeout
+	_move_pointer(display_item.get_global_rect().get_center())
+	await create_timer(0.28).timeout
+	await _click_at(_card_by_id("level_001").get_global_rect().get_center())
+	await create_timer(0.28).timeout
+	_check(not menu.is_open() and _game.page == GameShell.Page.LEVELS, "悬停子菜单打开后外部完整点击只关菜单，不穿透进入关卡")
+	_check(signals.is_empty(), "悬停、跨层、Esc 和外部关闭均不发刷新、排序或显示选择信号")
+	_check(_game._unfinished_first == sort_before and _game.settings.level_show_author == author_before and _game.settings.level_show_completion == completion_before, "悬停浏览保持原排序及两个独立显示偏好")
+	_check(_grid_level_ids("LevelGrid") == tutorial_order and _grid_level_ids("ImportedLevelGrid") == player_order, "悬停浏览不重排教学或玩家卡片")
+	_check(FileAccess.get_file_as_bytes(_game.settings_path) == settings_before and _display_data_snapshot() == data_before, "悬停浏览不改写本机设置、地图、作者、进度或草稿字节")
+
+	# 悬停展开后仍由真实点击提交一次选择；再用键盘逐级浏览，确保输入方式可交替使用。
+	await _click_at(_button("LevelMoreButton").get_global_rect().get_center())
+	await create_timer(0.24).timeout
+	_move_pointer(sort_item.get_global_rect().get_center())
+	await create_timer(0.28).timeout
+	if sort_panel.is_visible_in_tree():
+		await _click_at(_button("LevelSortUncompletedMenuItem" if sort_before else "LevelSortDefaultMenuItem").get_global_rect().get_center())
+	_check(not menu.is_open() and signals == [["sort", sort_before]], "悬停展开后单次点击当前排序正常提交一次并收起")
+	_button("LevelMoreButton").grab_focus()
+	_key(KEY_ENTER)
+	await create_timer(0.24).timeout
+	_key(KEY_DOWN)
+	_key(KEY_DOWN)
+	_key(KEY_RIGHT)
+	await _settle()
+	_check(display_panel.is_visible_in_tree() and _button("LevelShowAuthorMenuItem").has_focus(), "鼠标悬停操作之后仍可使用方向键打开显示分支")
+	_key(KEY_ESCAPE)
+	_key(KEY_ESCAPE)
+	await create_timer(0.28).timeout
+	_check(not menu.is_open() and signals == [["sort", sort_before]], "键盘关闭不会继承旧指针目标再次展开或额外提交")
+	menu.refresh_requested.disconnect(on_refresh)
+	menu.sort_changed.disconnect(on_sort)
+	menu.display_changed.disconnect(on_display)
+	_move_pointer((_game.find_child("LevelBrowserTitle", true, false) as Control).get_global_rect().get_center())
+	await _settle()
+
+
+## 仅发送视口变换后的真实移动事件，不发射节点信号或直接调用菜单展开函数。
+func _move_pointer(point: Vector2) -> void:
+	var motion := InputEventMouseMotion.new()
+	motion.position = root.get_final_transform() * point
+	motion.global_position = motion.position
+	Input.parse_input_event(motion)
+
+
+## 用完整鼠标或从更多入口开始的方向键导航进入显示分支，不直接调用菜单内部动作。
+func _open_display_menu(keyboard: bool) -> void:
+	if keyboard:
+		_button("LevelMoreButton").grab_focus()
+		_key(KEY_ENTER)
+		await create_timer(0.24).timeout
+		_key(KEY_DOWN)
+		_key(KEY_DOWN)
+		_key(KEY_RIGHT)
+		await _settle()
+	else:
+		await _click_at(_button("LevelMoreButton").get_global_rect().get_center())
+		await create_timer(0.24).timeout
+		await _click_at(_button("LevelDisplayMenuItem").get_global_rect().get_center())
+	_check(_game._level_header._actions_menu._display_open and _button("LevelShowAuthorMenuItem").has_focus(), "真实输入进入显示分支且焦点位于作者选项")
+
+
+## 勾选同时核验按钮语义和实际左侧标记，不用隐藏的按钮文字代替可见标签。
+func _check_display_marks(show_author: bool, show_completion: bool) -> void:
+	var menu := _game._level_header._actions_menu
+	for index in 2:
+		var item := menu._display_options[index]
+		var mark := menu._display_marks[index]
+		var caption := item.get_node("MenuCaption") as Label
+		var expected := show_author if index == 0 else show_completion
+		_check(item.button_pressed == expected and mark.visible == expected and item.icon == null and mark.get_global_rect().end.x <= caption.global_position.x, "显示选项使用独立左勾表达当前状态：" + str(item.name))
+
+
+## 快照读取地图原件和本轮草稿目录，设置文件单独持久化不包含在不可改写的数据内。
+func _display_data_snapshot() -> Dictionary:
+	var snapshot: Dictionary = {}
+	for definition: LevelDefinition in _game.catalog.levels:
+		snapshot[definition.source_path] = FileAccess.get_file_as_bytes(definition.source_path)
+		snapshot["document:" + definition.id] = definition.document.to_dict()
+	for identity: String in ["level_001", "a_import"]:
+		for kind: String in ["draft", "progress"]:
+			var path := _game.drafts._path(identity, kind)
+			if FileAccess.file_exists(path):
+				snapshot[path] = FileAccess.get_file_as_bytes(path)
+	return snapshot
+
+
 ## 按网格的真实子节点顺序读取关卡，略过导入入口与占位控件。
 func _grid_level_ids(grid_name: String, visible_only: bool = false) -> Array[String]:
 	var result: Array[String] = []
@@ -442,15 +708,20 @@ func _assert_menu_geometry(context: String) -> void:
 		_check(absf(bounds.end.x - before.end.x) < 1.0 and absf(bounds.position.y - before.end.y - 8.0) < 1.0, "二级菜单右对齐更多按钮并向下间隔 8 像素 " + context)
 		_check(not bounds.intersects(before) and more.get_global_rect().is_equal_approx(before), "二级菜单悬浮显示，不遮挡或推移更多入口 " + context)
 		var refresh := _button("LevelRefreshMenuItem")
-		var imported := _button("LevelImportMenuItem")
 		var sort := _button("LevelSortMenuItem")
-		for item in [refresh, imported, sort]:
-			_check(item != null and item.is_visible_in_tree() and bounds.encloses(item.get_global_rect()) and item.icon != null, "菜单文字与 SVG 图标处于面板内 " + context)
-		_check(not refresh.get_global_rect().intersects(imported.get_global_rect()) and not imported.get_global_rect().intersects(sort.get_global_rect()), "三行菜单操作互不重叠 " + context)
+		var display := _button("LevelDisplayMenuItem")
+		_check(_button("LevelImportMenuItem") == null and _button("ImportLevelButton") != null, "更多菜单移除重复导入，列表加号仍提供导入入口 " + context)
+		for item in [refresh, sort, display]:
+			_check(item != null and item.is_visible_in_tree() and bounds.encloses(item.get_global_rect()) and item.icon == null, "菜单项目为完整可见的纯文字按钮 " + context)
+			if item == null:
+				continue
+			var caption := item.get_node("MenuCaption") as Label
+			_check(caption.is_visible_in_tree() and caption.text == item.text and caption.get_theme_color("font_color").a > 0.9 and item.get_global_rect().encloses(caption.get_global_rect()) and caption.get_line_count() <= caption.get_visible_line_count(), "独立菜单标签完整显示实际可访问名称 " + context)
+		_check(not refresh.get_global_rect().intersects(sort.get_global_rect()) and not sort.get_global_rect().intersects(display.get_global_rect()), "三行菜单操作互不重叠 " + context)
 		var english := TranslationServer.get_locale().begins_with("en")
 		_check(TranslationServer.translate(refresh.text) == ("Refresh" if english else "刷新"), "刷新菜单项目随当前语言翻译 " + context)
-		_check(TranslationServer.translate(imported.text) == ("Import Level" if english else "导入关卡"), "导入菜单项目随当前语言翻译 " + context)
 		_check(TranslationServer.translate(sort.text) == ("Sort Order" if english else "排列方式"), "排序菜单项目随当前语言翻译 " + context)
+		_check(TranslationServer.translate(display.text) == ("Display Content" if english else "显示内容"), "显示菜单项目随当前语言翻译 " + context)
 	await _activate(_button("LevelSortMenuItem"), "展开排列方式检查边界 " + context)
 	await create_timer(0.24).timeout
 	var submenu := _game.find_child("LevelSortPanel", true, false) as Control
@@ -460,6 +731,9 @@ func _assert_menu_geometry(context: String) -> void:
 		for item_name in ["LevelSortDefaultMenuItem", "LevelSortUncompletedMenuItem"]:
 			var item := _button(item_name)
 			_check(item != null and item.is_visible_in_tree() and submenu.get_global_rect().encloses(item.get_global_rect()), "排序单选项目完整可见 " + context)
+			var mark := item.get_node("SortCheckmark") as Label
+			var caption := item.get_node("MenuCaption") as Label
+			_check(item.icon == null and mark.visible == item.button_pressed and mark.get_global_rect().end.x <= caption.global_position.x, "排序使用与单选状态一致的左侧勾号 " + context)
 	for close_submenu in [true, false]:
 		for pressed in [true, false]:
 			var escape := InputEventKey.new()

@@ -149,6 +149,8 @@ func start_example(document: MapDocument, content: ContentRegistry) -> DataResul
 
 数据流由 `LevelCatalog → LevelDefinition → AssemblyModel + 程序源文本 → GameSession` 组织。关卡页的加号和页头菜单共用 `FileDialog` 原生文件选择器，`ACCESS_FILESYSTEM`、单文件打开、JSON 筛选，默认使用系统 Downloads 目录。选中文件后 `PlayerLevelStore.import_file()` 先通过 `MapCodec` 与 `LevelDefinition` 校验，再复用原子托管保存生成独立副本。取消不写盘；原生选择期间抑制窗口重新获焦的目录刷新，避免选择回调前重建页面。成功刷新列表，不再显示手动复制提示。
 
+`LevelActionsMenu` 的主菜单包含刷新、排列方式、显示内容；排序与显示分别使用独立二级玻璃面板，左侧中性勾号表示选择。主行鼠标驻留 0.15 秒展开对应分支，斜向跨行进入已开子菜单时短暂保留原分支，菜单间隙不触发关闭；关闭、按键或离开目标会取消待展开状态。悬停只浏览，选择仍由点击或键盘提交。菜单缓存文本布局，仅字体、翻译、可用宽度变化时重新测量；稳定帧不重复排版与上传玻璃尺寸参数，入口或视口变动仍更新定位。显示作者信息与显示是否完成是互不排斥的开关，`LevelBrowserHeader.display_changed` 将明确的两项状态交给 Shell，`GameSettings` 把 `interface.level_show_author` / `level_show_completion` 默认设为 true 并独立保存，旧配置缺省开启且读取不写盘。Shell 仅切换原卡片说明节点的可见性，刷新、返回和重启后沿用偏好；用户作者文字、完成存档、排序和搜索结果不变。更多菜单不再提供导入，玩家分类的＋入口继续使用原生选择器。界面设置入口和相应页标题统一使用「选项」，五语词典提供对应本土化。
+
 玩家与教学分类分别保存当前会话的展开偏好，默认只展示首排七项（玩家导入卡占一项），搜索临时展示全部匹配结果，刷新与排序保留偏好。`PlayerLevelContextMenu` 发出重命名、打开目录与删除信号，不直接操作文件；`LevelCatalog` 校验当前目录快照与路径归属。重命名由 `GameShell` 在原 `LevelCardTitle` 上临时覆盖等宽 `LineEdit`，标题保留占位而隐藏自身字形，因此长文本不撑宽网格。只在 Enter 提交时调用 `LevelCatalog.rename_user_level()`；Esc、空白点击、焦点转移及页面重建销毁临时输入，恢复原名。中文输入法及文本右键菜单保持原生行为，旧输入回调绑定控件身份，不能提交后续编辑。`validate_player_level_name()` 供 UI 与落盘入口共同使用，接受 1 到 30 个 Unicode 文字、十进制数字、下划线和连字符，拒绝空白、其他符号、emoji 及不可见填充字符；不改变旧地图格式的名称加载规则。失败只在原位标红并更新悬停说明。落盘前仍重新核对文件字节，再仅更新显示名并原子写盘，不改 ID、路径及其他字段。打开目录返回真实玩家文件夹的绝对路径，由 UI 调用系统资源管理器；教程和过期目标不可操作。
 
 教学卡片的 `LevelCardCaption` 在未通关时为空且隐藏，通关后仅显示本土化完成标记；玩家卡片继续独立显示署名与完成状态。

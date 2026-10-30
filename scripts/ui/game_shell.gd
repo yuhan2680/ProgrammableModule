@@ -221,6 +221,7 @@ func _ready() -> void:
 		drafts = GameDraftStore.new(drafts_directory)
 		_runtime_storage_ready = true
 	settings.changed.connect(_remember_profile_hint_mode)
+	settings.changed.connect(_update_level_display_options)
 	_profile_tracker = PlayerAttemptTracker.new(profile_clock)
 	_activity_tracker = PlayerActivityTracker.new(profile_clock)
 	_shark_best_score = int(profile.get_statistics().shark_best_score)
@@ -660,7 +661,7 @@ func _build_ui() -> void:
 	_level_header.name = "LevelBrowserHeader"
 	_level_header.back_requested.connect(_go_back)
 	_level_header.refresh_requested.connect(_refresh_levels)
-	_level_header.import_requested.connect(_import_levels)
+	_level_header.display_changed.connect(_on_level_display_changed)
 	_level_header.sort_changed.connect(_on_level_sort_changed)
 	_level_header.query_changed.connect(_on_level_search_changed)
 	layout.add_child(_level_header)
@@ -905,7 +906,7 @@ func _show_main_page() -> void:
 	_add_menu_button(menu, "开始游戏", "StartGameButton", _open_page_from_main.bind(Page.LEVELS))
 	_add_menu_button(menu, "地图编辑器", "MapEditorButton", _open_page_from_main.bind(Page.EDITOR))
 	var leave := _add_menu_button(panel, "离开游戏", "LeaveGameButton", _request_quit)
-	var preferences := _add_menu_button(panel, "设置", "SettingsButton", _open_settings_from_main)
+	var preferences := _add_menu_button(panel, "选项", "SettingsButton", _open_settings_from_main)
 	for button in [leave, preferences]:
 		button.custom_minimum_size = Vector2(150, 48)
 		GameTheme.font_size(button, "font_size", 16)
@@ -1150,7 +1151,7 @@ func _show_settings_page() -> void:
 	_back_button.show()
 	_help_button.hide()
 	_refresh_button.hide()
-	_title.text = "设置"
+	_title.text = "选项"
 	GameTheme.font_size(_title, "font_size", 22)
 	_subtitle.hide()
 	_save_label.text = ""
@@ -1572,6 +1573,7 @@ func _show_level_page() -> void:
 	_header.hide()
 	_level_header.set_active(true)
 	_level_header.set_sort_enabled(_unfinished_first)
+	_level_header.set_display_options(settings.level_show_author, settings.level_show_completion)
 	_back_button.text = "← 开始页面"
 	_back_button.show()
 	_help_button.hide()
@@ -1657,6 +1659,7 @@ func _show_level_page() -> void:
 			_player_entries.append(_add_level_card(imported_grid, definition, index))
 	_apply_level_order()
 	_update_tutorial_section()
+	_update_level_display_options()
 	_layout_page_content.call_deferred()
 
 
@@ -1835,6 +1838,33 @@ func _on_level_sort_changed(enabled: bool) -> void:
 	_on_level_search_changed(_level_header.get_query())
 
 
+## 显示选择立即更新已有卡片并写入界面偏好，不改作者、通关记录或排序。
+func _on_level_display_changed(show_author: bool, show_completion: bool) -> void:
+	if page != Page.LEVELS:
+		return
+	var result := settings.set_level_display_options(show_author, show_completion)
+	if not result.is_ok():
+		_show_message("设置保存失败", GameI18n.translate_errors(result.errors))
+
+
+## 仅切换说明节点的可见性，保留搜索焦点、展开状态以及当前关卡控件。
+func _update_level_display_options() -> void:
+	if not is_instance_valid(_level_header):
+		return
+	_level_header.set_display_options(settings.level_show_author, settings.level_show_completion)
+	if page != Page.LEVELS:
+		return
+	for entry in _level_entries:
+		var definition: LevelDefinition = entry.definition
+		var card: Control = entry.control
+		var is_player := not definition.source_path.begins_with("res://data/levels/")
+		var caption := card.get_node("LevelCardCaption") as Label
+		caption.visible = settings.level_show_author if is_player else settings.level_show_completion and drafts.is_completed(definition.id)
+		var completed := card.get_node_or_null("PlayerLevelCompleted") as Label
+		if completed != null:
+			completed.visible = settings.level_show_completion
+
+
 ## 圆角方形卡片呈现关卡入口，完成标记仍从独立草稿存储读取。
 func _add_level_card(parent: Node, definition: LevelDefinition, index: int) -> Control:
 	var column := VBoxContainer.new()
@@ -1964,7 +1994,7 @@ func _delete_player_level(definition: LevelDefinition) -> void:
 		new_scroll.set_deferred("scroll_vertical", scroll_value)
 
 
-## 导入卡片和页头菜单共用系统文件选择入口。
+## 玩家关卡加号卡片打开系统文件选择入口。
 func _add_import_card(parent: Node) -> void:
 	var column := VBoxContainer.new()
 	column.custom_minimum_size.x = LEVEL_COLUMN_MIN_WIDTH
@@ -2899,11 +2929,11 @@ func _show_code_colors_page() -> void:
 	page = Page.CODE_COLORS
 	_ensure_menu_card()
 	_main_background.set_active(true)
-	_set_level_navigation(true, "返回设置")
+	_set_level_navigation(true, "返回选项")
 	_back_button.show()
 	_help_button.hide()
 	_refresh_button.hide()
-	_title.text = "设置"
+	_title.text = "选项"
 	GameTheme.font_size(_title, "font_size", 22)
 	_subtitle.hide()
 	_save_label.hide()
@@ -2927,7 +2957,7 @@ func _show_player_profile_page() -> void:
 	page = Page.PLAYER_PROFILE
 	_ensure_menu_card()
 	_main_background.set_active(true)
-	_set_level_navigation(true, "返回设置")
+	_set_level_navigation(true, "返回选项")
 	_back_button.show()
 	_help_button.hide()
 	_refresh_button.hide()
@@ -2999,11 +3029,11 @@ func _show_player_level_list_page() -> void:
 	page = Page.PLAYER_LEVEL_LIST
 	_ensure_menu_card()
 	_main_background.set_active(true)
-	_set_level_navigation(true, "返回设置")
+	_set_level_navigation(true, "返回选项")
 	_back_button.show()
 	_help_button.hide()
 	_refresh_button.hide()
-	_title.text = "设置"
+	_title.text = "选项"
 	GameTheme.font_size(_title, "font_size", 22)
 	_subtitle.hide()
 	_save_label.hide()

@@ -64,7 +64,7 @@ func _test_dictionary_completeness() -> void:
 	for source: String in GameI18n.NATIVE_MENU_CHINESE:
 		_check(GameI18nES.NATIVE_MENU.has(source) and not str(GameI18nES.NATIVE_MENU.get(source, "")).is_empty(), "西语原生菜单覆盖：" + source)
 	TranslationServer.set_locale("es")
-	for pair: Array in [["开始游戏", "Iniciar juego"], ["地图编辑器", "Editor de mapas"], ["设置", "Ajustes"], ["雷达模块", "Módulo de radar"]]:
+	for pair: Array in [["开始游戏", "Iniciar juego"], ["地图编辑器", "Editor de mapas"], ["选项", "Opciones"], ["雷达模块", "Módulo de radar"]]:
 		_check(str(TranslationServer.translate(pair[0])) == pair[1], "西语静态界面显示地区译文：" + pair[0])
 	for source: String in GameI18nES.MESSAGES:
 		_check(str(TranslationServer.translate(source)) == GameI18nES.MESSAGES[source], "西语语言实际资源与静态词典一致：" + source)

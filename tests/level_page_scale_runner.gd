@@ -17,7 +17,7 @@ func _run() -> void:
 	_original_mute = AudioServer.is_bus_mute(master)
 	root.gui_embed_subwindows = true
 	create_timer(90.0).timeout.connect(_timeout)
-	for path: String in ["navigation_back", "navigation_forward", "search", "search_collapse", "more", "refresh", "import_level", "sort"]:
+	for path: String in ["navigation_back", "navigation_forward", "search", "search_collapse", "more"]:
 		_svg_sources[path] = load("res://assets/ui/" + path + ".svg")
 	await _create_game()
 	_set_platform("Windows")
@@ -92,6 +92,11 @@ func _check_level_size(dimensions: Vector2i) -> void:
 		_check(_game._level_header._title.get_theme_font_size("font_size") == roundi(22 * percentage / 100.0), "UHD 高档文字比例应用真实字号 " + context + " " + str(percentage))
 		for grid: GridContainer in _game._level_grids:
 			_check(grid.columns == 7 and grid.get_global_rect().end.x <= root.get_visible_rect().end.x + 1.0, "UHD 高档文字仍保持七列横向边界 " + context + " " + str(percentage))
+		for language: String in (["zh_CN", "zh_HK", "es", "en", "ja"] if percentage == 200 else ["zh_CN"]):
+			_game.settings.set_language(language)
+			await _settle(8)
+			await _check_display_menu(menu_factor, context + " " + language + " " + str(percentage))
+	_game.settings.set_language("zh_CN")
 	_game.settings.set_ui_scale(125)
 	await _settle(12)
 	await _check_expansion(context)
@@ -157,11 +162,16 @@ func _check_header_and_menus(factor: float, context: String) -> void:
 		_check(actions._overlay.get_global_rect().is_equal_approx(root.get_visible_rect()), "放大更多菜单的遮挡层仍精确覆盖视口 " + context)
 		_check(root.get_visible_rect().grow(1).encloses(actions._panel.get_global_rect()), "更多菜单完整留在真实画幅内 " + context)
 		_check(absf(actions._panel.get_global_rect().end.x - more_bounds.end.x) <= 1.0 and actions._panel.get_global_rect().position.y >= more_bounds.end.y, "独立更多菜单仍贴入口右下角 " + context)
-		await _key(root, KEY_DOWN)
+		_check_menu_text_bounds(actions._panel, actions._items, context)
 		await _key(root, KEY_DOWN)
 		await _key(root, KEY_RIGHT)
 		_check(actions._sort_open and root.get_visible_rect().grow(1).encloses(actions._sort_panel.get_global_rect()), "排序子菜单键盘操作与边界正常 " + context)
 		_check(actions._sort_panel.get_global_transform().get_scale().is_equal_approx(Vector2.ONE * factor), "排序子菜单继承相同视觉比例 " + context)
+		_check_menu_text_bounds(actions._sort_panel, actions._sort_options, context)
+		await _key(root, KEY_ESCAPE)
+		await _key(root, KEY_DOWN)
+		await _key(root, KEY_RIGHT)
+		_check_display_panel(factor, context)
 		await _key(root, KEY_ESCAPE)
 		await _key(root, KEY_ESCAPE)
 	_check(not actions.is_open(), "更多菜单逐级 Esc 不穿透关卡 " + context)
@@ -174,6 +184,44 @@ func _check_header_and_menus(factor: float, context: String) -> void:
 	_check(menu._definition == _level_definition("scale_player_00"), "右键命中真实玩家关卡且未误选邻列 " + context)
 	await _key(root, KEY_ESCAPE)
 	_check(not menu.is_open() and _game.page == GameShell.Page.LEVELS, "右键取消不进入或删除背景关卡 " + context)
+
+
+## 大字号与长翻译走真实鼠标打开显示分支，按最终矩形验证两层菜单均未裁切。
+func _check_display_menu(factor: float, context: String) -> void:
+	var header := _game._level_header
+	await _click(header._more_button)
+	await create_timer(0.2).timeout
+	var actions := header._actions_menu
+	_check_menu_text_bounds(actions._panel, actions._items, context)
+	await _click(actions.find_child("LevelDisplayMenuItem", true, false) as Control)
+	_check_display_panel(factor, context)
+	await _key(root, KEY_ESCAPE)
+	_check(actions.is_open() and not actions._display_open, "大字号显示子菜单 Esc 仅返回上一层 " + context)
+	await _key(root, KEY_ESCAPE)
+	_check(not actions.is_open(), "显示菜单取消后释放真实输入遮挡 " + context)
+
+
+## 检查实际显示层、文字和左勾边界，字体放大不得裁切内容或重复叠加页面比例。
+func _check_display_panel(factor: float, context: String) -> void:
+	var actions := _game._level_header._actions_menu
+	var panel := actions._display_panel
+	_check(actions._display_open and panel.is_visible_in_tree() and root.get_visible_rect().grow(1).encloses(panel.get_global_rect()), "显示内容子菜单完整留在实际画幅内 " + context)
+	_check(panel.get_global_transform().get_scale().is_equal_approx(Vector2.ONE * factor), "显示子菜单只继承一次选关页面比例 " + context)
+	_check_menu_text_bounds(panel, actions._display_options, context)
+	for index in actions._display_marks.size():
+		var item := actions._display_options[index]
+		var mark := actions._display_marks[index]
+		var caption := item.get_node("MenuCaption") as Label
+		_check(item.button_pressed and mark.is_visible_in_tree() and item.get_global_rect().grow(1).encloses(mark.get_global_rect()) and mark.get_global_rect().end.x <= caption.global_position.x, "大字号左勾完整可见且不挤占显示标签 " + context)
+
+
+## 按最终标签行数和按钮矩形检查纯文字菜单，替代已经移除的装饰图标断言。
+func _check_menu_text_bounds(panel: Control, items: Array[Button], context: String) -> void:
+	_check(root.get_visible_rect().grow(1).encloses(panel.get_global_rect()), "文字菜单面板完整位于窗口 " + context)
+	for item in items:
+		var caption := item.get_node("MenuCaption") as Label
+		_check(item.icon == null and item.is_visible_in_tree() and panel.get_global_rect().grow(1).encloses(item.get_global_rect()), "纯文字菜单保留完整原生按钮命中区 " + context + " " + str(item.name))
+		_check(caption.is_visible_in_tree() and caption.text == item.text and item.get_global_rect().grow(1).encloses(caption.get_global_rect()) and caption.get_line_count() <= caption.get_visible_line_count(), "菜单标签完整换行且不超过按钮边界 " + context + " " + str(item.name))
 
 
 ## 展开、滚轮及收起保留首排横向位置；纵向条不能重新挤压七列布局。
@@ -218,10 +266,9 @@ func _check_svg_raster(factor: float, context: String) -> void:
 	var header := _game._level_header
 	var controls := [header._back_button, header._forward_button, header._search_button, header._search_close_button, header._more_button, header._search_icon]
 	var sources := ["navigation_back", "navigation_forward", "search", "search_collapse", "more", "search"]
-	for index in header._actions_menu._items.size():
-		controls.append(header._actions_menu._items[index])
-		sources.append(["refresh", "import_level", "sort"][index])
 	controls.append(header._actions_menu._sort_chevron)
+	sources.append("navigation_forward")
+	controls.append(header._actions_menu._display_chevron)
 	sources.append("navigation_forward")
 	for index in controls.size():
 		var control: Control = controls[index]

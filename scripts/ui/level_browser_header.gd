@@ -4,8 +4,8 @@ extends Control
 
 signal back_requested
 signal refresh_requested
-signal import_requested
 signal sort_changed(enabled: bool)
+signal display_changed(show_author: bool, show_completion: bool)
 signal query_changed(query: String)
 
 const HEIGHT := GameTheme.NAVIGATION_HEIGHT
@@ -37,6 +37,8 @@ var _focus_buttons: Array[Button] = []
 var _focus_styles: Array[StyleBox] = []
 var _keyboard_focus_visible := false
 var _restore_search_focus := false
+var _show_author := true
+var _show_completion := true
 
 
 ## 控件只创建一次，刷新目录时保留输入焦点、光标和正在进行的展开动画。
@@ -389,14 +391,15 @@ func _request_refresh() -> void:
 	refresh_requested.emit()
 
 
-## 菜单常驻但默认隐藏，两个选项继续通过信号复用目录刷新与导入流程。
+## 菜单常驻但默认隐藏，刷新、排序与显示偏好通过信号交给目录页面。
 func _build_actions_menu() -> void:
 	_actions_menu = LevelActionsMenu.new()
 	_actions_menu.name = "LevelActionsMenu"
 	_actions_menu.refresh_requested.connect(_request_refresh)
-	_actions_menu.import_requested.connect(_request_import)
 	_actions_menu.sort_changed.connect(_request_sort)
+	_actions_menu.display_changed.connect(_request_display)
 	_actions_menu.input_observed.connect(_observe_input)
+	_actions_menu.set_display_options(_show_author, _show_completion)
 	add_child(_actions_menu)
 
 
@@ -410,11 +413,6 @@ func _toggle_actions_menu() -> void:
 		_actions_menu.popup_at(_more_button)
 
 
-## 先由菜单收起，再请求上层打开导入对话框，避免两个输入层同时抢占操作。
-func _request_import() -> void:
-	import_requested.emit()
-
-
 ## 从选关页同步本次会话的排序状态，不触发排序回调或改写玩家存档。
 func set_sort_enabled(enabled: bool) -> void:
 	if _actions_menu != null:
@@ -424,3 +422,18 @@ func set_sort_enabled(enabled: bool) -> void:
 ## 排序只交给目录显示层处理，菜单不直接改动关卡目录或完成记录。
 func _request_sort(enabled: bool) -> void:
 	sort_changed.emit(enabled)
+
+
+## 记录两项独立显示偏好，创建前的回填也会在菜单就绪时保留。
+func set_display_options(show_author: bool, show_completion: bool) -> void:
+	_show_author = show_author
+	_show_completion = show_completion
+	if _actions_menu != null:
+		_actions_menu.set_display_options(show_author, show_completion)
+
+
+## 显示内容只改变目录呈现，页头不读取或改写关卡作者和完成记录。
+func _request_display(show_author: bool, show_completion: bool) -> void:
+	_show_author = show_author
+	_show_completion = show_completion
+	display_changed.emit(show_author, show_completion)
