@@ -704,6 +704,8 @@ func _build_scene_controls(parent: Node) -> void:
 	var row := ResponsivePropertyRow.new()
 	row.name = "MapEditorPointAndResetRows"
 	row.group_sizes = [1, 1]
+	# 长译文换行后重置组在正文居中；并排时左列仍吸收余宽，保留右侧按钮布局。
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 12)
 	body.add_child(row)
 	var placement_column := VBoxContainer.new()

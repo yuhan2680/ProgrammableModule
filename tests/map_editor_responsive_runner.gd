@@ -105,10 +105,31 @@ func _check_geometry(expected_width: float, context: String) -> void:
 	for button: Button in [_editor._play_button, _editor.find_child("MapEditorEditTab", true, false), _editor.find_child("MapEditorGuideTab", true, false)]:
 		_check(card.get_global_rect().grow(1).encloses(button.get_global_rect()) and root.get_visible_rect().grow(1).encloses(button.get_global_rect()) and not scroll.get_global_rect().intersects(button.get_global_rect()), "顶部测试与页签常驻且避开滚动正文 " + context + " " + str(button.name))
 	_check(_editor._header.get_global_rect().encloses(_editor._header.save_button.get_global_rect()), "保存图标仍固定在页头并完整可达 " + context)
+	_check_point_reset_alignment(context)
 	if GameTheme.font_scale(_editor) >= 2.0:
 		var player := _editor.find_child("MapEditorPlayerLimits", true, false) as ResponsivePropertyRow
 		var enemy := _editor.find_child("MapEditorEnemyLimits", true, false) as ResponsivePropertyRow
 		_check(player.stacked and enemy.stacked, "大字号多栏数值组自动改为一栏 " + context)
+
+
+## 根据最终矩形验证重置组独占一行时居中，宽度恢复后仍与点位组并排且文字完整。
+func _check_point_reset_alignment(context: String) -> void:
+	var row := _editor.find_child("MapEditorPointAndResetRows", true, false) as Control
+	var placement := row.get_child(0) as Control
+	var reset := _editor._reset_spawn_button.get_parent() as Control
+	var placement_bounds := placement.get_global_rect()
+	var reset_bounds := reset.get_global_rect()
+	var below := reset_bounds.position.y >= placement_bounds.end.y - 0.5
+	if below:
+		for button: Button in [_editor._reset_spawn_button, _editor._reset_goal_button]:
+			_check(absf(button.get_global_rect().get_center().x - row.get_global_rect().get_center().x) <= 1.1, "重置按钮独占一行时在正文中居中 " + context + " " + button.text)
+	else:
+		_check(reset_bounds.position.x >= placement_bounds.end.x - 0.5 and not reset_bounds.grow(-0.1).intersects(placement_bounds), "并排时重置组留在点位组右侧且不重叠 " + context)
+	_check(absf(_editor._reset_spawn_button.size.x - _editor._reset_goal_button.size.x) <= 0.5, "两个重置按钮始终等宽 " + context)
+	for button: Button in [_editor._reset_spawn_button, _editor._reset_goal_button]:
+		var text_width := button.get_theme_font("font").get_string_size(button.atr(button.text), HORIZONTAL_ALIGNMENT_LEFT, -1, button.get_theme_font_size("font_size")).x
+		var padding := button.get_theme_stylebox("normal").get_minimum_size().x
+		_check(text_width + padding <= button.size.x + 1.1, "重置按钮保留完整本土化文字宽度 " + context + " " + button.text)
 
 
 ## 真实滚动逐项到达表单底部，增加行高不应让任何字段被固定操作区遮住。
@@ -134,6 +155,10 @@ func _check_editing() -> void:
 	_fonts.set_percentage(100)
 	TranslationServer.set_locale("en")
 	await _settle()
+	_check_point_reset_alignment("日语大字号窄窗口切回英文默认字号")
+	var points := _editor.find_child("MapEditorPointAndResetRows", true, false) as Control
+	var placement := points.get_child(0) as Control
+	_check(_editor._reset_spawn_button.global_position.x >= placement.get_global_rect().end.x - 0.5, "恢复英文默认字号和宽窗口后重置按钮重新回到点位组右侧")
 	_check(_editor._name_field.get_instance_id() == identity and field.has_focus() and field.text == "responsive draft" and field.caret_column == 6 and field.get_selection_from_column() == 2 and field.get_selection_to_column() == 6, "重排保留原输入实例、焦点、草稿与选区")
 	_check(_editor.editor_document.document.display_name == original and not _editor.editor_document.can_undo(), "重排期间未提交正在输入的名称")
 	field.text_submitted.emit(field.text)
